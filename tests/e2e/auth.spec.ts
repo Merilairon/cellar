@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
 // One fresh DB per run (see playwright.config.ts); steps depend on each other.
@@ -15,6 +16,17 @@ test('unauthenticated request to a protected page redirects to /login', async ({
 
 test('setup -> login', async ({ page }) => {
   await page.goto('/setup');
+  for (const scheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    const { violations } = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+      .analyze();
+    expect(
+      violations.map((v) => ({ id: v.id, nodes: v.nodes.map((n) => n.target.join(' ')) })),
+      `setup page axe (${scheme})`,
+    ).toEqual([]);
+  }
+  await page.emulateMedia({ colorScheme: 'light' });
   await page.getByLabel('Email').fill(ADMIN.email);
   await page.getByLabel('Display name').fill(ADMIN.name);
   await page.getByLabel(/^Password/).fill(ADMIN.password);

@@ -43,7 +43,7 @@ export function InviteForm() {
         {t('admin.users.inviteEmail')}
         <input name="email" type="email" maxLength={254} className="border p-2" />
       </label>
-      <button type="submit" disabled={pending} className="bg-emerald-600 p-2 text-white">
+      <button type="submit" disabled={pending} className="bg-emerald-700 p-2 text-white">
         {t('admin.users.inviteSubmit')}
       </button>
       <Feedback state={state} linkLabel={t('admin.users.linkOnce')} />
