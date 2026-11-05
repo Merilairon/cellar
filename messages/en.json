@@ -163,7 +163,6 @@
       "network": "The request failed. Check your connection and try again.",
       "generic": "Something went wrong. Try again."
     },
-    "switchToPaste": "Paste the recipe instead",
     "review": {
       "title": "Review the imported recipe",
       "intro": "Check the recipe and fix anything that was read wrongly, then save it.",
