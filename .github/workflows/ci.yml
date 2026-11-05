@@ -7,7 +7,13 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    # Pinned Playwright image keeps fonts identical to the one used to generate the visual
+    # baselines (scripts/update-visual-baselines.sh). Keep the tag equal to @playwright/test.
+    container:
+      image: mcr.microsoft.com/playwright:v1.64.1-noble
+      options: --ipc=host
     steps:
+      - run: apt-get update && apt-get install -y build-essential python3
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
@@ -17,7 +23,6 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
-      - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
       - uses: actions/upload-artifact@v4
         if: failure()
