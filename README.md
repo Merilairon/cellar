@@ -105,7 +105,7 @@ Add `--push` and a registry tag to publish.
 Back up the `/data` volume (the SQLite database lives in it). With the app stopped (`docker compose stop app`), for example:
 
 ```bash
-docker run --rm -v recipe-book_app-data:/data -v "$PWD":/backup alpine tar czf /backup/cellar-data.tgz -C /data .
+docker run --rm -v cellar_app-data:/data -v "$PWD":/backup alpine tar czf /backup/cellar-data.tgz -C /data .
 ```
 
 The volume name is `<compose project>_app-data`; check with `docker volume ls`.

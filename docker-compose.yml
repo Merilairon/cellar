@@ -2,6 +2,7 @@
 #   (docker-compose.direct.yml publishes the app on :3000)
 # Behind Caddy: docker compose --profile caddy up -d --build
 #   (this file alone never publishes the app port; only Caddy listens on 80/443)
+name: cellar
 services:
   app:
     build: .
