@@ -38,6 +38,7 @@ export default defineConfig([
     'next-env.d.ts',
     'node_modules/**',
     'drizzle/**',
+    'dist/**',
     '.claude/**',
     '.kilo/**',
     '.vibe/**',
