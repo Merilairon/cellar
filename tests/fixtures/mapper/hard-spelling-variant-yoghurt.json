@@ -1,0 +1,41 @@
+{
+  "class": "hard",
+  "note": "The step spells it \"yoghurt\", the list \"yogurt\": names are matched exactly, no fuzzy matching.",
+  "ingredients": [
+    "2 cups plain yogurt",
+    "1 cup granola",
+    "1 tbsp maple syrup"
+  ],
+  "steps": [
+    "Spoon the yoghurt into a glass.",
+    "Top with the granola and a drizzle of syrup."
+  ],
+  "expected": {
+    "view": "grid",
+    "sections": [
+      {
+        "title": null,
+        "rows": [
+          "yogurt",
+          "granola",
+          "maple syrup"
+        ],
+        "steps": [
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 0
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          }
+        ]
+      }
+    ]
+  },
+  "confidence": {
+    "min": 0.7
+  }
+}

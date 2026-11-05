@@ -467,7 +467,8 @@ describe('sections (G16, G20)', () => {
     ]);
     expect(p.sections).toHaveLength(1);
     expect(p.warnings).toContain('sections_from_ingredients_only');
-    expect(p.signals.secFactor).toBe(0.85);
+    expect(p.signals.secFactor).toBe(0.65);
+    expect(p.confidence).toBeLessThan(0.7);
     expect(p.sections[0]!.ingredients.map((i) => i.group_label)).toContain('Frosting');
   });
   it('a flat list shared by two sections warns and assigns the first mentioning section', () => {

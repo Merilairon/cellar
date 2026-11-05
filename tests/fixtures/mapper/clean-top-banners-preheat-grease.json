@@ -1,0 +1,55 @@
+{
+  "class": "clean",
+  "note": "Two top banners; the grease step names butter but mentions no ingredient.",
+  "ingredients": [
+    "1 cup flour",
+    "1/2 cup butter",
+    "2 eggs"
+  ],
+  "steps": [
+    "Preheat the oven to 180°C.",
+    "Grease a loaf tin with butter.",
+    "Cream the butter and eggs.",
+    "Fold in the flour.",
+    "Bake for 40 minutes."
+  ],
+  "expected": {
+    "view": "grid",
+    "sections": [
+      {
+        "title": null,
+        "rows": [
+          "butter",
+          "egg",
+          "flour"
+        ],
+        "steps": [
+          {
+            "kind": "banner_top"
+          },
+          {
+            "kind": "banner_top"
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 1
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          }
+        ]
+      }
+    ]
+  },
+  "confidence": {
+    "min": 0.7
+  }
+}

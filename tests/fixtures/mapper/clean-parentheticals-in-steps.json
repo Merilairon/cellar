@@ -1,0 +1,47 @@
+{
+  "class": "clean",
+  "note": "Parenthetical remarks inside step text.",
+  "ingredients": [
+    "1 cup sugar",
+    "2 eggs",
+    "1 cup flour"
+  ],
+  "steps": [
+    "Add the sugar (see note) and the eggs (room temperature).",
+    "Stir in the flour (sifted).",
+    "Bake."
+  ],
+  "expected": {
+    "view": "grid",
+    "sections": [
+      {
+        "title": null,
+        "rows": [
+          "sugar",
+          "egg",
+          "flour"
+        ],
+        "steps": [
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 1
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          }
+        ]
+      }
+    ]
+  },
+  "confidence": {
+    "min": 0.7
+  }
+}

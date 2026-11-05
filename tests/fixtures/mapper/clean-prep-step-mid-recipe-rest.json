@@ -1,0 +1,55 @@
+{
+  "class": "clean",
+  "note": "\"Rest 10 minutes\" in the middle is a column with the previous span.",
+  "ingredients": [
+    "2 cups flour",
+    "1 cup water",
+    "1 tsp yeast",
+    "1 tsp salt"
+  ],
+  "steps": [
+    "Stir the yeast into the water.",
+    "Add the flour and salt and knead.",
+    "Rest 10 minutes.",
+    "Bake at 220°C for 30 minutes."
+  ],
+  "expected": {
+    "view": "grid",
+    "sections": [
+      {
+        "title": null,
+        "rows": [
+          "yeast",
+          "water",
+          "flour",
+          "salt"
+        ],
+        "steps": [
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 1
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 3
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 3
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 3
+          }
+        ]
+      }
+    ]
+  },
+  "confidence": {
+    "min": 0.7
+  }
+}

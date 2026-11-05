@@ -1,0 +1,56 @@
+{
+  "class": "hard",
+  "note": "\"some of the sugar\" then \"the rest of the sugar\": not resolvable, so one row and a warning.",
+  "ingredients": [
+    "1 cup sugar",
+    "1/2 cup butter",
+    "2 eggs"
+  ],
+  "steps": [
+    "Cream the butter with some of the sugar.",
+    "Beat in the eggs.",
+    "Fold in the rest of the sugar.",
+    "Bake."
+  ],
+  "expected": {
+    "view": "grid",
+    "sections": [
+      {
+        "title": null,
+        "rows": [
+          "butter",
+          "sugar",
+          "egg"
+        ],
+        "steps": [
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 1
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          }
+        ]
+      }
+    ],
+    "warnings_include": [
+      "split_unresolved:sugar"
+    ]
+  },
+  "confidence": {
+    "max": 0.95
+  }
+}

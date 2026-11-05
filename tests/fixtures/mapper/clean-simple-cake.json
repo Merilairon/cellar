@@ -1,0 +1,63 @@
+{
+  "class": "clean",
+  "note": "One section, preheat banner, five columns.",
+  "ingredients": [
+    "2 cups flour",
+    "1 cup sugar",
+    "2 eggs",
+    "1/2 cup butter",
+    "1 cup milk",
+    "2 tsp baking powder"
+  ],
+  "steps": [
+    "Preheat the oven to 350°F.",
+    "Cream the butter and sugar until fluffy.",
+    "Beat in the eggs.",
+    "Whisk the flour and baking powder, then stir into the batter alternately with the milk.",
+    "Pour into a greased pan and bake for 30 minutes."
+  ],
+  "expected": {
+    "view": "grid",
+    "sections": [
+      {
+        "title": null,
+        "rows": [
+          "butter",
+          "sugar",
+          "egg",
+          "flour",
+          "baking powder",
+          "milk"
+        ],
+        "steps": [
+          {
+            "kind": "banner_top"
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 1
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 5
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 5
+          }
+        ]
+      }
+    ]
+  },
+  "confidence": {
+    "min": 0.7
+  }
+}

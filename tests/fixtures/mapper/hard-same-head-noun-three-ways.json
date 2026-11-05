@@ -1,0 +1,24 @@
+{
+  "class": "hard",
+  "note": "Three oils and the step says \"the oil\": cannot be resolved.",
+  "ingredients": [
+    "1 tbsp olive oil",
+    "1 tbsp sesame oil",
+    "1 tbsp vegetable oil",
+    "2 cups rice"
+  ],
+  "steps": [
+    "Heat the oil in a wok.",
+    "Add the rice and stir fry.",
+    "Drizzle with the oil."
+  ],
+  "expected": {
+    "view": "list",
+    "warnings_include": [
+      "ambiguous_name:oil"
+    ]
+  },
+  "confidence": {
+    "max": 0.69
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "class": "clean",
+  "note": "Classic cookie order with two mixing steps.",
+  "ingredients": [
+    "1 cup butter",
+    "3/4 cup sugar",
+    "1 egg",
+    "2 cups flour",
+    "1 tsp baking soda",
+    "1 cup chocolate chips"
+  ],
+  "steps": [
+    "Cream the butter and sugar.",
+    "Beat in the egg.",
+    "Stir in the flour and baking soda.",
+    "Fold in the chocolate chips.",
+    "Bake at 375°F for 10 minutes."
+  ],
+  "expected": {
+    "view": "grid",
+    "sections": [
+      {
+        "title": null,
+        "rows": [
+          "butter",
+          "sugar",
+          "egg",
+          "flour",
+          "baking soda",
+          "chocolate chip"
+        ],
+        "steps": [
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 1
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 4
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 5
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 5
+          }
+        ]
+      }
+    ]
+  },
+  "confidence": {
+    "min": 0.7
+  }
+}

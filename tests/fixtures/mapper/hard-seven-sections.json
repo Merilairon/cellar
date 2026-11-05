@@ -1,0 +1,30 @@
+{
+  "class": "hard",
+  "note": "Seven sections exceed the limit of six: no proposal.",
+  "ingredients": [
+    "1 cup flour",
+    "2 eggs"
+  ],
+  "steps": [
+    "For the part A:",
+    "Stir the flour.",
+    "For the part B:",
+    "Stir the flour.",
+    "For the part C:",
+    "Stir the flour.",
+    "For the part D:",
+    "Stir the flour.",
+    "For the part E:",
+    "Stir the flour.",
+    "For the part F:",
+    "Stir the flour.",
+    "For the part G:",
+    "Stir the flour."
+  ],
+  "expected": {
+    "view": "none",
+    "warnings_include": [
+      "too_many_sections"
+    ]
+  }
+}

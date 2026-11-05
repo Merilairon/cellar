@@ -1,0 +1,94 @@
+{
+  "class": "clean",
+  "note": "Two sections from HowToSection names, ingredient groups match the names.",
+  "ingredients": [
+    "For the cake:",
+    "2 cups flour",
+    "2 eggs",
+    "1/2 cup butter",
+    "For the frosting:",
+    "1 cup powdered sugar",
+    "2 tbsp milk"
+  ],
+  "steps": [
+    {
+      "text": "Cream the butter.",
+      "section": "Cake"
+    },
+    {
+      "text": "Beat in the eggs.",
+      "section": "Cake"
+    },
+    {
+      "text": "Fold in the flour.",
+      "section": "Cake"
+    },
+    {
+      "text": "Bake for 30 minutes.",
+      "section": "Cake"
+    },
+    {
+      "text": "Whisk the milk into the powdered sugar.",
+      "section": "Frosting"
+    },
+    {
+      "text": "Spread over the cooled cake.",
+      "section": "Frosting"
+    }
+  ],
+  "expected": {
+    "view": "grid",
+    "sections": [
+      {
+        "title": "Cake",
+        "rows": [
+          "butter",
+          "egg",
+          "flour"
+        ],
+        "steps": [
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 0
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 1
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          }
+        ]
+      },
+      {
+        "title": "Frosting",
+        "rows": [
+          "milk",
+          "powdered sugar"
+        ],
+        "steps": [
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 1
+          },
+          {
+            "kind": "banner_bottom"
+          }
+        ]
+      }
+    ]
+  },
+  "confidence": {
+    "min": 0.7
+  }
+}

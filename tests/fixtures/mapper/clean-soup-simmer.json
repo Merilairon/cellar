@@ -1,0 +1,63 @@
+{
+  "class": "clean",
+  "note": "Saute then simmer, a seasoning step that adds salt, trailing serve banner.",
+  "ingredients": [
+    "2 tbsp olive oil",
+    "1 onion",
+    "2 cloves garlic",
+    "3 carrots",
+    "1 litre vegetable stock",
+    "1 tsp salt"
+  ],
+  "steps": [
+    "Heat the olive oil in a large pot.",
+    "Add the onion and garlic and cook until soft.",
+    "Add the carrots and stock and simmer for 25 minutes.",
+    "Season with salt.",
+    "Serve hot."
+  ],
+  "expected": {
+    "view": "grid",
+    "sections": [
+      {
+        "title": null,
+        "rows": [
+          "olive oil",
+          "onion",
+          "garlic",
+          "carrot",
+          "vegetable stock",
+          "salt"
+        ],
+        "steps": [
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 0
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 4
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 5
+          },
+          {
+            "kind": "banner_bottom"
+          }
+        ]
+      }
+    ]
+  },
+  "confidence": {
+    "min": 0.7
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "class": "clean",
+  "note": "Oil first, a chopped-name ingredient, seasoning at the end.",
+  "ingredients": [
+    "2 tbsp oil",
+    "1 onion, chopped",
+    "2 cloves garlic",
+    "1 tbsp curry powder",
+    "400 g chopped tomatoes",
+    "200 ml coconut milk",
+    "1 tsp salt"
+  ],
+  "steps": [
+    "Heat the oil in a deep pan.",
+    "Saute the onion and garlic for 5 minutes.",
+    "Stir in the curry powder.",
+    "Add the tomatoes and coconut milk and simmer for 20 minutes.",
+    "Season with salt."
+  ],
+  "expected": {
+    "view": "grid",
+    "sections": [
+      {
+        "title": null,
+        "rows": [
+          "oil",
+          "onion",
+          "garlic",
+          "curry powder",
+          "tomato",
+          "coconut milk",
+          "salt"
+        ],
+        "steps": [
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 0
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 3
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 5
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 6
+          }
+        ]
+      }
+    ]
+  },
+  "confidence": {
+    "min": 0.7
+  }
+}

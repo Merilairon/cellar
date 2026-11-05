@@ -1,0 +1,24 @@
+{
+  "class": "hard",
+  "note": "Whole wheat flour and white flour listed, the step says \"the flour\".",
+  "ingredients": [
+    "1 cup whole wheat flour",
+    "1 cup white flour",
+    "2 eggs",
+    "1 cup milk"
+  ],
+  "steps": [
+    "Whisk the eggs and milk.",
+    "Stir in the flour.",
+    "Bake."
+  ],
+  "expected": {
+    "view": "list",
+    "warnings_include": [
+      "ambiguous_name:flour"
+    ]
+  },
+  "confidence": {
+    "max": 0.69
+  }
+}

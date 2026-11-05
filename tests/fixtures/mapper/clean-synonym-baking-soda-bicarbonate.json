@@ -1,0 +1,49 @@
+{
+  "class": "clean",
+  "note": "bicarbonate of soda in the step, baking soda in the list.",
+  "ingredients": [
+    "2 cups flour",
+    "1 tsp baking soda",
+    "1 egg",
+    "1/2 cup milk"
+  ],
+  "steps": [
+    "Whisk the egg and milk.",
+    "Sift the flour and bicarbonate of soda into the bowl and mix.",
+    "Bake."
+  ],
+  "expected": {
+    "view": "grid",
+    "sections": [
+      {
+        "title": null,
+        "rows": [
+          "egg",
+          "milk",
+          "flour",
+          "baking soda"
+        ],
+        "steps": [
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 1
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 3
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 3
+          }
+        ]
+      }
+    ]
+  },
+  "confidence": {
+    "min": 0.7
+  }
+}

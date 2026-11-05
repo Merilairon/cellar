@@ -1,0 +1,68 @@
+{
+  "class": "hard",
+  "note": "Butter is used by both sections but listed once in a flat list: one row, in the first section.",
+  "ingredients": [
+    "2 tbsp butter",
+    "1 cup flour",
+    "1 cup sugar",
+    "1 cup powdered sugar"
+  ],
+  "steps": [
+    "For the cake:",
+    "Cream the butter and sugar.",
+    "Add the flour.",
+    "Bake.",
+    "For the glaze:",
+    "Melt the butter.",
+    "Whisk in the powdered sugar."
+  ],
+  "expected": {
+    "view": "grid",
+    "sections": [
+      {
+        "title": "Cake",
+        "rows": [
+          "butter",
+          "sugar",
+          "flour"
+        ],
+        "steps": [
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 1
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          }
+        ]
+      },
+      {
+        "title": "Glaze",
+        "rows": [
+          "powdered sugar"
+        ],
+        "steps": [
+          {
+            "kind": "banner_top"
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 0
+          }
+        ]
+      }
+    ],
+    "warnings_include": [
+      "ingredient_shared_across_sections"
+    ]
+  }
+}

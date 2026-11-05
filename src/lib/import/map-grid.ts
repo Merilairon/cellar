@@ -493,7 +493,7 @@ function run(input: unknown, opts: MapOptions | undefined): MapResult {
   }
 
   let secFactor = 1;
-  if (warn.has('sections_from_ingredients_only')) secFactor *= 0.85;
+  if (warn.has('sections_from_ingredients_only')) secFactor *= 0.65;
   if (warn.has('ingredient_shared_across_sections')) secFactor *= 0.85;
   if (warn.has('section_merged')) secFactor *= 0.7;
   const r3 = (x: number) => Math.round(x * 1000) / 1000;

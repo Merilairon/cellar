@@ -1,0 +1,51 @@
+{
+  "class": "clean",
+  "note": "Temperature in both units and a minutes range.",
+  "ingredients": [
+    "2 cups flour",
+    "2 eggs",
+    "1 cup sugar"
+  ],
+  "steps": [
+    "Beat the eggs and sugar.",
+    "Fold in the flour.",
+    "Bake at 350°F (180°C) for 30-35 minutes."
+  ],
+  "expected": {
+    "view": "grid",
+    "sections": [
+      {
+        "title": null,
+        "rows": [
+          "egg",
+          "sugar",
+          "flour"
+        ],
+        "steps": [
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 1
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2,
+            "temp_f": 350,
+            "temp_c": 180,
+            "minutes_min": 30,
+            "minutes_max": 35
+          }
+        ]
+      }
+    ]
+  },
+  "confidence": {
+    "min": 0.7
+  }
+}

@@ -82,7 +82,7 @@ const PREP_OBJECTS: ReadonlyMap<string, ReadonlySet<string>> = (() => {
   return m;
 })();
 const PREP_ALWAYS = new Set(['preheat', 'gather']);
-const PREP_WINDOW = 6;
+const PREP_WINDOW = 8;
 
 const SUBORDINATORS = new Set(['once', 'when', 'after', 'while', 'until', 'if', 'as', 'before']);
 
@@ -187,6 +187,8 @@ function detectPrep(tokens: Token[]): string | null {
     const t = tokens[j]!;
     if (t.sent !== 0) break;
     if (objects.has(t.w)) return first.w;
+    // "Butter the bread and place on a baking sheet": another verb ends the prep clause.
+    if (VERB_CLASS.has(t.w)) break;
   }
   return null;
 }

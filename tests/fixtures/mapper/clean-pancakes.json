@@ -1,0 +1,61 @@
+{
+  "class": "clean",
+  "note": "Dry and wet bowls; the combine step mentions nothing new.",
+  "ingredients": [
+    "1 1/2 cups flour",
+    "3 tbsp sugar",
+    "1 tbsp baking powder",
+    "1/2 tsp salt",
+    "1 1/4 cups milk",
+    "1 egg",
+    "3 tbsp melted butter"
+  ],
+  "steps": [
+    "Whisk the flour, sugar, baking powder and salt in a large bowl.",
+    "Whisk the milk, egg and melted butter in a jug.",
+    "Pour the wet mixture into the dry and stir until just combined.",
+    "Cook ladlefuls of batter on a hot griddle until golden on both sides."
+  ],
+  "expected": {
+    "view": "grid",
+    "sections": [
+      {
+        "title": null,
+        "rows": [
+          "flour",
+          "sugar",
+          "baking powder",
+          "salt",
+          "milk",
+          "egg",
+          "butter"
+        ],
+        "steps": [
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 3
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 6
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 6
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 6
+          }
+        ]
+      }
+    ]
+  },
+  "confidence": {
+    "min": 0.7
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "class": "hard",
+  "note": "\"Serve with extra honey\": honey is only in the bottom banner, so its row is appended and unmentioned.",
+  "ingredients": [
+    "1 cup oats",
+    "1 cup milk",
+    "2 tbsp honey"
+  ],
+  "steps": [
+    "Simmer the oats in the milk for 5 minutes.",
+    "Stir well.",
+    "Serve with extra honey."
+  ],
+  "expected": {
+    "view": "grid",
+    "sections": [
+      {
+        "title": null,
+        "rows": [
+          "oats",
+          "milk",
+          "honey"
+        ],
+        "steps": [
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 1
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          },
+          {
+            "kind": "banner_bottom"
+          }
+        ]
+      }
+    ],
+    "warnings_include": [
+      "ingredient_unmentioned:honey"
+    ]
+  },
+  "confidence": {
+    "min": 0.7
+  }
+}

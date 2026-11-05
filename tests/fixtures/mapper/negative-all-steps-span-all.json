@@ -1,0 +1,19 @@
+{
+  "class": "negative",
+  "note": "Every step spans all rows (cap 0.55).",
+  "ingredients": [
+    "1 cup flour",
+    "2 eggs"
+  ],
+  "steps": [
+    "Dump the flour and eggs in a bowl.",
+    "Stir.",
+    "Bake."
+  ],
+  "expected": {
+    "view": "list"
+  },
+  "confidence": {
+    "max": 0.69
+  }
+}

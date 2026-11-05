@@ -1,0 +1,53 @@
+{
+  "class": "clean",
+  "note": "Short whisk-only recipe; head nouns find multi-word names.",
+  "ingredients": [
+    "3 tbsp olive oil",
+    "1 tbsp red wine vinegar",
+    "1 tsp dijon mustard",
+    "1 tsp honey",
+    "1/2 tsp salt",
+    "1/4 tsp pepper"
+  ],
+  "steps": [
+    "Whisk the vinegar, mustard and honey in a bowl.",
+    "Slowly whisk in the olive oil.",
+    "Season with salt and pepper."
+  ],
+  "expected": {
+    "view": "grid",
+    "sections": [
+      {
+        "title": null,
+        "rows": [
+          "red wine vinegar",
+          "dijon mustard",
+          "honey",
+          "olive oil",
+          "salt",
+          "pepper"
+        ],
+        "steps": [
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 3
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 5
+          }
+        ]
+      }
+    ]
+  },
+  "confidence": {
+    "min": 0.7
+  }
+}

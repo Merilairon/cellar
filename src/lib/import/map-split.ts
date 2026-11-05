@@ -214,6 +214,32 @@ export function resolveSplit(ing: IngredientInput, events: SplitEvent[]): SplitR
       ],
     };
   }
+  // (a') an explicit quantity, then "the remaining ..." (the rest is total minus the quantity).
+  if (
+    steps.length === 2 &&
+    steps[0]!.marker.kind === 'qty' &&
+    steps[1]!.marker.kind === 'remaining'
+  ) {
+    const m = steps[0]!.marker;
+    const sides: Array<[number | null | undefined, string | null | undefined]> = [
+      [ing.us_qty, ing.us_unit],
+      [ing.metric_qty, ing.metric_unit],
+    ];
+    const side = sides.find(([qty, u]) => qty != null && canonicalUnit(u) === m.unit);
+    const total = side ? side[0]! : null;
+    if (total === null || m.qty >= total) return { ok: false };
+    return {
+      ok: true,
+      portions: [
+        {
+          label: `${round2(m.qty)}${m.unit ? ' ' + m.unit : ''}`.slice(0, 60),
+          step: steps[0]!.step,
+          fields: scaled(ing, m.qty / total),
+        },
+        { label: 'remaining', step: steps[1]!.step, fields: scaled(ing, (total - m.qty) / total) },
+      ],
+    };
+  }
   // (b) explicit quantities in every step that add up to the line (within 2 percent).
   const qtys = steps.map((s) => s.marker);
   if (steps.length <= 4 && qtys.every((m) => m.kind === 'qty')) {

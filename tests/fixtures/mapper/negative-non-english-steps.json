@@ -1,0 +1,20 @@
+{
+  "class": "negative",
+  "note": "Dutch steps: names match but no verb is recognized, so labels fall back.",
+  "ingredients": [
+    "200 g bloem",
+    "2 eieren",
+    "250 ml melk"
+  ],
+  "steps": [
+    "Meng de bloem en de eieren in een kom.",
+    "Voeg de melk toe.",
+    "Bak 30 minuten in de oven."
+  ],
+  "expected": {
+    "view": "list"
+  },
+  "confidence": {
+    "max": 0.39
+  }
+}

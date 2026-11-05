@@ -86,6 +86,7 @@ describe('prep detection (G2)', () => {
     'Preheat oven to 350°F (170°C).',
     'Lightly oil a baking sheet.',
     'Heat the oven to 350°F (170°C) and line a 9 inch round pan.',
+    'Butter and flour a 9 inch round pan.',
     'Set aside.',
     'Preheat the grill.',
     'Gather your ingredients.',

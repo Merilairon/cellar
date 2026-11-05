@@ -141,6 +141,24 @@ describe('resolveSplit', () => {
       expect(r.portions.map((p) => p.fields.us_qty)).toEqual([2, 2]);
     }
   });
+  it('a quantity then the remaining portion splits the rest', () => {
+    const r = resolveSplit(ing({ us_qty: 4, us_unit: 'tbsp' }), [
+      ev(1, { kind: 'qty', qty: 2, unit: 'tbsp' }),
+      ev(3, { kind: 'remaining' }),
+    ]);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.portions.map((p) => p.label)).toEqual(['2 tbsp', 'remaining']);
+      expect(r.portions.map((p) => p.fields.us_qty)).toEqual([2, 2]);
+    }
+  });
+  it('a quantity larger than the line then remaining is unresolved', () => {
+    const r = resolveSplit(ing({ us_qty: 1, us_unit: 'tbsp' }), [
+      ev(1, { kind: 'qty', qty: 2, unit: 'tbsp' }),
+      ev(3, { kind: 'remaining' }),
+    ]);
+    expect(r.ok).toBe(false);
+  });
   it('explicit quantities that do not add up are unresolved', () => {
     const r = resolveSplit(ing({ us_qty: 5, us_unit: 'tbsp' }), [
       ev(1, { kind: 'qty', qty: 2, unit: 'tbsp' }),

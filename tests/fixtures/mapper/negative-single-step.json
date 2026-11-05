@@ -1,0 +1,17 @@
+{
+  "class": "negative",
+  "note": "One step only: a one-column grid adds nothing (cap 0.50).",
+  "ingredients": [
+    "1 cup flour",
+    "2 eggs"
+  ],
+  "steps": [
+    "Mix the flour and the eggs and bake."
+  ],
+  "expected": {
+    "view": "list"
+  },
+  "confidence": {
+    "max": 0.69
+  }
+}

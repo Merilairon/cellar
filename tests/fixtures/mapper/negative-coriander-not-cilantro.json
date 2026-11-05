@@ -1,0 +1,23 @@
+{
+  "class": "negative",
+  "note": "Coriander seed must not be read as cilantro leaf: the unmatched ingredient lowers confidence.",
+  "ingredients": [
+    "1 bunch cilantro",
+    "200 g rice",
+    "1 tsp salt"
+  ],
+  "steps": [
+    "Cook the rice.",
+    "Stir in the coriander seeds and salt.",
+    "Serve."
+  ],
+  "expected": {
+    "view": "list",
+    "warnings_include": [
+      "ingredient_unmentioned:cilantro"
+    ]
+  },
+  "confidence": {
+    "max": 0.69
+  }
+}

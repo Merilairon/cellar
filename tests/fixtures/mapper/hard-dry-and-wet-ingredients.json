@@ -1,0 +1,24 @@
+{
+  "class": "hard",
+  "note": "\"The dry ingredients\" cannot be resolved to rows.",
+  "ingredients": [
+    "2 cups flour",
+    "1 tsp baking powder",
+    "1 cup milk",
+    "2 eggs"
+  ],
+  "steps": [
+    "Whisk the dry ingredients.",
+    "Whisk the wet ingredients.",
+    "Combine and bake."
+  ],
+  "expected": {
+    "view": "list",
+    "warnings_include": [
+      "group_reference"
+    ]
+  },
+  "confidence": {
+    "max": 0.69
+  }
+}
