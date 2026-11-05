@@ -71,9 +71,11 @@ describe('createImport', () => {
       status: 'needs_review',
       method: 'static',
       error_code: null,
-      confidence: null,
       duplicate: null,
     });
+    // The mapper ran: a proposal exists and the top-level fields mirror it.
+    expect(res.confidence).toEqual(expect.any(Number));
+    expect(['high', 'medium', 'low']).toContain(res.mapping_level);
     expect((res.draft as { title: string }).title).toBe('Pancakes');
     expect(f.mock.calls[0]![1]).toEqual({ allowLocal: false });
     const job = db.select().from(importJob).get()!;
@@ -187,6 +189,33 @@ describe('createImport', () => {
       );
       expect(res.duplicate).toEqual({ recipe_id: id, title: 'Existing' });
     });
+    it('matches a recipe stored with http when the import URL is https, and the reverse (Q3)', async () => {
+      const id = createRecipe(db, a.id, tree('http://example.com/p', 'private'));
+      const res = await createImport(
+        db,
+        a,
+        { url: 'https://example.com/p' },
+        { safeFetch: okFetch() },
+      );
+      expect(res.duplicate?.recipe_id).toBe(id);
+      const res2 = await createImport(
+        db,
+        a,
+        { url: 'http://example.com/p' },
+        { safeFetch: okFetch() },
+      );
+      expect(res2.duplicate?.recipe_id).toBe(id);
+    });
+    it('does not match a different path', async () => {
+      createRecipe(db, a.id, tree('http://example.com/other', 'private'));
+      const res = await createImport(
+        db,
+        a,
+        { url: 'https://example.com/p' },
+        { safeFetch: okFetch() },
+      );
+      expect(res.duplicate).toBeNull();
+    });
     it("never reveals another user's private recipe", async () => {
       createRecipe(db, b.id, tree('https://example.com/p', 'private'));
       const res = await createImport(
@@ -221,6 +250,72 @@ describe('getImportFor', () => {
     expect(getImportFor(db, a, res.id)).toMatchObject({ id: res.id, status: 'needs_review' });
     expect(getImportFor(db, b, res.id)).toBeNull();
     expect(getImportFor(db, a, 'nope')).toBeNull();
+  });
+});
+
+describe('mapping in the response (G21, G23)', () => {
+  it('exposes confidence and level from the stored proposal, rounded to 2 decimals', async () => {
+    const res = await createImport(
+      db,
+      a,
+      { url: 'https://example.com/p' },
+      { safeFetch: okFetch() },
+    );
+    const draft = res.draft as { mapping: { confidence: number; level: string } };
+    expect(res.confidence).toBe(Math.round(draft.mapping.confidence * 100) / 100);
+    expect(res.mapping_level).toBe(draft.mapping.level);
+  });
+
+  it('a draft stored before 3b (no mapping key) reads as mapping null and stays reviewable', async () => {
+    const res = await createImport(
+      db,
+      a,
+      { url: 'https://example.com/p' },
+      { safeFetch: okFetch() },
+    );
+    const row = db.select().from(importJob).get()!;
+    const stored = JSON.parse(row.draftJson!);
+    delete stored.draft.mapping;
+    db.update(importJob)
+      .set({ draftJson: JSON.stringify(stored) })
+      .run();
+    const again = getImportFor(db, a, res.id)!;
+    expect(again.status).toBe('needs_review');
+    expect(again.confidence).toBeNull();
+    expect(again.mapping_level).toBeNull();
+    expect((again.draft as { mapping: unknown }).mapping).toBeNull();
+  });
+
+  it('a tampered mapping block reads as null instead of breaking the response', async () => {
+    const res = await createImport(
+      db,
+      a,
+      { url: 'https://example.com/p' },
+      { safeFetch: okFetch() },
+    );
+    const stored = JSON.parse(db.select().from(importJob).get()!.draftJson!);
+    stored.draft.mapping = { version: 1, confidence: 'high' };
+    db.update(importJob)
+      .set({ draftJson: JSON.stringify(stored) })
+      .run();
+    expect(getImportFor(db, a, res.id)).toMatchObject({ confidence: null, mapping_level: null });
+  });
+
+  it('a mapper that throws still yields a reviewable job without a proposal', async () => {
+    const res = await createImport(
+      db,
+      a,
+      { url: 'https://example.com/p' },
+      {
+        safeFetch: okFetch(),
+        mapGrid: () => {
+          throw new Error('boom');
+        },
+        log: () => {},
+      },
+    );
+    expect(res).toMatchObject({ status: 'needs_review', confidence: null, mapping_level: null });
+    expect(res.warnings).toContain('mapping_invalid');
   });
 });
 

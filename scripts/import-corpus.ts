@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type { Draft } from '@/lib/import/normalize';
 import { runImport } from '@/lib/import/pipeline';
 
 // Fixture corpus runner (spec req 14, data-model G9/G11). Offline: runImport gets a fake
@@ -19,8 +20,22 @@ export type Expectation = {
   forbid?: string[];
   /** `null`: the draft must have no cover image. */
   cover_image?: null;
+  /** `paste`: the fixture is `name.txt` and goes through the paste path (default: `name.html`, URL path). */
+  input?: 'paste';
+  /** Checks on the auto-mapper proposal attached by the pipeline (3b). */
+  map?: MapExpectation;
   carry?: string;
   note?: string;
+};
+
+export type MapExpectation = {
+  /** Section titles of `draft.mapping.sections`, in order. */
+  section_titles?: Array<string | null>;
+  min_confidence?: number;
+  max_confidence?: number;
+  /** `none`: the draft must carry no proposal. */
+  level?: 'high' | 'medium' | 'low' | 'none';
+  warnings_include?: string[];
 };
 
 export type Row = {
@@ -47,6 +62,29 @@ export type Report = {
   bytes: number;
 };
 
+function checkMap(exp: MapExpectation, m: Draft['mapping'], pageWarnings: string[]): string[] {
+  const problems: string[] = [];
+  if (exp.level === 'none') {
+    if (m !== null) problems.push('expected no mapping');
+    return problems;
+  }
+  if (!m) return [`expected a mapping, got none (${pageWarnings.join(',') || 'no warning'})`];
+  if (exp.level !== undefined && m.level !== exp.level)
+    problems.push(`level ${m.level} != ${exp.level}`);
+  if (exp.min_confidence !== undefined && m.confidence < exp.min_confidence)
+    problems.push(`confidence ${m.confidence} < ${exp.min_confidence}`);
+  if (exp.max_confidence !== undefined && m.confidence > exp.max_confidence)
+    problems.push(`confidence ${m.confidence} > ${exp.max_confidence}`);
+  if (exp.section_titles !== undefined) {
+    const got = JSON.stringify(m.sections.map((s) => s.title ?? null));
+    if (got !== JSON.stringify(exp.section_titles))
+      problems.push(`section titles ${got} != ${JSON.stringify(exp.section_titles)}`);
+  }
+  for (const w of exp.warnings_include ?? [])
+    if (!m.warnings.includes(w as never)) problems.push(`mapping warning missing: ${w}`);
+  return problems;
+}
+
 function check(exp: Expectation, r: Awaited<ReturnType<typeof runImport>>): string[] {
   const problems: string[] = [];
   const got = r.status === 'needs_review' && r.draft ? 'draft' : 'no_recipe';
@@ -66,6 +104,7 @@ function check(exp: Expectation, r: Awaited<ReturnType<typeof runImport>>): stri
       if (blob.includes(f.toLowerCase())) problems.push(`unsanitized: found "${f}"`);
     if (exp.cover_image === null && d.cover_image_url !== null)
       problems.push(`cover image kept: ${d.cover_image_url}`);
+    if (exp.map) problems.push(...checkMap(exp.map, d.mapping, r.warnings));
   } else if (got !== 'no_recipe' || r.error_code !== 'no_recipe') {
     problems.push(`expected no_recipe, got ${got}`);
   }
@@ -81,7 +120,8 @@ export async function runCorpus(dir = FIXTURE_DIR): Promise<Report> {
   let bytes = 0;
   for (const name of names) {
     const exp = JSON.parse(readFileSync(join(dir, `${name}.expected.json`), 'utf8')) as Expectation;
-    const html = readFileSync(join(dir, `${name}.html`));
+    const paste = exp.input === 'paste';
+    const html = readFileSync(join(dir, `${name}.${paste ? 'txt' : 'html'}`));
     bytes += html.length;
     const fakeFetch = async (url: string) => ({
       status: 200,
@@ -92,7 +132,7 @@ export async function runCorpus(dir = FIXTURE_DIR): Promise<Report> {
     let row: Row;
     try {
       const r = await runImport(
-        { url: `https://fixtures.example.com/${name}` },
+        paste ? { text: html.toString('utf8') } : { url: `https://fixtures.example.com/${name}` },
         { safeFetch: fakeFetch },
       );
       const problems = check(exp, r);

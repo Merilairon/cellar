@@ -10,7 +10,7 @@ import { getCoverPhoto } from '@/lib/db/photos';
 import { getRecipeFull } from '@/lib/db/recipes';
 import { importJob, recipe, user } from '@/lib/db/schema';
 import { deleteRecipeFor } from '@/lib/recipes/service';
-import { createImport } from './service';
+import { createImport, parseStoredDraft } from './service';
 import { saveImport } from './save';
 import type { SafeFetchOptions, SafeFetchResult } from './safe-fetch';
 
@@ -76,7 +76,7 @@ afterEach(() => {
 });
 
 describe('saveImport', () => {
-  it('saves an edited draft: normalized source_url, hostname source_name, list, private, job saved', async () => {
+  it('saves an edited draft: canonical source_url with the entered scheme, hostname source_name, list, private, job saved', async () => {
     const id = await start();
     const r = await saveImport(db, a, id, draft({ title: 'Edited' }), deps());
     expect(r).toMatchObject({ ok: true, warnings: [] });
@@ -85,7 +85,7 @@ describe('saveImport', () => {
     expect(full).toMatchObject({
       title: 'Edited',
       ownerId: a.id,
-      sourceUrl: 'https://example.com/p',
+      sourceUrl: 'http://example.com/p', // entered scheme kept, tracking params stripped (Q3)
       sourceName: 'example.com',
       viewMode: 'list',
       visibility: 'private',
@@ -140,6 +140,30 @@ describe('saveImport', () => {
     expect(getRecipeFull(db, r.id)!.sourceUrl).toBe('https://example.com/p');
   });
 
+  it('an emptied source_url clears it instead of falling back to the job URL', async () => {
+    for (const cleared of ['', null, '   ']) {
+      const id = await start('https://example.com/p');
+      const r = await saveImport(db, a, id, draft({ source_url: cleared }), deps());
+      if (!r.ok || !('id' in r)) throw new Error('fail');
+      const full = getRecipeFull(db, r.id)!;
+      expect(full.sourceUrl).toBeNull();
+      expect(full.sourceName).toBeNull();
+    }
+  });
+
+  it('keeps the entered http scheme and strips tracking and fragment', async () => {
+    const id = await start('https://example.com/p');
+    const r = await saveImport(
+      db,
+      a,
+      id,
+      draft({ source_url: 'http://Example.com/slow/?utm_source=x#c' }),
+      deps(),
+    );
+    if (!r.ok || !('id' in r)) throw new Error('fail');
+    expect(getRecipeFull(db, r.id)!.sourceUrl).toBe('http://example.com/slow');
+  });
+
   it('second save is 409 and creates no second recipe', async () => {
     const id = await start();
     await saveImport(db, a, id, draft(), deps());
@@ -185,6 +209,112 @@ describe('saveImport', () => {
       deps(),
     );
     expect(g).toMatchObject({ ok: false, status: 422 });
+  });
+
+  describe('explicit view_mode and grid validation', () => {
+    const grid = (over: Record<string, unknown> = {}, rows: [number, number] = [0, 1]) =>
+      draft({
+        sections: [
+          {
+            ingredients: [{ name: 'flour' }, { name: 'sugar' }],
+            steps: [
+              {
+                kind: 'column',
+                label: 'Mix',
+                detail: 'Mix flour and sugar.',
+                row_start: rows[0],
+                row_end: rows[1],
+              },
+            ],
+          },
+        ],
+        ...over,
+      });
+
+    it('saves a valid grid as grid when view_mode is grid', async () => {
+      const id = await start();
+      const r = await saveImport(db, a, id, grid({ view_mode: 'grid' }), deps());
+      if (!r.ok || !('id' in r)) throw new Error(JSON.stringify(r));
+      expect(getRecipeFull(db, r.id)!.viewMode).toBe('grid');
+    });
+
+    it('saves list when view_mode is list, even with valid spans', async () => {
+      const id = await start();
+      const r = await saveImport(db, a, id, grid({ view_mode: 'list' }), deps());
+      if (!r.ok || !('id' in r)) throw new Error(JSON.stringify(r));
+      expect(getRecipeFull(db, r.id)!.viewMode).toBe('list');
+    });
+
+    it('imports open as list when view_mode is omitted (v0.3.0 behaviour)', async () => {
+      const id = await start();
+      const r = await saveImport(db, a, id, grid(), deps());
+      if (!r.ok || !('id' in r)) throw new Error(JSON.stringify(r));
+      expect(getRecipeFull(db, r.id)!.viewMode).toBe('list');
+    });
+
+    it('422 for a tampered grid: span beyond the last row, no recipe, job stays reviewable', async () => {
+      const id = await start();
+      const r = await saveImport(db, a, id, grid({ view_mode: 'grid' }, [0, 9]), deps());
+      expect(r).toMatchObject({ ok: false, status: 422 });
+      if (!r.ok && r.status === 422) expect(r.errors.length).toBeGreaterThan(0);
+      expect(db.select().from(recipe).all()).toHaveLength(0);
+      expect(db.select().from(importJob).get()!.status).toBe('needs_review');
+    });
+
+    it('422 for end before start and negative spans in grid mode', async () => {
+      for (const rows of [
+        [1, 0],
+        [-1, 0],
+      ] as Array<[number, number]>) {
+        const id = await start();
+        expect(
+          await saveImport(db, a, id, grid({ view_mode: 'grid' }, rows), deps()),
+        ).toMatchObject({ ok: false, status: 422 });
+      }
+      expect(db.select().from(recipe).all()).toHaveLength(0);
+    });
+
+    it('422 for an unknown view_mode', async () => {
+      const id = await start();
+      expect(await saveImport(db, a, id, grid({ view_mode: 'table' }), deps())).toMatchObject({
+        ok: false,
+        status: 422,
+      });
+    });
+
+    it('a mapper proposal from the stored draft saves as a valid grid', async () => {
+      const rich = {
+        '@type': 'Recipe',
+        name: 'Cake',
+        recipeIngredient: ['1 cup flour', '1 cup sugar', '2 eggs'],
+        recipeInstructions: [
+          'Whisk the flour and sugar.',
+          'Beat in the eggs.',
+          'Bake for 30 minutes at 180C.',
+        ],
+      };
+      const richFetch = async (): Promise<SafeFetchResult> => ({
+        status: 200,
+        headers: { 'content-type': 'text/html' },
+        body: enc.encode(`<script type="application/ld+json">${JSON.stringify(rich)}</script>`),
+        finalUrl: 'https://example.com/cake',
+      });
+      const id = (
+        await createImport(db, a, { url: 'https://example.com/cake' }, { safeFetch: richFetch })
+      ).id;
+      const stored = parseStoredDraft(db.select().from(importJob).get()!.draftJson)!;
+      expect(stored.draft.mapping).not.toBeNull();
+      const proposal = stored.draft.mapping!;
+      const r = await saveImport(
+        db,
+        a,
+        id,
+        { title: 'Mapped', view_mode: 'grid', sections: proposal.sections },
+        deps(),
+      );
+      if (!r.ok || !('id' in r)) throw new Error(JSON.stringify(r));
+      expect(getRecipeFull(db, r.id)!.viewMode).toBe('grid');
+    });
   });
 
   it('rolls back fully when the recipe insert fails; job stays needs_review', async () => {

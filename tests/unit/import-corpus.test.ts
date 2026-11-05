@@ -17,6 +17,10 @@ describe('import fixture corpus', () => {
       expect(report.failures.filter((r) => r.expect !== 'draft')).toEqual([]);
       expect(report.outOfSlice.length).toBeGreaterThan(0);
       expect(report.bytes).toBeLessThan(1024 * 1024);
+      // Pipeline-level mapper fixtures (3b T7): normalize -> mapGrid wiring end to end.
+      const mapRows = report.rows.filter((r) => r.name.startsWith('map-'));
+      expect(mapRows.length).toBeGreaterThanOrEqual(3);
+      expect(mapRows.filter((r) => !r.pass)).toEqual([]);
       expect(fetchSpy).not.toHaveBeenCalled();
     } finally {
       vi.unstubAllGlobals();

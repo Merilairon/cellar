@@ -33,7 +33,9 @@ export type ImportJobResponse = {
   draft: unknown | null;
   warnings: string[];
   error_code: ImportErrorCodeValue | null;
-  /** 3b field; always null in 3a. */
-  confidence: null;
+  /** Auto-mapper confidence, 0 to 1 with 2 decimals; null when there is no proposal (old draft, mapper failure). */
+  confidence: number | null;
+  /** `high` >= 0.70, `medium` 0.40 to < 0.70, `low` below; null with `confidence`. */
+  mapping_level: 'high' | 'medium' | 'low' | null;
   duplicate: { recipe_id: string; title: string } | null;
 };

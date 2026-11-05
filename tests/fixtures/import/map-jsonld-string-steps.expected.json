@@ -1,0 +1,8 @@
+{
+  "expect": "draft",
+  "kind": "mapper: string steps",
+  "title": "Garlic Pasta",
+  "min_ingredients": 4,
+  "min_steps": 4,
+  "map": { "section_titles": [null] }
+}

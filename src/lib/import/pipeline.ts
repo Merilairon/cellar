@@ -1,5 +1,6 @@
 import { ImportError, type ImportErrorCode } from './errors';
 import { extractRecipeNode } from './extract-jsonld';
+import { attachMapping, type MapFn } from './mapping';
 import { normalizeRecipe, type Draft } from './normalize';
 import { MAX_PASTE_CHARS, recipeNodeFromPaste } from './paste';
 import {
@@ -7,7 +8,7 @@ import {
   type SafeFetchOptions,
   type SafeFetchResult,
 } from './safe-fetch';
-import { normalizeSourceUrl } from './source-url';
+import { normalizeSourceUrl, storedSourceUrl } from './source-url';
 
 // Orchestration for slice 3a: static fetch -> JSON-LD -> normalize, or paste. Headless
 // (`method = 'headless'`) is a later slice and is never produced here. Only `safeFetch`
@@ -20,6 +21,8 @@ export type ImportDeps = {
   /** Passed straight to safeFetch (non-production fixture seam, from env). */
   fetchOptions?: SafeFetchOptions;
   log?: (msg: string, err?: unknown) => void;
+  /** Test seam: replaces the auto-mapper. Never exposed to request data. */
+  mapGrid?: MapFn;
 };
 
 export type ImportResult = {
@@ -72,21 +75,27 @@ export async function runImport(input: ImportInput, deps: ImportDeps = {}): Prom
       deps.log?.('parse failed: unexpected', e);
       return failed('paste', 'no_recipe');
     }
-    const { draft, warnings } = parsed;
-    if (!draft) return failed('paste', 'no_recipe', { warnings, raw_html: text });
+    if (!parsed.draft)
+      return failed('paste', 'no_recipe', { warnings: parsed.warnings, raw_html: text });
+    const mapped = attachMapping(parsed.draft, parsed.mapInput, {
+      mapGrid: deps.mapGrid,
+      log: deps.log,
+    });
     return {
       status: 'needs_review',
       method: 'paste',
-      draft,
-      warnings,
+      draft: mapped.draft,
+      warnings: [...parsed.warnings, ...mapped.warnings],
       error_code: null,
       source_url: null,
       raw_html: text,
     };
   }
 
+  // Comparison key (duplicate detection, job.url) and the URL to store (entered scheme, Q3).
   const sourceUrl = normalizeSourceUrl(input.url);
-  if (!sourceUrl) return failed('static', 'invalid_url');
+  const storedUrl = storedSourceUrl(input.url);
+  if (!sourceUrl || !storedUrl) return failed('static', 'invalid_url');
 
   let page: SafeFetchResult;
   try {
@@ -106,13 +115,25 @@ export async function runImport(input: ImportInput, deps: ImportDeps = {}): Prom
   let normalized: ReturnType<typeof normalizeRecipe> | null = null;
   try {
     node = extractRecipeNode(html).node;
-    if (node) normalized = normalizeRecipe(node, { sourceUrl });
+    // Relative cover URLs resolve against where the page really is (final URL after redirects).
+    if (node) normalized = normalizeRecipe(node, { sourceUrl: storedUrl, baseUrl: page.finalUrl });
   } catch (e) {
     deps.log?.('parse failed: unexpected', e);
     return failed('static', 'no_recipe', base);
   }
   if (!node || !normalized) return failed('static', 'no_recipe', base);
-  const { draft, warnings } = normalized;
-  if (!draft) return failed('static', 'no_recipe', { ...base, warnings });
-  return { status: 'needs_review', method: 'static', draft, warnings, error_code: null, ...base };
+  if (!normalized.draft)
+    return failed('static', 'no_recipe', { ...base, warnings: normalized.warnings });
+  const mapped = attachMapping(normalized.draft, normalized.mapInput, {
+    mapGrid: deps.mapGrid,
+    log: deps.log,
+  });
+  return {
+    status: 'needs_review',
+    method: 'static',
+    draft: mapped.draft,
+    warnings: [...normalized.warnings, ...mapped.warnings],
+    error_code: null,
+    ...base,
+  };
 }

@@ -38,11 +38,32 @@ describe('runImport: URL path', () => {
     expect(r).toMatchObject({ status: 'needs_review', method: 'static', error_code: null });
     expect(r.draft?.title).toBe('Pancakes');
     expect(r.draft?.view_mode).toBe('list');
-    expect(r.draft?.source_url).toBe('https://example.com/pancakes');
+    // Stored URL keeps the entered scheme (Q3); the job/comparison key is the https form.
+    expect(r.draft?.source_url).toBe('http://example.com/pancakes');
     expect(r.source_url).toBe('https://example.com/pancakes');
     expect(r.raw_html).toContain('ld+json');
     // The original (not normalized) URL is what gets fetched.
     expect(f.mock.calls[0]![0]).toBe('http://Example.com/pancakes/?utm_source=x#c');
+  });
+
+  it('resolves a relative cover URL against the final URL after redirects (m1)', async () => {
+    const f = fetchStub({
+      ...ok(html({ ...RECIPE, image: '/img/p.jpg' })),
+      finalUrl: 'https://cdn.example.org/moved/pancakes',
+    });
+    const r = await runImport({ url: 'https://short.example.com/x' }, { safeFetch: f });
+    expect(r.draft?.cover_image_url).toBe('https://cdn.example.org/img/p.jpg');
+    // The stored source URL is still what the user entered.
+    expect(r.draft?.source_url).toBe('https://short.example.com/x');
+  });
+
+  it('keeps the entered http scheme in the draft and the https comparison key in the job', async () => {
+    const r = await runImport(
+      { url: 'http://Example.com/p/?utm_source=x' },
+      { safeFetch: fetchStub(ok(html(RECIPE))) },
+    );
+    expect(r.draft?.source_url).toBe('http://example.com/p');
+    expect(r.source_url).toBe('https://example.com/p');
   });
 
   it('forwards fetch options (fixture seam) to safeFetch', async () => {

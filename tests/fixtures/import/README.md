@@ -17,7 +17,7 @@ Runner: `scripts/import-corpus.ts`. Each fixture is `name.html` plus `name.expec
 
 ## Expectation file
 
-`{ expect, kind, title?, min_ingredients?, min_steps?, forbid?, cover_image?, carry?, note? }`
+`{ expect, kind, title?, min_ingredients?, min_steps?, forbid?, cover_image?, input?, map?, carry?, note? }`
 
 - `expect: "draft"`: must produce a valid draft; counts in the success rate.
 - `expect: "no_recipe"`: deliberately rejected (paywalled stub, non-recipe pages,
@@ -27,6 +27,12 @@ Runner: `scripts/import-corpus.ts`. Each fixture is `name.html` plus `name.expec
   (owner decision). Today they must still return `no_recipe`, not crash.
 - `forbid`: substrings that must not appear anywhere in the draft (sanitizer checks).
 - `cover_image: null`: the draft must have no cover image (unsafe URL schemes dropped).
+- `input: "paste"`: the fixture is `name.txt` (plain text) and goes through the paste path
+  instead of `name.html` through the URL path.
+- `map`: checks on the auto-mapper proposal the pipeline attaches (`draft.mapping`):
+  `section_titles`, `min_confidence`, `max_confidence`, `level` (`high|medium|low|none`),
+  `warnings_include`. The `map-*` fixtures prove the normalize -> mapper wiring end to end
+  (HowToSection plus ingredient group headings, string steps, pasted `For the sauce:`).
 
 ## Success rate
 
