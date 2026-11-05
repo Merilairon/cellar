@@ -2,8 +2,9 @@ import { getDb } from '@/lib/db';
 import { getEnv } from '@/lib/env';
 import { createImport } from '@/lib/import/service';
 import { importLog, serverFetchOptions } from '@/lib/import/route-deps';
+import { busyResponse, LimiterBusyError } from '@/lib/import/limiter';
 import { importRequestSchema } from '@/lib/import/schemas';
-import { authenticate, json, readJson } from '@/lib/recipes/http';
+import { authenticate, IMPORT_BODY_MAX, json, readJson } from '@/lib/recipes/http';
 import { importLimiter } from '@/lib/security/import-limits';
 
 export const dynamic = 'force-dynamic';
@@ -24,22 +25,28 @@ export async function POST(request: Request) {
     );
   }
 
-  const parsed = await readJson(request);
+  const parsed = await readJson(request, IMPORT_BODY_MAX);
   if (parsed instanceof Response) return parsed;
   const input = importRequestSchema.safeParse(parsed.body);
   if (!input.success) return json(422, { error: 'invalid_request' });
 
   const env = getEnv();
-  const result = await createImport(
-    getDb(),
-    auth.user,
-    input.data.url !== undefined ? { url: input.data.url } : { text: input.data.text! },
-    {
-      fetchOptions: serverFetchOptions(),
-      keepRawHtml: env.KEEP_RAW_HTML,
-      uploadsDir: env.UPLOADS_DIR,
-      log: importLog,
-    },
-  );
+  let result;
+  try {
+    result = await createImport(
+      getDb(),
+      auth.user,
+      input.data.url !== undefined ? { url: input.data.url } : { text: input.data.text! },
+      {
+        fetchOptions: serverFetchOptions(),
+        keepRawHtml: env.KEEP_RAW_HTML,
+        uploadsDir: env.UPLOADS_DIR,
+        log: importLog,
+      },
+    );
+  } catch (e) {
+    if (e instanceof LimiterBusyError) return busyResponse(e);
+    throw e;
+  }
   return json(200, result);
 }

@@ -26,15 +26,50 @@ export async function authenticate(request: Request): Promise<{ user: User } | R
   return { user };
 }
 
+/** Body caps (bytes) for JSON endpoints that accept free text. */
+export const IMPORT_BODY_MAX = 1024 * 1024;
+export const SAVE_BODY_MAX = 256 * 1024;
+
+/**
+ * Read the body as text, never buffering more than `maxBytes`. Rejects early on an
+ * oversize Content-Length and counts streamed bytes otherwise (chunked or lying header).
+ * Returns null when the cap is exceeded.
+ */
+async function readCapped(request: Request, maxBytes: number): Promise<string | null> {
+  const declared = request.headers.get('content-length');
+  if (declared !== null && Number(declared) > maxBytes) return null;
+  if (!request.body) return '';
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel().catch(() => undefined);
+      return null;
+    }
+    chunks.push(value);
+  }
+  return new TextDecoder().decode(Buffer.concat(chunks));
+}
+
 /**
  * Parse a JSON body. Requires `Content-Type: application/json` (415 otherwise, which also
- * keeps cross-site simple-form posts out); invalid JSON is 400. Returns a Response on failure.
+ * keeps cross-site simple-form posts out); a body over `maxBytes` is 413 (checked before
+ * any parse); invalid JSON is 400. Returns a Response on failure.
  */
-export async function readJson(request: Request): Promise<{ body: unknown } | Response> {
+export async function readJson(
+  request: Request,
+  maxBytes: number = IMPORT_BODY_MAX,
+): Promise<{ body: unknown } | Response> {
   const type = request.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase();
   if (type !== 'application/json') return json(415, { error: 'unsupported_media_type' });
+  const text = await readCapped(request, maxBytes);
+  if (text === null) return json(413, { error: 'payload_too_large' });
   try {
-    return { body: await request.json() };
+    return { body: JSON.parse(text) };
   } catch {
     return json(400, { error: 'invalid_json' });
   }

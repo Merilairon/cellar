@@ -2,7 +2,7 @@ import { getDb } from '@/lib/db';
 import { getEnv } from '@/lib/env';
 import { saveImport } from '@/lib/import/save';
 import { serverFetchOptions } from '@/lib/import/route-deps';
-import { authenticate, failure, json, readJson } from '@/lib/recipes/http';
+import { authenticate, failure, json, readJson, SAVE_BODY_MAX } from '@/lib/recipes/http';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,7 +11,7 @@ type Ctx = { params: Promise<{ id: string }> };
 export async function POST(request: Request, { params }: Ctx) {
   const auth = await authenticate(request);
   if (auth instanceof Response) return auth;
-  const parsed = await readJson(request);
+  const parsed = await readJson(request, SAVE_BODY_MAX);
   if (parsed instanceof Response) return parsed;
   const result = await saveImport(getDb(), auth.user, (await params).id, parsed.body, {
     fetchOptions: serverFetchOptions(),
