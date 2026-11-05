@@ -1,0 +1,11 @@
+.next
+node_modules
+drizzle
+package-lock.json
+playwright-report
+test-results
+.claude
+.kilo
+.vibe
+docs
+milestones
