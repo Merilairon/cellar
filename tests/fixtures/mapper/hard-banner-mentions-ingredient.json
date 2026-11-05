@@ -1,6 +1,6 @@
 {
   "class": "hard",
-  "note": "\"Serve with extra honey\": honey is only in the bottom banner, so its row is appended and unmentioned.",
+  "note": "\"Serve with extra honey\": honey is only in the bottom banner, so its row is appended, unmentioned and not counted as covered (list, not grid; review m1).",
   "ingredients": [
     "1 cup oats",
     "1 cup milk",
@@ -12,7 +12,7 @@
     "Serve with extra honey."
   ],
   "expected": {
-    "view": "grid",
+    "view": "list",
     "sections": [
       {
         "title": null,
@@ -43,6 +43,6 @@
     ]
   },
   "confidence": {
-    "min": 0.7
+    "max": 0.69
   }
 }

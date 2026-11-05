@@ -1,0 +1,51 @@
+{
+  "class": "hard",
+  "note": "Ingredient lines without quantities; steps use \"season\" and combined verbs.",
+  "ingredients": [
+    "chicken thighs",
+    "salt",
+    "pepper",
+    "olive oil",
+    "1 lemon"
+  ],
+  "steps": [
+    "Pat the chicken thighs dry and season with salt and pepper.",
+    "Sear in the olive oil, skin side down, for 6 minutes.",
+    "Flip, squeeze the lemon over, and roast at 425 F for 20 minutes."
+  ],
+  "expected": {
+    "view": "grid",
+    "sections": [
+      {
+        "title": null,
+        "rows": [
+          "chicken thigh",
+          "salt",
+          "pepper",
+          "olive oil",
+          "lemon"
+        ],
+        "steps": [
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 3
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 4
+          }
+        ]
+      }
+    ]
+  },
+  "confidence": {
+    "min": 0.7
+  }
+}

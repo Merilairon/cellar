@@ -1,0 +1,49 @@
+{
+  "class": "hard",
+  "note": "Steps carry \"Step N:\" prefixes copied from a page.",
+  "ingredients": [
+    "1 cup flour",
+    "1/2 cup sugar",
+    "2 eggs",
+    "1 cup milk"
+  ],
+  "steps": [
+    "Step 1: Mix the flour and sugar.",
+    "Step 2: Whisk in the eggs and milk.",
+    "Step 3: Pour into a pan and bake for 25 minutes."
+  ],
+  "expected": {
+    "view": "grid",
+    "sections": [
+      {
+        "title": null,
+        "rows": [
+          "flour",
+          "sugar",
+          "egg",
+          "milk"
+        ],
+        "steps": [
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 1
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 3
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 3
+          }
+        ]
+      }
+    ]
+  },
+  "confidence": {
+    "min": 0.7
+  }
+}

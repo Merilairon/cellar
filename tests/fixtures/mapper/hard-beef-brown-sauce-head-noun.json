@@ -1,0 +1,49 @@
+{
+  "class": "hard",
+  "note": "Head-noun mention (\"the sauce\" for tomato sauce) and \"brown\" as a verb.",
+  "ingredients": [
+    "1 lb ground beef",
+    "1 onion",
+    "2 cloves garlic",
+    "1 can tomato sauce"
+  ],
+  "steps": [
+    "Brown the beef with the onion in a large skillet.",
+    "Stir in the garlic and the sauce.",
+    "Simmer for 20 minutes."
+  ],
+  "expected": {
+    "view": "grid",
+    "sections": [
+      {
+        "title": null,
+        "rows": [
+          "beef",
+          "onion",
+          "garlic",
+          "tomato sauce"
+        ],
+        "steps": [
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 1
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 3
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 3
+          }
+        ]
+      }
+    ]
+  },
+  "confidence": {
+    "min": 0.7
+  }
+}

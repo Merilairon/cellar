@@ -14,7 +14,7 @@
     "Bake."
   ],
   "expected": {
-    "view": "grid",
+    "view": "list",
     "sections": [
       {
         "title": null,
@@ -53,6 +53,6 @@
     ]
   },
   "confidence": {
-    "max": 0.95
+    "max": 0.69
   }
 }

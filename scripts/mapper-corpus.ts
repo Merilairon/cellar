@@ -42,6 +42,8 @@ export type MapperFixture = {
     warnings_include?: string[];
   };
   confidence?: { min?: number; max?: number };
+  /** Reason this `hard` fixture is known not to meet its expectations (reported, not failing). */
+  known_miss?: string;
 };
 
 export type MapperRow = {
@@ -57,6 +59,8 @@ export type MapperRow = {
   warnings: string[];
   /** The fixture met every expectation it states. */
   ok: boolean;
+  /** Reason given by a `known_miss` fixture. */
+  knownMiss?: string;
   /** Structure or view differs from the expectation while confidence is high. */
   confidentWrong: boolean;
   problems: string[];
@@ -70,6 +74,10 @@ export type MapperReport = {
   hard: { total: number; structured: number; exact: number; wrongBelowHigh: number; wrong: number };
   negatives: { total: number; ok: number };
   confidentWrong: MapperRow[];
+  /** `hard` fixtures that miss their stated expectations without a `known_miss` reason. */
+  hardUnexplained: MapperRow[];
+  /** `known_miss` fixtures that now meet their expectations (the marker is stale). */
+  staleKnownMiss: MapperRow[];
   calibration: Array<{ bucket: string; total: number; exact: number }>;
   timing: { maxMs: number; medianMs: number };
   fixtureCount: number;
@@ -119,6 +127,7 @@ type Case = {
   stepParams?: ExpectedStepParams[][];
   warnings?: string[];
   confidence?: { min?: number; max?: number };
+  knownMiss?: string;
 };
 
 /** References derived from the samples (G1): input from samples.ts, expected = the sample. */
@@ -150,6 +159,8 @@ function fixtureCases(): Case[] {
     stepParams: fx.expected.sections?.map((s) => s.steps),
     warnings: fx.expected.warnings_include,
     confidence: fx.confidence,
+    knownMiss:
+      typeof fx.known_miss === 'string' && fx.known_miss.trim() ? fx.known_miss : undefined,
   }));
 }
 
@@ -212,6 +223,7 @@ function runCase(c: Case): MapperRow {
     stepsTotal,
     warnings: warnings as string[],
     ok: problems.length === 0,
+    knownMiss: c.knownMiss,
     confidentWrong: highConf && (structureWrong || viewWrong),
     problems,
     ms,
@@ -249,6 +261,8 @@ export function runMapperCorpus(): MapperReport {
   const stepsRight = clean.reduce((n, r) => n + r.stepsRight, 0);
   const stepsTotal = clean.reduce((n, r) => n + r.stepsTotal, 0);
   const confidentWrong = rows.filter((r) => r.confidentWrong);
+  const hardUnexplained = hard.filter((r) => !r.ok && !r.knownMiss);
+  const staleKnownMiss = rows.filter((r) => r.knownMiss && r.ok);
   const cleanExactRate = clean.length ? exactOf(clean) / clean.length : 0;
   const spanRate = stepsTotal ? stepsRight / stepsTotal : 0;
 
@@ -274,6 +288,11 @@ export function runMapperCorpus(): MapperReport {
       detail: String(confidentWrong.length),
     },
     {
+      name: 'hard fixtures meet their expectations or are marked known_miss',
+      pass: hardUnexplained.length === 0 && staleKnownMiss.length === 0,
+      detail: `${hardUnexplained.length} unexplained, ${staleKnownMiss.length} stale`,
+    },
+    {
       name: 'negatives end as list/none with confidence < 0.70',
       pass: neg.every((r) => r.ok),
       detail: `${neg.filter((r) => r.ok).length}/${neg.length}`,
@@ -293,6 +312,8 @@ export function runMapperCorpus(): MapperReport {
     },
     negatives: { total: neg.length, ok: neg.filter((r) => r.ok).length },
     confidentWrong,
+    hardUnexplained,
+    staleKnownMiss,
     calibration,
     timing: {
       maxMs: times[times.length - 1] ?? 0,
@@ -318,7 +339,8 @@ export function printMapperReport(report: MapperReport): void {
       'portion labels, and per step kind, row_start, row_end (labels and temp/time are not compared\n' +
       'except where a fixture states them). EXACT = every part equal. view: grid when confidence\n' +
       '>= 0.70, list below that, none when no proposal. Thresholds: high >= 0.70, medium 0.40-0.69,\n' +
-      'low < 0.40. Fixtures are self-written; this does not measure real sites.\n',
+      "low < 0.40. Fixtures are self-written: this table is a regression net on the author's own text, not\n" +
+      'an accuracy estimate for real sites.\n',
   );
   console.log(
     `${pad('fixture', 42)} ${pad('class', 9)} ${pad('want', 5)} ${pad('got', 5)} ${pad('conf', 5)} ${pad('level', 6)} ${pad('structure', 16)} warnings`,
@@ -329,7 +351,7 @@ export function printMapperReport(report: MapperReport): void {
       `${pad(r.name, 42)} ${pad(r.cls, 9)} ${pad(r.expectView, 5)} ${pad(r.gotView, 5)} ${pad(
         r.confidence === null ? '-' : r.confidence.toFixed(2),
         5,
-      )} ${pad(r.level, 6)} ${pad(structure, 16)} ${r.warnings.join(', ')}${r.ok ? '' : `   <-- ${r.problems.join('; ')}`}`,
+      )} ${pad(r.level, 6)} ${pad(structure, 16)} ${r.warnings.join(', ')}${r.ok ? '' : `   <-- ${r.knownMiss ? 'known miss: ' : ''}${r.problems.join('; ')}`}`,
     );
   }
   const { clean, hard, references, negatives } = report;

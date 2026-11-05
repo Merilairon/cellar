@@ -1,0 +1,76 @@
+{
+  "class": "clean",
+  "note": "Two sections, each with every step spanning all its rows: the span count is per section, so this is not capped at 0.55 (review m2).",
+  "ingredients": [
+    "For the base:",
+    "1 cup flour",
+    "1/2 cup sugar",
+    "For the topping:",
+    "1 cup berries",
+    "2 tbsp honey"
+  ],
+  "steps": [
+    {
+      "text": "Mix the flour and sugar.",
+      "section": "Base"
+    },
+    {
+      "text": "Bake for 20 minutes.",
+      "section": "Base"
+    },
+    {
+      "text": "Toss the berries with the honey.",
+      "section": "Topping"
+    },
+    {
+      "text": "Spoon over the base.",
+      "section": "Topping"
+    }
+  ],
+  "expected": {
+    "view": "grid",
+    "sections": [
+      {
+        "title": "Base",
+        "rows": [
+          "flour",
+          "sugar"
+        ],
+        "steps": [
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 1
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 1
+          }
+        ]
+      },
+      {
+        "title": "Topping",
+        "rows": [
+          "berry",
+          "honey"
+        ],
+        "steps": [
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 1
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 1
+          }
+        ]
+      }
+    ]
+  },
+  "confidence": {
+    "min": 0.7
+  }
+}
