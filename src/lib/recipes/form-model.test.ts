@@ -7,6 +7,7 @@ import {
   emptyStep,
   errorMap,
   errorMessageKey,
+  formFromDraft,
   formFromRecipe,
   formToPayload,
   ingredientLines,
@@ -170,5 +171,56 @@ describe('validateForm', () => {
   it('maps every reported code to a message key', () => {
     expect(errorMessageKey('row_order')).toBe('recipe.errors.row_order');
     expect(errorMessageKey('something_new')).toBe('recipe.errors.generic');
+  });
+});
+
+describe('formFromDraft', () => {
+  const draft = {
+    title: 'Pancakes <b>',
+    description: null,
+    servings: 4,
+    servings_label: null,
+    prep_minutes: 10,
+    cook_minutes: null,
+    source_url: 'https://example.com/p',
+    source_name: 'Example',
+    tags: ['breakfast'],
+    cover_image_url: null,
+    sections: [
+      {
+        title: null,
+        ingredients: [
+          {
+            name: 'flour',
+            raw_text: '200 g flour',
+            metric_qty: 200,
+            metric_unit: 'g',
+            display_primary: 'metric' as const,
+          },
+        ],
+        steps: [{ kind: 'column' as const, label: 'Mix', detail: 'Mix it.' }],
+      },
+    ],
+  };
+
+  it('pre-fills metadata, ingredient lines and steps without spans', () => {
+    const f = formFromDraft(draft as never);
+    expect(f).toMatchObject({
+      title: 'Pancakes <b>', // kept as plain text, escaped by React on render
+      servings: '4',
+      prepMinutes: '10',
+      cookMinutes: '',
+      sourceName: 'Example',
+      sourceUrl: 'https://example.com/p',
+      visibility: 'private',
+    });
+    expect(f.sections[0]!.ingredientsText).toBe('200 g flour');
+    expect(f.sections[0]!.steps[0]).toMatchObject({ label: 'Mix', rowStart: '', rowEnd: '' });
+  });
+
+  it('validates as a list recipe', () => {
+    const v = validateForm(formFromDraft(draft as never));
+    expect(v.ok).toBe(true);
+    if (v.ok) expect(v.viewMode).toBe('list');
   });
 });

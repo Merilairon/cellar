@@ -4,6 +4,7 @@ import {
   parseIngredientLine,
   toIngredientFields,
 } from '@/lib/import/ingredient-parser';
+import type { Draft } from '@/lib/import/normalize';
 import { validateRecipeGrid } from '@/lib/grid/validate';
 import {
   recipeInputSchema,
@@ -195,6 +196,37 @@ export function formFromRecipe(r: RecipeLike): FormState {
       };
     }),
   };
+}
+
+/** Pre-fills the form from an import draft (list view: spans stay empty unless the draft has them). */
+export function formFromDraft(d: Draft): FormState {
+  return formFromRecipe({
+    title: d.title,
+    description: d.description ?? null,
+    servings: d.servings ?? null,
+    servings_label: d.servings_label ?? null,
+    prep_minutes: d.prep_minutes ?? null,
+    cook_minutes: d.cook_minutes ?? null,
+    source_url: d.source_url ?? null,
+    source_name: d.source_name ?? null,
+    visibility: d.visibility ?? 'private',
+    sections: d.sections.map((s) => ({
+      title: s.title ?? null,
+      ingredients: s.ingredients.map((i, position) => ({ ...i, position })),
+      steps: s.steps.map((t, position) => ({
+        position,
+        kind: t.kind,
+        label: t.label,
+        detail: t.detail,
+        row_start: t.kind === 'column' ? (t.row_start ?? null) : null,
+        row_end: t.kind === 'column' ? (t.row_end ?? null) : null,
+        temp_c: t.temp_c ?? null,
+        temp_f: t.temp_f ?? null,
+        minutes_min: t.minutes_min ?? null,
+        minutes_max: t.minutes_max ?? null,
+      })),
+    })),
+  });
 }
 
 /** Non-blank trimmed lines; blank lines are ignored, so row numbers count these. */
