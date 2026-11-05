@@ -5,7 +5,8 @@ import {
   toIngredientFields,
 } from '@/lib/import/ingredient-parser';
 import type { Draft } from '@/lib/import/normalize';
-import { validateRecipeGrid } from '@/lib/grid/validate';
+import { validateRecipeGrid, type GridIssue } from '@/lib/grid/validate';
+import type { ApiSection } from '@/components/recipe/types';
 import {
   recipeInputSchema,
   zodIssuesToErrors,
@@ -202,8 +203,9 @@ export function formFromRecipe(r: RecipeLike): FormState {
   };
 }
 
-/** Pre-fills the form from an import draft (list view: spans stay empty unless the draft has them). */
-export function formFromDraft(d: Draft): FormState {
+type DraftSections = Draft['sections'];
+
+function formFromDraftSections(d: Draft, sections: DraftSections): FormState {
   return formFromRecipe({
     title: d.title,
     description: d.description ?? null,
@@ -214,7 +216,7 @@ export function formFromDraft(d: Draft): FormState {
     source_url: d.source_url ?? null,
     source_name: d.source_name ?? null,
     visibility: d.visibility ?? 'private',
-    sections: d.sections.map((s) => ({
+    sections: sections.map((s) => ({
       title: s.title ?? null,
       ingredients: s.ingredients.map((i, position) => ({ ...i, position })),
       steps: s.steps.map((t, position) => ({
@@ -232,6 +234,106 @@ export function formFromDraft(d: Draft): FormState {
     })),
   });
 }
+
+/** Pre-fills the form from an import draft (list view: spans stay empty unless the draft has them). */
+export function formFromDraft(d: Draft): FormState {
+  return formFromDraftSections(d, d.sections);
+}
+
+/**
+ * Form for one structure of the draft: `list` is the flat page-order sections, `grid` the
+ * mapper's proposal (falls back to the list when there is no proposal). Spans go from 0-based
+ * to 1-based strings.
+ */
+export function formFromDraftMode(d: Draft, mode: 'list' | 'grid'): FormState {
+  return formFromDraftSections(d, mode === 'grid' && d.mapping ? d.mapping.sections : d.sections);
+}
+
+/** Same form with only `sections` replaced; every field outside sections is kept. */
+export const withSections = (f: FormState, sections: FormSection[]): FormState => ({
+  ...f,
+  sections,
+});
+
+/** Content of the sections without row keys, to tell whether the user edited them. */
+export const sectionsSignature = (sections: FormSection[]): string =>
+  JSON.stringify(
+    sections.map((s) => [
+      s.title,
+      s.ingredientsText,
+      s.steps.map((t) => [
+        t.kind,
+        t.label,
+        t.detail,
+        t.rowStart,
+        t.rowEnd,
+        t.tempC,
+        t.tempF,
+        t.minutesMin,
+        t.minutesMax,
+      ]),
+    ]),
+  );
+
+/**
+ * Sections as the grid component takes them, built from the form as it is right now. Ids come
+ * from row indexes (never a counter), so server and client render the same markup.
+ */
+export function formToPreviewSections(f: FormState): ApiSection[] {
+  return f.sections.map((s, si) => ({
+    id: `pv-s${si}`,
+    position: si,
+    title: s.title.trim() ? s.title : null,
+    ingredients: buildIngredients(s.ingredientsText, s.originals).map((i, ii) => ({
+      id: `pv-s${si}-i${ii}`,
+      position: ii,
+      name: i.name,
+      note: i.note ?? null,
+      raw_text: i.raw_text ?? i.name,
+      metric_qty: i.metric_qty ?? null,
+      metric_qty_max: i.metric_qty_max ?? null,
+      metric_unit: i.metric_unit ?? null,
+      us_qty: i.us_qty ?? null,
+      us_qty_max: i.us_qty_max ?? null,
+      us_unit: i.us_unit ?? null,
+      display_primary: i.display_primary ?? 'metric',
+      split_group_id: i.split_group_id ?? null,
+      portion_label: i.portion_label ?? null,
+      group_label: i.group_label ?? null,
+    })),
+    steps: s.steps.map((t, ti) => {
+      const column = t.kind === 'column';
+      const a = column ? num(t.rowStart) : null;
+      const b = column ? num(t.rowEnd) : null;
+      return {
+        id: `pv-s${si}-t${ti}`,
+        position: ti,
+        kind: t.kind,
+        label: t.label,
+        detail: t.detail,
+        row_start: a === null ? null : a - 1,
+        row_end: b === null ? null : b - 1,
+        temp_c: num(t.tempC),
+        temp_f: num(t.tempF),
+        minutes_min: num(t.minutesMin),
+        minutes_max: num(t.minutesMax),
+      };
+    }),
+  }));
+}
+
+/** Everything that stops the form from being a drawable, savable grid (spans must all be set). */
+export function previewIssues(f: FormState): GridIssue[] {
+  return validateRecipeGrid({
+    sections: previewSectionsToGrid(formToPreviewSections(f)),
+  }).errors;
+}
+
+const previewSectionsToGrid = (secs: ApiSection[]) =>
+  secs.map((s) => ({
+    ingredients: s.ingredients,
+    steps: s.steps.map((t) => ({ kind: t.kind, row_start: t.row_start, row_end: t.row_end })),
+  }));
 
 /** Non-blank trimmed lines; blank lines are ignored, so row numbers count these. */
 export const ingredientLines = (text: string): string[] =>
