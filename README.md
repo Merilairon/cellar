@@ -1,4 +1,4 @@
-# Recipe Book
+# Cellar
 
 A self-hosted recipe book for you and the people you invite. Next.js 16, SQLite, one container.
 
@@ -95,7 +95,7 @@ See [docs/deployment.md](docs/deployment.md) for details.
 Build for amd64 and arm64 with buildx (cross-building needs QEMU; see [docs/deployment.md](docs/deployment.md)):
 
 ```bash
-docker buildx build --platform linux/amd64,linux/arm64 -t recipe-book:multi .
+docker buildx build --platform linux/amd64,linux/arm64 -t cellar:multi .
 ```
 
 Add `--push` and a registry tag to publish.
@@ -105,7 +105,7 @@ Add `--push` and a registry tag to publish.
 Back up the `/data` volume (the SQLite database lives in it). With the app stopped (`docker compose stop app`), for example:
 
 ```bash
-docker run --rm -v recipe-book_app-data:/data -v "$PWD":/backup alpine tar czf /backup/recipe-book-data.tgz -C /data .
+docker run --rm -v recipe-book_app-data:/data -v "$PWD":/backup alpine tar czf /backup/cellar-data.tgz -C /data .
 ```
 
 The volume name is `<compose project>_app-data`; check with `docker volume ls`.

@@ -41,7 +41,7 @@ Runs `node dist/admin-reset.mjs` (esbuild bundle; the standalone image has no ts
 ## Multi-arch image (amd64 + arm64)
 
 ```sh
-docker buildx build --platform linux/amd64,linux/arm64 -t recipe-book:multi .
+docker buildx build --platform linux/amd64,linux/arm64 -t cellar:multi .
 ```
 
 Add `--push -t registry/name:tag` to publish (CI never pushes). Native modules (`better-sqlite3`, `argon2`) use upstream prebuilt binaries when available; the build stage includes python3/make/g++ so `node-gyp` can compile them otherwise. The runtime stage has no toolchain. Cross-building arm64 on amd64 needs QEMU (`docker run --privileged --rm tonistiigi/binfmt --install arm64`).

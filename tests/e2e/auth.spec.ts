@@ -25,7 +25,7 @@ test('setup -> login', async ({ page }) => {
   await page.getByLabel('Password').fill(ADMIN.password);
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole('heading', { name: 'Recipe Book' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Cellar' })).toBeVisible();
 
   const res = await page.request.get('/setup');
   expect(res.status()).toBe(404);

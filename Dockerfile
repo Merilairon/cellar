@@ -32,7 +32,7 @@ COPY --from=build --chown=node:node /app/drizzle ./drizzle
 COPY --from=build --chown=node:node /app/dist/admin-reset.mjs ./dist/admin-reset.mjs
 # Standalone has no tsx or build tooling: map the CLI to the esbuild bundle so
 # `npm run admin:reset -- <email>` works inside the container.
-RUN printf '{"name":"recipe-book","private":true,"scripts":{"admin:reset":"node dist/admin-reset.mjs"}}\n' > package.json \
+RUN printf '{"name":"cellar","private":true,"scripts":{"admin:reset":"node dist/admin-reset.mjs"}}\n' > package.json \
  && chown node:node package.json
 USER node
 VOLUME /data

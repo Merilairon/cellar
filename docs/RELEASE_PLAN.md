@@ -1,4 +1,4 @@
-# Recipe Book — Release Plan
+# Cellar — Release Plan
 
 Milestones are sequential; each one is a runnable, deployable version. Specs live in [../milestones/](../milestones).
 

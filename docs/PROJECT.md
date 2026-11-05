@@ -1,4 +1,4 @@
-# Recipe Book — Project Overview
+# Cellar — Project Overview
 
 Self-hosted recipe book for family and friends. Imports recipes from URLs and shows them in a step-by-ingredient **grid**.
 
@@ -55,7 +55,7 @@ Self-hosted recipe book for family and friends. Imports recipes from URLs and sh
 ## Repository Layout (target)
 
 ```
-recipe-book/
+cellar/
 ├─ docs/               planning documents
 ├─ milestones/         implementation specs
 ├─ src/

@@ -1,4 +1,4 @@
-# Recipe Book — Product Requirements Document
+# Cellar — Product Requirements Document
 
 **Status:** Draft v1 · **Owner:** Jan Baetens
 
@@ -6,7 +6,7 @@
 
 Recipes live in bookmarks, screenshots, and scattered websites full of ads, life stories and pop-ups. Standard recipe layouts (ingredient list, then numbered paragraphs) force the cook to keep flipping between "what do I need" and "what do I do now". The result is mistakes and lost context mid-cooking.
 
-Recipe Book is a self-hosted web app that:
+Cellar is a self-hosted web app that:
 
 1. Stores a family's recipes in one place.
 2. Imports recipes from any URL.

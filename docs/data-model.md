@@ -1,4 +1,4 @@
-# Recipe Book — Data Model
+# Cellar — Data Model
 
 SQLite. IDs are ULIDs (text). Timestamps are ISO-8601 UTC text.
 

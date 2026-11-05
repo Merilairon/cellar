@@ -25,7 +25,7 @@
   "common": {
     "logout": "Sign out",
     "invalidLink": "This link is invalid or has expired.",
-    "home": "Recipe Book",
+    "home": "Cellar",
     "loading": "Loading"
   },
   "admin": {

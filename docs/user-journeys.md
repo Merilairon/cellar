@@ -1,4 +1,4 @@
-# Recipe Book — User Journeys
+# Cellar — User Journeys
 
 ## Personas
 

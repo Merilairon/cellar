@@ -1,4 +1,4 @@
-# Recipe Book — Task Assignments
+# Cellar — Task Assignments
 
 Maps each release slice to the specialist agents in [.claude/agents/](../.claude/agents). Slices follow [RELEASE_PLAN.md](RELEASE_PLAN.md). **Lead** owns delivery of the slice; **Support** contributes; **Gate** must sign off before the slice is marked done.
 
