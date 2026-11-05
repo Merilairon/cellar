@@ -15,6 +15,10 @@ services:
       # Comma-separated IPs/CIDRs whose X-Forwarded-* headers are trusted. Empty = none.
       # With the caddy profile set it to 172.28.0.10 (Caddy's fixed address below).
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+      # Import (v0.3). Defaults match the app defaults.
+      KEEP_RAW_HTML: ${KEEP_RAW_HTML:-false}
+      RATE_LIMIT_IMPORT_MAX: ${RATE_LIMIT_IMPORT_MAX:-20}
+      RATE_LIMIT_IMPORT_WINDOW_SEC: ${RATE_LIMIT_IMPORT_WINDOW_SEC:-3600}
     volumes:
       - app-data:/data
     healthcheck:
