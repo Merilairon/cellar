@@ -113,6 +113,44 @@ describe('recipe tables', () => {
     ).toThrow(/CHECK/);
   });
 
+  it('CHECKs enums and ties spans to kind', () => {
+    const u = setup();
+    const r = mkRecipe(u.id);
+    const raw = (sql: string) => db.$client.exec(sql);
+    expect(() => raw(`UPDATE recipe SET visibility='public' WHERE id='${r.id}'`)).toThrow(/CHECK/);
+    expect(() => raw(`UPDATE recipe SET view_mode='cards' WHERE id='${r.id}'`)).toThrow(/CHECK/);
+    const s = db.insert(section).values({ recipeId: r.id, position: 0 }).returning().get();
+    const base = { recipeId: r.id, sectionId: s.id, label: 'l' };
+    expect(() =>
+      db
+        .insert(step)
+        .values({ ...base, position: 0, kind: 'banner_top', rowStart: 0, rowEnd: 0 })
+        .run(),
+    ).toThrow(/CHECK/);
+    expect(() =>
+      db
+        .insert(step)
+        .values({ ...base, position: 1, kind: 'banner_bottom', rowStart: 1, rowEnd: 2 })
+        .run(),
+    ).toThrow(/CHECK/);
+    db.insert(step)
+      .values({ ...base, position: 2, kind: 'banner_top' })
+      .run();
+    db.insert(step)
+      .values({ ...base, position: 3, kind: 'column' })
+      .run(); // list-mode column without spans
+    expect(() =>
+      raw(
+        `INSERT INTO step (id, recipe_id, section_id, position, kind, label) VALUES ('x','${r.id}','${s.id}',9,'sidebar','l')`,
+      ),
+    ).toThrow(/CHECK/);
+    expect(() =>
+      raw(
+        `INSERT INTO ingredient (id, recipe_id, section_id, position, name, raw_text, display_primary) VALUES ('y','${r.id}','${s.id}',0,'n','n','imperial')`,
+      ),
+    ).toThrow(/CHECK/);
+  });
+
   it('keeps a v0.1 database intact when the recipe migration applies on top', () => {
     db = openDb(':memory:');
     const folder = join(process.cwd(), 'drizzle');

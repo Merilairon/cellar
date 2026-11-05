@@ -26,11 +26,16 @@ export async function authenticate(request: Request): Promise<{ user: User } | R
   return { user };
 }
 
-/** Parse a JSON body; undefined means invalid JSON (caller answers 400). */
-export async function readJson(request: Request): Promise<{ body: unknown } | undefined> {
+/**
+ * Parse a JSON body. Requires `Content-Type: application/json` (415 otherwise, which also
+ * keeps cross-site simple-form posts out); invalid JSON is 400. Returns a Response on failure.
+ */
+export async function readJson(request: Request): Promise<{ body: unknown } | Response> {
+  const type = request.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase();
+  if (type !== 'application/json') return json(415, { error: 'unsupported_media_type' });
   try {
     return { body: await request.json() };
   } catch {
-    return undefined;
+    return json(400, { error: 'invalid_json' });
   }
 }

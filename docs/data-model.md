@@ -116,11 +116,11 @@ Either measure may be null; the missing one is derived by the conversion engine 
 **Implementation notes (v0.2, migration `0001_recipes`)**
 - Foreign keys: `section`, `ingredient`, `step` -> `recipe` and `ingredient`/`step` -> `section` are `ON DELETE CASCADE`. `recipe.owner_id` -> `user` is `RESTRICT` (a user delete must reassign or delete recipes explicitly, see `deleteUserGuarded`). `recipe.copied_from_id` -> `recipe` is `ON DELETE SET NULL`.
 - Indexes: `recipe(owner_id)`, `recipe(copied_from_id)`, `recipe(visibility, updated_at)`, `ingredient(recipe_id)`, `step(recipe_id)`; unique `section(recipe_id, position)`, `ingredient(section_id, position)`, `step(section_id, position)`; unique `recipe(share_token)`.
-- `step` has a CHECK: `row_start`/`row_end` are both null or both set with `0 <= row_start <= row_end`. Range against the ingredient count and banner-has-no-span are validated in `src/lib/grid/validate.ts` (a banner row must have both null; enforced by zod and the validator, not the CHECK).
+- CHECK constraints: `recipe.visibility`, `recipe.view_mode`, `ingredient.display_primary`, `step.kind` enums; and on `step`: banners must have NULL `row_start`/`row_end`, a column has both null (list-mode recipe) or both set with `0 <= row_start <= row_end`. Range against the ingredient count is validated in `src/lib/grid/validate.ts`.
 - `recipe.view_mode` defaults to `list`; the API computes `grid` when every column step has a valid span (and there is at least one). `step.detail` defaults to `''`. `split_group_id` is a plain ULID column (no table, no FK); the API rewrites client-supplied group values to fresh ULIDs.
 - `share_token` exists but is unused until M5.
 - Ingredient ranges ("2-3") store the lower bound in the single quantity column; the original line stays in `raw_text`. Units outside metric/US (can, clove, pinch) are stored in `metric_qty` with the unit text in `metric_unit`; plain counts have a null unit.
-- Until the grid editor (M4), `PUT /api/recipes/:id` replaces all sections/ingredients/steps atomically (child ids change); omitting `visibility` on PUT keeps the stored value.
+- Until the grid editor (M4), `PUT /api/recipes/:id` replaces all sections/ingredients/steps atomically (child ids change). Omitting `visibility` keeps the stored value. Omitting `view_mode` keeps a stored `list`; a stored `grid` stays `grid` only while the spans are still valid (otherwise the recomputed default, `list`). Mutating recipe endpoints require `Content-Type: application/json` (415 otherwise). Authorization is re-checked inside the write transaction.
 
 ### tag / recipe_tag
 `tag(id, name unique)`, `recipe_tag(recipe_id, tag_id)`.

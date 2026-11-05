@@ -43,6 +43,21 @@ export type RecipeFull = RecipeRow & {
   sections: Array<SectionRow & { ingredients: IngredientRow[]; steps: StepRow[] }>;
 };
 
+/** Decides, inside the write transaction, whether the caller may act on the stored row. */
+export type RecipeGuard = (row: RecipeRow) => 'ok' | 'not_found' | 'forbidden';
+
+/** Thrown from inside a transaction (which rolls back) when a guard refuses. */
+export class RecipeGuardError extends Error {
+  constructor(readonly status: 'not_found' | 'forbidden') {
+    super(`recipe guard: ${status}`);
+  }
+}
+
+function enforce(guard: RecipeGuard | undefined, row: RecipeRow): void {
+  const verdict = guard ? guard(row) : 'ok';
+  if (verdict !== 'ok') throw new RecipeGuardError(verdict);
+}
+
 function insertSections(tx: Conn, recipeId: string, sections: RecipeTree['sections']): void {
   const groups = new Map<string, string>();
   const remap = (g: string | null | undefined): string | null => {
@@ -94,18 +109,30 @@ export function createRecipe(db: Db, ownerId: string, tree: RecipeTree): string 
 /**
  * Replace a recipe's fields and ALL children atomically (delete sections, re-insert).
  * Child ids change. Returns false if the recipe does not exist. If any insert fails the
- * transaction rolls back and the original recipe is untouched.
+ * transaction rolls back and the original recipe is untouched. `guard` runs on the stored
+ * row inside the same BEGIN IMMEDIATE transaction (no check-then-act gap) and throws
+ * RecipeGuardError when it refuses. `viewMode(stored)` overrides the tree's view mode
+ * using the stored value.
  */
-export function replaceRecipe(db: Db, id: string, tree: RecipeTree): boolean {
+export function replaceRecipe(
+  db: Db,
+  id: string,
+  tree: RecipeTree,
+  opts: {
+    guard?: RecipeGuard;
+    viewMode?: (stored: RecipeRow['viewMode']) => RecipeRow['viewMode'];
+  } = {},
+): boolean {
   return db.transaction(
     (tx) => {
-      const updated = tx
-        .update(recipe)
-        .set({ ...tree.fields, updatedAt: nowIso() })
+      const row = tx.select().from(recipe).where(eq(recipe.id, id)).get();
+      if (!row) return false;
+      enforce(opts.guard, row);
+      const viewMode = opts.viewMode ? opts.viewMode(row.viewMode) : tree.fields.viewMode;
+      tx.update(recipe)
+        .set({ ...tree.fields, viewMode, updatedAt: nowIso() })
         .where(eq(recipe.id, id))
-        .returning({ id: recipe.id })
-        .all();
-      if (updated.length === 0) return false;
+        .run();
       tx.delete(section).where(eq(section.recipeId, id)).run(); // cascades to ingredient and step
       insertSections(tx, id, tree.sections);
       return true;
@@ -183,22 +210,34 @@ export function listRecipesForUser(db: Db, userId: string): RecipeListItem[] {
 }
 
 /** Delete a recipe; sections, ingredients and steps cascade, copies get `copied_from_id = null`. */
-export function deleteRecipe(db: Db, id: string): boolean {
-  return db.delete(recipe).where(eq(recipe.id, id)).returning({ id: recipe.id }).all().length > 0;
+export function deleteRecipe(db: Db, id: string, guard?: RecipeGuard): boolean {
+  return db.transaction(
+    (tx) => {
+      const row = tx.select().from(recipe).where(eq(recipe.id, id)).get();
+      if (!row) return false;
+      enforce(guard, row);
+      tx.delete(recipe).where(eq(recipe.id, id)).run();
+      return true;
+    },
+    { behavior: 'immediate' },
+  );
 }
 
 export function setRecipeVisibility(
   db: Db,
   id: string,
   visibility: RecipeRow['visibility'],
+  guard?: RecipeGuard,
 ): boolean {
-  return (
-    db
-      .update(recipe)
-      .set({ visibility, updatedAt: nowIso() })
-      .where(eq(recipe.id, id))
-      .returning({ id: recipe.id })
-      .all().length > 0
+  return db.transaction(
+    (tx) => {
+      const row = tx.select().from(recipe).where(eq(recipe.id, id)).get();
+      if (!row) return false;
+      enforce(guard, row);
+      tx.update(recipe).set({ visibility, updatedAt: nowIso() }).where(eq(recipe.id, id)).run();
+      return true;
+    },
+    { behavior: 'immediate' },
   );
 }
 
@@ -207,11 +246,17 @@ export function setRecipeVisibility(
  * private, `copied_from_id` = source, no share token, `view_mode` kept.
  * Returns the new id, or undefined if the source does not exist.
  */
-export function copyRecipe(db: Db, sourceId: string, newOwnerId: string): string | undefined {
+export function copyRecipe(
+  db: Db,
+  sourceId: string,
+  newOwnerId: string,
+  guard?: RecipeGuard,
+): string | undefined {
   return db.transaction(
     (tx) => {
       const src = loadFull(tx, sourceId);
       if (!src) return undefined;
+      enforce(guard, src);
       const now = nowIso();
       const id = ulid();
       tx.insert(recipe)

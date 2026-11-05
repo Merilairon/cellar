@@ -8,7 +8,9 @@ import {
   listRecipesForUser,
   replaceRecipe,
   setRecipeVisibility,
+  RecipeGuardError,
   type RecipeFull,
+  type RecipeGuard,
   type RecipeTree,
 } from '@/lib/db/recipes';
 import { validateRecipeGrid } from '@/lib/grid/validate';
@@ -85,17 +87,42 @@ export function toTree(input: RecipeInput, viewMode: ViewMode): RecipeTree {
   };
 }
 
+const readGuard =
+  (actor: Actor): RecipeGuard =>
+  (row) =>
+    canRead(actor, row) ? 'ok' : 'not_found';
+const writeGuard =
+  (actor: Actor): RecipeGuard =>
+  (row) =>
+    !canRead(actor, row) ? 'not_found' : canWrite(actor, row) ? 'ok' : 'forbidden';
+
+/** Run a guarded db write; a guard refusal inside the transaction becomes a 404/403 failure. */
+function guarded<T>(fn: () => T): { ok: true; value: T } | Failure {
+  try {
+    return { ok: true, value: fn() };
+  } catch (e) {
+    if (e instanceof RecipeGuardError) {
+      return { ok: false, status: e.status === 'forbidden' ? 403 : 404 };
+    }
+    throw e;
+  }
+}
+
 /** Validate a request body into a persistable tree, or 422 field errors. */
-export function prepareRecipe(body: unknown): Result<{ tree: RecipeTree }> {
+export function prepareRecipe(
+  body: unknown,
+): Result<{ tree: RecipeTree; explicitViewMode: boolean }> {
   const parsed = recipeInputSchema.safeParse(body);
   if (!parsed.success) return { ok: false, status: 422, errors: zodIssuesToErrors(parsed.error) };
   const input = parsed.data;
   const viewMode = input.view_mode ?? defaultViewMode(input);
-  if (viewMode === 'grid') {
-    const { errors } = validateRecipeGrid(input);
-    if (errors.length > 0) return { ok: false, status: 422, errors };
-  }
-  return { ok: true, tree: toTree(input, viewMode) };
+  const { errors } = validateRecipeGrid(input);
+  if (viewMode === 'grid' && errors.length > 0) return { ok: false, status: 422, errors };
+  return {
+    ok: true,
+    tree: toTree(input, viewMode),
+    explicitViewMode: input.view_mode !== undefined,
+  };
 }
 
 export function toApiRecipe(r: RecipeFull, canEdit: boolean) {
@@ -188,21 +215,29 @@ export function updateRecipeFor(
   id: string,
   body: unknown,
 ): Result<{ recipe: ApiRecipe }> {
+  // Cheap pre-checks for status ordering; the authoritative check re-runs in the transaction.
   const row = getRecipeRow(db, id);
   if (!row || !canRead(actor, row)) return { ok: false, status: 404 };
   if (!canWrite(actor, row)) return { ok: false, status: 403 };
   const prepared = prepareRecipe(body);
   if (!prepared.ok) return prepared;
-  if (!replaceRecipe(db, id, prepared.tree)) return { ok: false, status: 404 };
+  // View mode omitted: a stored list stays list; a stored grid stays grid only while it is
+  // still valid (otherwise the recomputed default, which is list).
+  const keepStored = (stored: 'grid' | 'list') =>
+    // tree viewMode is the explicit value, or the recomputed default (grid only if valid).
+    !prepared.explicitViewMode && stored === 'list' ? 'list' : prepared.tree.fields.viewMode!;
+  const res = guarded(() =>
+    replaceRecipe(db, id, prepared.tree, { guard: writeGuard(actor), viewMode: keepStored }),
+  );
+  if (!res.ok) return res;
+  if (!res.value) return { ok: false, status: 404 };
   return { ok: true, recipe: toApiRecipe(getRecipeFull(db, id)!, true) };
 }
 
 export function deleteRecipeFor(db: Db, actor: Actor, id: string): Result<object> {
-  const row = getRecipeRow(db, id);
-  if (!row || !canRead(actor, row)) return { ok: false, status: 404 };
-  if (!canWrite(actor, row)) return { ok: false, status: 403 };
-  deleteRecipe(db, id);
-  return { ok: true };
+  const res = guarded(() => deleteRecipe(db, id, writeGuard(actor)));
+  if (!res.ok) return res;
+  return res.value ? { ok: true } : { ok: false, status: 404 };
 }
 
 export function setVisibilityFor(
@@ -216,14 +251,13 @@ export function setVisibilityFor(
   if (!canWrite(actor, row)) return { ok: false, status: 403 };
   const parsed = visibilityInputSchema.safeParse(body);
   if (!parsed.success) return { ok: false, status: 422, errors: zodIssuesToErrors(parsed.error) };
-  setRecipeVisibility(db, id, parsed.data.visibility);
-  return { ok: true, visibility: parsed.data.visibility };
+  const res = guarded(() => setRecipeVisibility(db, id, parsed.data.visibility, writeGuard(actor)));
+  if (!res.ok) return res;
+  return res.value ? { ok: true, visibility: parsed.data.visibility } : { ok: false, status: 404 };
 }
 
 export function copyRecipeFor(db: Db, actor: Actor, id: string): Result<{ id: string }> {
-  const row = getRecipeRow(db, id);
-  if (!row || !canRead(actor, row)) return { ok: false, status: 404 };
-  const newId = copyRecipe(db, id, actor.id);
-  if (!newId) return { ok: false, status: 404 };
-  return { ok: true, id: newId };
+  const res = guarded(() => copyRecipe(db, id, actor.id, readGuard(actor)));
+  if (!res.ok) return res;
+  return res.value ? { ok: true, id: res.value } : { ok: false, status: 404 };
 }

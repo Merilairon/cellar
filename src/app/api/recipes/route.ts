@@ -14,7 +14,7 @@ export async function POST(request: Request) {
   const auth = await authenticate(request);
   if (auth instanceof Response) return auth;
   const parsed = await readJson(request);
-  if (!parsed) return json(400, { error: 'invalid_json' });
+  if (parsed instanceof Response) return parsed;
   const result = createRecipeFor(getDb(), auth.user, parsed.body);
   return result.ok ? json(201, result.recipe) : failure(result);
 }

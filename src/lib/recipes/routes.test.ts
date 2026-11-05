@@ -74,6 +74,23 @@ describe('POST /api/recipes', () => {
     expect(db.$client.prepare('select count(*) n from recipe').get()).toEqual({ n: 0 });
   });
 
+  it('415 without a JSON content type (after CSRF and auth), on every body route', async () => {
+    const noType = { 'sec-fetch-site': 'same-origin' };
+    const text = { ...noType, 'content-type': 'text/plain' };
+    expect((await createPost(req('POST', SAMPLE_SKILLET_COOKIES, noType))).status).toBe(415);
+    expect((await createPost(req('POST', SAMPLE_SKILLET_COOKIES, text))).status).toBe(415);
+    const { json } = await create();
+    expect((await PUT(req('PUT', SAMPLE_SKILLET_COOKIES, text), ctx(json.id))).status).toBe(415);
+    expect((await visPut(req('PUT', { visibility: 'users' }, text), ctx(json.id))).status).toBe(
+      415,
+    );
+    const charset = { ...noType, 'content-type': 'application/json; charset=utf-8' };
+    expect((await createPost(req('POST', SAMPLE_SKILLET_COOKIES, charset))).status).toBe(201);
+    expect((await createPost(req('POST', SAMPLE_SKILLET_COOKIES, {}))).status).toBe(403);
+    state.current = null;
+    expect((await createPost(req('POST', SAMPLE_SKILLET_COOKIES, noType))).status).toBe(401);
+  });
+
   it('401 without a session, 400 on bad JSON, 422 on invalid spans', async () => {
     state.current = null;
     expect((await createPost(req('POST', SAMPLE_SKILLET_COOKIES))).status).toBe(401);

@@ -223,6 +223,23 @@ describe('update', () => {
     expect(upd.ok && upd.recipe.visibility).toBe('users');
   });
 
+  it('omitted view_mode keeps a stored list, and recomputes a stored grid', () => {
+    const { owner } = setup();
+    const listBody = { ...clone(), view_mode: 'list' };
+    const listId = okRecipe(createRecipeFor(db, owner, listBody)).id;
+    const keep = updateRecipeFor(db, owner, listId, { ...clone(), view_mode: undefined });
+    expect(keep.ok && keep.recipe.view_mode).toBe('list');
+    const explicit = updateRecipeFor(db, owner, listId, { ...clone(), view_mode: 'grid' });
+    expect(explicit.ok && explicit.recipe.view_mode).toBe('grid');
+    const stays = updateRecipeFor(db, owner, listId, { ...clone(), view_mode: undefined });
+    expect(stays.ok && stays.recipe.view_mode).toBe('grid');
+    const broken = clone();
+    broken.view_mode = undefined;
+    broken.sections[0].steps[3].row_end = 99;
+    const demoted = updateRecipeFor(db, owner, listId, broken);
+    expect(demoted.ok && demoted.recipe.view_mode).toBe('list');
+  });
+
   it('list-mode save of invalid spans succeeds, switching to grid then fails', () => {
     const { owner } = setup();
     const body = clone();

@@ -85,20 +85,15 @@ export type DeleteResult = 'ok' | 'not_found' | 'last_admin' | 'invalid_reassign
  * the target, `delete` removes them (children cascade; copies made by others keep
  * existing with `copied_from_id = null`). Any refusal leaves everything untouched.
  */
-export function deleteUserGuarded(
-  db: Db,
-  id: string,
-  opts: { recipes?: 'delete' | 'reassign'; reassignTo?: string } = {},
-): DeleteResult {
+export type RecipeDisposition = { recipes: 'delete' } | { recipes: 'reassign'; reassignTo: string };
+
+export function deleteUserGuarded(db: Db, id: string, opts: RecipeDisposition): DeleteResult {
   return db.transaction(
     (tx) => {
       const target = tx.select().from(user).where(eq(user.id, id)).get();
       if (!target) return 'not_found';
-      const reassign = opts.recipes === 'reassign' || opts.reassignTo !== undefined;
-      if (reassign) {
-        const to = opts.reassignTo
-          ? tx.select().from(user).where(eq(user.id, opts.reassignTo)).get()
-          : undefined;
+      if (opts.recipes === 'reassign') {
+        const to = tx.select().from(user).where(eq(user.id, opts.reassignTo)).get();
         if (!to || to.deactivatedAt || to.id === id) return 'invalid_reassign_target';
       }
       if (target.role === 'admin' && !target.deactivatedAt) {
@@ -110,7 +105,7 @@ export function deleteUserGuarded(
             .get()?.n ?? 0;
         if (admins <= 1) return 'last_admin';
       }
-      if (reassign && opts.reassignTo !== undefined) {
+      if (opts.recipes === 'reassign') {
         tx.update(recipe).set({ ownerId: opts.reassignTo }).where(eq(recipe.ownerId, id)).run();
       } else {
         tx.delete(recipe).where(eq(recipe.ownerId, id)).run();

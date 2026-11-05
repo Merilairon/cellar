@@ -8,6 +8,7 @@ import {
   deleteRecipe,
   getRecipeFull,
   listRecipesForUser,
+  RecipeGuardError,
   replaceRecipe,
   setRecipeVisibility,
   type RecipeTree,
@@ -242,5 +243,53 @@ describe('copyRecipe', () => {
   it('returns undefined for a missing source', () => {
     const a = setup();
     expect(copyRecipe(db, 'nope', a.id)).toBeUndefined();
+  });
+});
+
+describe('guards run inside the write transaction (no check-then-act gap)', () => {
+  const ownerOnly = (ownerId: string) => (row: { ownerId: string }) =>
+    row.ownerId === ownerId ? ('ok' as const) : ('forbidden' as const);
+
+  it('a guard evaluated against the stored row refuses after ownership changed, changing nothing', () => {
+    const a = setup();
+    const b = mkUser('b@x.test');
+    const id = createRecipe(db, a.id, tree('Original'));
+    // Ownership moves to b between the caller's earlier read and the write.
+    db.update(recipe).set({ ownerId: b.id }).where(eq(recipe.id, id)).run();
+    const guard = ownerOnly(a.id);
+    expect(() => replaceRecipe(db, id, tree('Hacked'), { guard })).toThrow(RecipeGuardError);
+    expect(() => deleteRecipe(db, id, guard)).toThrow(RecipeGuardError);
+    expect(() => setRecipeVisibility(db, id, 'users', guard)).toThrow(RecipeGuardError);
+    expect(() => copyRecipe(db, id, a.id, guard)).toThrow(RecipeGuardError);
+    const r = getRecipeFull(db, id)!;
+    expect(r.title).toBe('Original');
+    expect(r.visibility).toBe('private');
+    expect(r.sections).toHaveLength(2);
+    expect(db.select().from(recipe).all()).toHaveLength(1);
+  });
+
+  it('guard verdicts map to the error status; ok proceeds', () => {
+    const a = setup();
+    const id = createRecipe(db, a.id, tree());
+    try {
+      deleteRecipe(db, id, () => 'not_found');
+    } catch (e) {
+      expect((e as RecipeGuardError).status).toBe('not_found');
+    }
+    expect(deleteRecipe(db, id, () => 'ok')).toBe(true);
+  });
+
+  it('replaceRecipe viewMode resolver receives the stored value', () => {
+    const a = setup();
+    const id = createRecipe(db, a.id, tree()); // grid
+    let seen = '';
+    replaceRecipe(db, id, tree(), {
+      viewMode: (stored) => {
+        seen = stored;
+        return 'list';
+      },
+    });
+    expect(seen).toBe('grid');
+    expect(getRecipeFull(db, id)!.viewMode).toBe('list');
   });
 });

@@ -11,11 +11,12 @@ export async function call(url: string, method: string, body?: unknown): Promise
   }
 }
 
-/** The URL if it is http(s), else null (never render javascript: links). */
+/** The normalized href if the URL is http(s), else null (never render javascript: links). */
 export function safeHttpUrl(value: string | null | undefined): string | null {
   if (!value) return null;
   try {
-    return /^https?:$/.test(new URL(value).protocol) ? value : null;
+    const u = new URL(value);
+    return /^https?:$/.test(u.protocol) ? u.href : null;
   } catch {
     return null;
   }

@@ -114,6 +114,8 @@ export const recipe = sqliteTable(
     // Makes ON DELETE SET NULL on copied_from_id an index lookup, not a table scan.
     index('recipe_copied_from_id_idx').on(t.copiedFromId),
     index('recipe_visibility_updated_at_idx').on(t.visibility, t.updatedAt),
+    check('recipe_visibility_chk', sql`${t.visibility} IN ('private', 'users')`),
+    check('recipe_view_mode_chk', sql`${t.viewMode} IN ('grid', 'list')`),
   ],
 );
 
@@ -159,6 +161,7 @@ export const ingredient = sqliteTable(
   (t) => [
     uniqueIndex('ingredient_section_position_uq').on(t.sectionId, t.position),
     index('ingredient_recipe_id_idx').on(t.recipeId),
+    check('ingredient_display_primary_chk', sql`${t.displayPrimary} IN ('metric', 'us')`),
   ],
 );
 
@@ -186,11 +189,13 @@ export const step = sqliteTable(
   (t) => [
     uniqueIndex('step_section_position_uq').on(t.sectionId, t.position),
     index('step_recipe_id_idx').on(t.recipeId),
-    // Spans are both set or both null; when set they are ordered and non-negative.
-    // Range against the ingredient count is validated in src/lib/grid/validate.ts.
+    check('step_kind_chk', sql`${t.kind} IN ('banner_top', 'column', 'banner_bottom')`),
+    // Banners never carry spans. Column spans are both null (list-mode recipe) or both set
+    // with 0 <= row_start <= row_end. Range against the ingredient count is validated in
+    // src/lib/grid/validate.ts.
     check(
       'step_span_chk',
-      sql`(${t.rowStart} IS NULL AND ${t.rowEnd} IS NULL) OR (${t.rowStart} IS NOT NULL AND ${t.rowEnd} IS NOT NULL AND ${t.rowStart} >= 0 AND ${t.rowStart} <= ${t.rowEnd})`,
+      sql`(${t.kind} IN ('banner_top', 'banner_bottom') AND ${t.rowStart} IS NULL AND ${t.rowEnd} IS NULL) OR (${t.kind} = 'column' AND ((${t.rowStart} IS NULL AND ${t.rowEnd} IS NULL) OR (${t.rowStart} IS NOT NULL AND ${t.rowEnd} IS NOT NULL AND ${t.rowStart} >= 0 AND ${t.rowStart} <= ${t.rowEnd})))`,
     ),
   ],
 );

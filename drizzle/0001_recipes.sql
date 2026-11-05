@@ -15,7 +15,8 @@ CREATE TABLE `ingredient` (
 	`display_primary` text DEFAULT 'metric' NOT NULL,
 	`group_label` text,
 	FOREIGN KEY (`recipe_id`) REFERENCES `recipe`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`section_id`) REFERENCES `section`(`id`) ON UPDATE no action ON DELETE cascade
+	FOREIGN KEY (`section_id`) REFERENCES `section`(`id`) ON UPDATE no action ON DELETE cascade,
+	CONSTRAINT "ingredient_display_primary_chk" CHECK("ingredient"."display_primary" IN ('metric', 'us'))
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `ingredient_section_position_uq` ON `ingredient` (`section_id`,`position`);--> statement-breakpoint
@@ -38,7 +39,9 @@ CREATE TABLE `recipe` (
 	`created_at` text NOT NULL,
 	`updated_at` text NOT NULL,
 	FOREIGN KEY (`owner_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE restrict,
-	FOREIGN KEY (`copied_from_id`) REFERENCES `recipe`(`id`) ON UPDATE no action ON DELETE set null
+	FOREIGN KEY (`copied_from_id`) REFERENCES `recipe`(`id`) ON UPDATE no action ON DELETE set null,
+	CONSTRAINT "recipe_visibility_chk" CHECK("recipe"."visibility" IN ('private', 'users')),
+	CONSTRAINT "recipe_view_mode_chk" CHECK("recipe"."view_mode" IN ('grid', 'list'))
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `recipe_share_token_unique` ON `recipe` (`share_token`);--> statement-breakpoint
@@ -70,7 +73,8 @@ CREATE TABLE `step` (
 	`minutes_max` integer,
 	FOREIGN KEY (`recipe_id`) REFERENCES `recipe`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`section_id`) REFERENCES `section`(`id`) ON UPDATE no action ON DELETE cascade,
-	CONSTRAINT "step_span_chk" CHECK(("step"."row_start" IS NULL AND "step"."row_end" IS NULL) OR ("step"."row_start" IS NOT NULL AND "step"."row_end" IS NOT NULL AND "step"."row_start" >= 0 AND "step"."row_start" <= "step"."row_end"))
+	CONSTRAINT "step_kind_chk" CHECK("step"."kind" IN ('banner_top', 'column', 'banner_bottom')),
+	CONSTRAINT "step_span_chk" CHECK(("step"."kind" IN ('banner_top', 'banner_bottom') AND "step"."row_start" IS NULL AND "step"."row_end" IS NULL) OR ("step"."kind" = 'column' AND (("step"."row_start" IS NULL AND "step"."row_end" IS NULL) OR ("step"."row_start" IS NOT NULL AND "step"."row_end" IS NOT NULL AND "step"."row_start" >= 0 AND "step"."row_start" <= "step"."row_end"))))
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `step_section_position_uq` ON `step` (`section_id`,`position`);--> statement-breakpoint

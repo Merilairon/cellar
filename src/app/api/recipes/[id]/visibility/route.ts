@@ -8,7 +8,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   const auth = await authenticate(request);
   if (auth instanceof Response) return auth;
   const parsed = await readJson(request);
-  if (!parsed) return json(400, { error: 'invalid_json' });
+  if (parsed instanceof Response) return parsed;
   const result = setVisibilityFor(getDb(), auth.user, (await params).id, parsed.body);
   return result.ok ? json(200, { visibility: result.visibility }) : failure(result);
 }

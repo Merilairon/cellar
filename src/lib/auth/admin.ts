@@ -34,11 +34,5 @@ export type RecipeChoice = { recipes: 'delete' } | { recipes: 'reassign'; reassi
  * moves them to `reassignTo` (validated there before anything changes).
  */
 export function deleteUser(db: Db, targetId: string, choice: RecipeChoice): DeleteResult {
-  return deleteUserGuarded(
-    db,
-    targetId,
-    choice.recipes === 'reassign'
-      ? { recipes: 'reassign', reassignTo: choice.reassignTo }
-      : { recipes: 'delete' },
-  );
+  return deleteUserGuarded(db, targetId, choice);
 }

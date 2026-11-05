@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "4659dd1f-5db7-47f5-a321-37afa367116b",
+  "id": "8a91d8a7-bce0-4dee-af88-d2785db607d0",
   "prevId": "297f11c9-b2b5-4f65-ad86-cf5d38f8b77a",
   "tables": {
     "ingredient": {
@@ -161,7 +161,12 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "checkConstraints": {
+        "ingredient_display_primary_chk": {
+          "name": "ingredient_display_primary_chk",
+          "value": "\"ingredient\".\"display_primary\" IN ('metric', 'us')"
+        }
+      }
     },
     "invite": {
       "name": "invite",
@@ -510,7 +515,16 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "checkConstraints": {
+        "recipe_visibility_chk": {
+          "name": "recipe_visibility_chk",
+          "value": "\"recipe\".\"visibility\" IN ('private', 'users')"
+        },
+        "recipe_view_mode_chk": {
+          "name": "recipe_view_mode_chk",
+          "value": "\"recipe\".\"view_mode\" IN ('grid', 'list')"
+        }
+      }
     },
     "section": {
       "name": "section",
@@ -784,9 +798,13 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {
+        "step_kind_chk": {
+          "name": "step_kind_chk",
+          "value": "\"step\".\"kind\" IN ('banner_top', 'column', 'banner_bottom')"
+        },
         "step_span_chk": {
           "name": "step_span_chk",
-          "value": "(\"step\".\"row_start\" IS NULL AND \"step\".\"row_end\" IS NULL) OR (\"step\".\"row_start\" IS NOT NULL AND \"step\".\"row_end\" IS NOT NULL AND \"step\".\"row_start\" >= 0 AND \"step\".\"row_start\" <= \"step\".\"row_end\")"
+          "value": "(\"step\".\"kind\" IN ('banner_top', 'banner_bottom') AND \"step\".\"row_start\" IS NULL AND \"step\".\"row_end\" IS NULL) OR (\"step\".\"kind\" = 'column' AND ((\"step\".\"row_start\" IS NULL AND \"step\".\"row_end\" IS NULL) OR (\"step\".\"row_start\" IS NOT NULL AND \"step\".\"row_end\" IS NOT NULL AND \"step\".\"row_start\" >= 0 AND \"step\".\"row_start\" <= \"step\".\"row_end\")))"
         }
       }
     },
