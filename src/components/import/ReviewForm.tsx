@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -8,7 +8,15 @@ import { safeHttpUrl } from '@/components/recipe/api';
 import { RecipeForm } from '@/components/recipe/RecipeForm';
 import { btn } from '@/components/recipe/styles';
 import type { Draft } from '@/lib/import/normalize';
-import { formFromDraft } from '@/lib/recipes/form-model';
+import {
+  formFromDraftMode,
+  previewIssues,
+  sectionsSignature,
+  withSections,
+  type FormState,
+} from '@/lib/recipes/form-model';
+import { MappingPanel } from './MappingPanel';
+import { initialMapState, mapReducer, saveViewMode, type MapAction } from './mapping-state';
 import { warningMessage } from './warnings';
 
 // Every imported value below (title, source, tags, warnings, duplicate title) is rendered as a
@@ -27,7 +35,53 @@ export function ReviewForm({
 }) {
   const t = useTranslations();
   const router = useRouter();
-  const [initial] = useState(() => formFromDraft(draft));
+  const mapping = draft.mapping?.version === 1 ? draft.mapping : null;
+  const [mapState, dispatch] = useReducer(mapReducer, mapping, (m) =>
+    initialMapState(m ? m.level : 'low'),
+  );
+  // `formInit` is what RecipeForm (re)mounts with; `current` follows every edit for the preview.
+  const [formInit, setFormInit] = useState(() =>
+    formFromDraftMode(draft, mapping && mapping.level === 'high' ? 'grid' : 'list'),
+  );
+  const [current, setCurrent] = useState<FormState>(formInit);
+  const [loadedSig, setLoadedSig] = useState(() => sectionsSignature(formInit.sections));
+  const [previewOpen, setPreviewOpen] = useState(true);
+  const [saveInvalid, setSaveInvalid] = useState(false);
+  const pendingFocus = useRef<string | null>(null);
+  const edited = sectionsSignature(current.sections) !== loadedSig;
+
+  // Focus is moved explicitly because the form remounts on every structure load.
+  useEffect(() => {
+    if (pendingFocus.current) {
+      document.getElementById(pendingFocus.current)?.focus();
+      pendingFocus.current = null;
+    }
+  });
+  useEffect(() => {
+    if (mapState.confirm) document.getElementById('map-confirm-keep')?.focus();
+  }, [mapState.confirm]);
+
+  const onFormChange = useCallback((f: FormState) => {
+    setCurrent(f);
+    setSaveInvalid(false);
+  }, []);
+
+  function perform(a: MapAction) {
+    // Only `sections` is replaced; title, description and the other fields are kept.
+    const next = formFromDraftMode(draft, a === 'list' ? 'list' : 'grid');
+    const merged = withSections(current, next.sections);
+    setFormInit(merged);
+    setCurrent(merged);
+    setLoadedSig(sectionsSignature(merged.sections));
+    setSaveInvalid(false);
+    if (a !== 'list') setPreviewOpen(true);
+    pendingFocus.current = a === 'list' ? 'map-btn-preview' : 'map-preview-summary';
+    dispatch({ type: 'done', action: a });
+  }
+  function onAction(a: MapAction) {
+    if (edited) dispatch({ type: 'ask', action: a });
+    else perform(a);
+  }
   const [includeCover, setIncludeCover] = useState(draft.cover_image_url !== null);
   const [dupOpen, setDupOpen] = useState(duplicate !== null);
   const sourceHref = safeHttpUrl(draft.source_url);
@@ -52,6 +106,24 @@ export function ReviewForm({
           </div>
         </div>
       )}
+      {mapping && (
+        <MappingPanel
+          mapping={mapping}
+          state={mapState}
+          edited={edited}
+          form={current}
+          previewOpen={previewOpen}
+          onPreviewToggle={setPreviewOpen}
+          saveInvalid={saveInvalid}
+          invalid={mapState.mode === 'grid' && previewIssues(current).length > 0}
+          onAction={onAction}
+          onConfirm={() => mapState.confirm && perform(mapState.confirm)}
+          onCancel={() => {
+            pendingFocus.current = `map-btn-${mapState.confirm}`;
+            dispatch({ type: 'cancel' });
+          }}
+        />
+      )}
       {sourceText && (
         <p className="text-sm text-neutral-700 dark:text-neutral-300">
           {t('import.review.source', { name: sourceText })}
@@ -61,8 +133,8 @@ export function ReviewForm({
         <div className="rounded border border-neutral-500 p-3">
           <h2 className="font-semibold">{t('import.review.warnings')}</h2>
           <ul className="mt-1 list-disc pl-5">
-            {warnings.map((w) => (
-              <li key={w}>{warningMessage(t, w)}</li>
+            {warnings.map((w, i) => (
+              <li key={`${i}${w}`}>{warningMessage(t, w)}</li>
             ))}
           </ul>
         </div>
@@ -107,12 +179,19 @@ export function ReviewForm({
 
   return (
     <RecipeForm
-      initial={initial}
+      key={mapState.version}
+      initial={formInit}
+      onChange={mapping ? onFormChange : undefined}
       header={header}
       target={{
         url: `/api/import/${jobId}/save`,
         method: 'POST',
-        extra: { import_cover: includeCover && draft.cover_image_url !== null },
+        extra: {
+          import_cover: includeCover && draft.cover_image_url !== null,
+          // An explicit view_mode only when the screen offered the choice; otherwise the API decides.
+          ...saveViewMode(mapping, mapState.mode),
+        },
+        onInvalid: () => setSaveInvalid(true),
         redirect: (res) =>
           res.warnings?.includes('cover_failed')
             ? `/recipes/${res.id}?notice=cover_failed`
