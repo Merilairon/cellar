@@ -1,8 +1,8 @@
+import { getTranslations } from 'next-intl/server';
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth/current-user';
 import { getDb } from '@/lib/db';
 import { countUsers } from '@/lib/db/users';
-import { t } from '@/lib/messages';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,6 +11,7 @@ export default async function LoginPage({
 }: {
   searchParams: Promise<{ error?: string; registered?: string; passwordChanged?: string }>;
 }) {
+  const t = await getTranslations();
   if (countUsers(getDb()) === 0) redirect('/setup');
   if (await getCurrentUser()) redirect('/');
   const { error, registered, passwordChanged } = await searchParams;

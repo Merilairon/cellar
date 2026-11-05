@@ -1,7 +1,7 @@
 'use client';
 
 import { useActionState } from 'react';
-import { t } from '@/lib/messages';
+import { useTranslations } from 'next-intl';
 import {
   createInviteAction,
   createResetAction,
@@ -12,6 +12,7 @@ import {
 const initial: ActionState = {};
 
 function Feedback({ state, linkLabel }: { state: ActionState; linkLabel: string }) {
+  const t = useTranslations();
   return (
     <>
       {state.error && (
@@ -33,6 +34,7 @@ function Feedback({ state, linkLabel }: { state: ActionState; linkLabel: string 
 }
 
 export function InviteForm() {
+  const t = useTranslations();
   const [state, action, pending] = useActionState(createInviteAction, initial);
   return (
     <form action={action} className="flex flex-col gap-2">
@@ -49,6 +51,7 @@ export function InviteForm() {
 }
 
 export function ResetButton({ userId }: { userId: string }) {
+  const t = useTranslations();
   const [state, action, pending] = useActionState(createResetAction, initial);
   return (
     <form action={action}>
@@ -62,6 +65,7 @@ export function ResetButton({ userId }: { userId: string }) {
 }
 
 export function DeactivateButton({ userId }: { userId: string }) {
+  const t = useTranslations();
   const [state, action, pending] = useActionState(deactivateAction, initial);
   return (
     <form action={action}>

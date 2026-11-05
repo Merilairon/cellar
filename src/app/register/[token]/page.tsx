@@ -1,7 +1,7 @@
+import { getTranslations } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { lookupInvite } from '@/lib/auth/invites';
 import { getDb } from '@/lib/db';
-import { t } from '@/lib/messages';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,6 +21,7 @@ export default async function RegisterPage({
   params: Promise<{ token: string }>;
   searchParams: Promise<{ error?: string }>;
 }) {
+  const t = await getTranslations();
   const { token } = await params;
   const { error } = await searchParams;
   // Invalid, expired and used tokens are indistinguishable: same 404 page.

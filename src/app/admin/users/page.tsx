@@ -1,13 +1,14 @@
+import { getTranslations } from 'next-intl/server';
 import { redirect } from 'next/navigation';
 import { listUsersForAdmin } from '@/lib/auth/admin';
 import { requireAdmin } from '@/lib/auth/current-user';
 import { getDb } from '@/lib/db';
-import { t } from '@/lib/messages';
 import { DeactivateButton, InviteForm, ResetButton } from './forms';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AdminUsersPage() {
+  const t = await getTranslations();
   const admin = await requireAdmin();
   if (!admin.ok) redirect(admin.status === 401 ? '/login' : '/');
   const users = listUsersForAdmin(getDb());

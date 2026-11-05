@@ -1,7 +1,7 @@
+import { getTranslations } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { isResetTokenUsable } from '@/lib/auth/resets';
 import { getDb } from '@/lib/db';
-import { t } from '@/lib/messages';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,6 +12,7 @@ export default async function ResetPage({
   params: Promise<{ token: string }>;
   searchParams: Promise<{ error?: string }>;
 }) {
+  const t = await getTranslations();
   const { token } = await params;
   const { error } = await searchParams;
   if (!isResetTokenUsable(getDb(), token)) notFound();

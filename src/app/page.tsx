@@ -1,11 +1,12 @@
+import { getTranslations } from 'next-intl/server';
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth/current-user';
-import { t } from '@/lib/messages';
 
 export const dynamic = 'force-dynamic';
 
 // Placeholder page; replaced by the app shell in later tasks.
 export default async function Home() {
+  const t = await getTranslations();
   // The proxy only checks cookie presence; this is the authoritative session check.
   if (!(await getCurrentUser())) redirect('/login');
   return (
