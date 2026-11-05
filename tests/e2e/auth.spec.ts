@@ -131,5 +131,5 @@ test('admin deletes a member, last admin is protected', async ({ page }) => {
   const admin = page.getByRole('row', { name: new RegExp(ADMIN.email) });
   await admin.getByText('Delete user').click();
   await admin.getByRole('button', { name: 'Delete permanently' }).click();
-  await expect(page.getByRole('alert')).toContainText('last active admin cannot be deleted');
+  await expect(page.getByText('The last active admin cannot be deleted.')).toBeVisible();
 });
