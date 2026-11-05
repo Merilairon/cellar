@@ -44,6 +44,19 @@ function apiShaped(r: typeof SAMPLE_VANILLA_CAKE) {
   };
 }
 
+describe('ingredient ranges', () => {
+  it('buildIngredients stores the upper bound and keeps it when the line is unchanged', () => {
+    const first = buildIngredients('2-3 tbsp honey', []);
+    expect(first[0]).toMatchObject({ us_qty: 2, us_qty_max: 3, us_unit: 'tbsp' });
+    const again = buildIngredients('2-3 tbsp honey', first);
+    expect(again[0]).toMatchObject({ us_qty: 2, us_qty_max: 3 });
+    expect(
+      recipeInputSchema.shape.sections.element.shape.ingredients.element.safeParse(again[0])
+        .success,
+    ).toBe(true);
+  });
+});
+
 describe('ingredient lines', () => {
   it('ignores blank lines and trims', () => {
     expect(ingredientLines('  a \n\n  \n b')).toEqual(['a', 'b']);

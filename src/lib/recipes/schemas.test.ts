@@ -24,6 +24,20 @@ describe('recipeInputSchema', () => {
     expect(r.visibility).toBeUndefined();
   });
 
+  it('validates ingredient range bounds', () => {
+    const ing = (o: Record<string, unknown>) => ({
+      title: 'T',
+      sections: [{ ingredients: [{ name: 'honey', ...o }], steps: [] }],
+    });
+    expect(errs(ing({ us_qty: 2, us_qty_max: 3, us_unit: 'tbsp' }))).toEqual([]);
+    expect(errs(ing({ us_qty: 3, us_qty_max: 2 }))).toEqual([
+      { path: 'sections.0.ingredients.0.us_qty_max', code: 'qty_range_order' },
+    ]);
+    expect(errs(ing({ metric_qty_max: 3 }))).toEqual([
+      { path: 'sections.0.ingredients.0.metric_qty_max', code: 'qty_range_order' },
+    ]);
+  });
+
   it('rejects banner steps with spans', () => {
     const e = errs(minimal([{ kind: 'banner_top', label: 'x', row_start: 0, row_end: 0 }]));
     expect(e.map((x) => x.path)).toContain('sections.0.steps.0.row_start');

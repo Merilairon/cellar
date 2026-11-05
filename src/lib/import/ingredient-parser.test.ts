@@ -169,8 +169,32 @@ describe('toIngredientFields (no conversion)', () => {
   it('other units (can) keep their text in metric_unit', () => {
     expect(f('1 (14 oz) can tomatoes')).toMatchObject({ metric_qty: 1, metric_unit: 'can' });
   });
-  it('range stores the lower bound; raw_text keeps the original', () => {
-    expect(f('2-3 tbsp honey')).toMatchObject({ us_qty: 2, raw_text: '2-3 tbsp honey' });
+  it('range stores both bounds on the primary side; raw_text keeps the original', () => {
+    expect(f('2-3 tbsp honey')).toMatchObject({
+      us_qty: 2,
+      us_qty_max: 3,
+      metric_qty_max: null,
+      raw_text: '2-3 tbsp honey',
+    });
+    expect(f('2 to 3 cloves garlic')).toMatchObject({
+      metric_qty: 2,
+      metric_qty_max: 3,
+      metric_unit: 'cloves',
+    });
+    expect(f('100-150 g flour')).toMatchObject({ metric_qty: 100, metric_qty_max: 150 });
+  });
+  it('single quantities and degenerate ranges have no upper bound', () => {
+    expect(f('2 tbsp honey')).toMatchObject({ us_qty_max: null, metric_qty_max: null });
+    expect(f('3-2 tbsp honey')).toMatchObject({ us_qty: 3, us_qty_max: null });
+    expect(f('2-2 tbsp honey')).toMatchObject({ us_qty: 2, us_qty_max: null });
+  });
+  it('a range with a dual unit keeps the upper bound on the primary side only', () => {
+    expect(f('2-3 cups (480 mL) stock')).toMatchObject({
+      us_qty: 2,
+      us_qty_max: 3,
+      metric_qty: 480,
+      metric_qty_max: null,
+    });
   });
   it('no quantity and unparsed lines leave every measure null but keep raw_text', () => {
     expect(f('salt to taste')).toMatchObject({ metric_qty: null, us_qty: null, note: 'to taste' });

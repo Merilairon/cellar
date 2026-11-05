@@ -37,9 +37,12 @@ export function defaultViewMode(input: Pick<RecipeInput, 'sections'>): ViewMode 
 }
 
 function composeRawText(i: RecipeInput['sections'][number]['ingredients'][number]): string {
-  const measure =
-    i.display_primary === 'us' ? [i.us_qty, i.us_unit] : [i.metric_qty, i.metric_unit];
-  return [...measure, i.name].filter((x) => x != null && x !== '').join(' ');
+  const [qty, max, unit] =
+    i.display_primary === 'us'
+      ? [i.us_qty, i.us_qty_max, i.us_unit]
+      : [i.metric_qty, i.metric_qty_max, i.metric_unit];
+  const amount = qty != null && max != null ? `${qty}-${max}` : qty;
+  return [amount, unit, i.name].filter((x) => x != null && x !== '').join(' ');
 }
 
 export function toTree(input: RecipeInput, viewMode: ViewMode): RecipeTree {
@@ -64,8 +67,10 @@ export function toTree(input: RecipeInput, viewMode: ViewMode): RecipeTree {
         note: i.note ?? null,
         rawText: i.raw_text ?? composeRawText(i),
         metricQty: i.metric_qty ?? null,
+        metricQtyMax: i.metric_qty_max ?? null,
         metricUnit: i.metric_unit ?? null,
         usQty: i.us_qty ?? null,
+        usQtyMax: i.us_qty_max ?? null,
         usUnit: i.us_unit ?? null,
         displayPrimary: i.display_primary,
         splitGroupId: i.split_group_id ?? null,
@@ -154,8 +159,10 @@ export function toApiRecipe(r: RecipeFull, canEdit: boolean) {
         note: i.note,
         raw_text: i.rawText,
         metric_qty: i.metricQty,
+        metric_qty_max: i.metricQtyMax,
         metric_unit: i.metricUnit,
         us_qty: i.usQty,
+        us_qty_max: i.usQtyMax,
         us_unit: i.usUnit,
         display_primary: i.displayPrimary,
         split_group_id: i.splitGroupId,

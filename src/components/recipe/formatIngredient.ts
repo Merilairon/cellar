@@ -24,19 +24,25 @@ export function formatQty(n: number): string {
 
 export type MeasureFields = {
   metric_qty: number | null;
+  /** Upper bound of a range ("2-3 tbsp"); null/absent for a single quantity. */
+  metric_qty_max?: number | null;
   metric_unit: string | null;
   us_qty: number | null;
+  us_qty_max?: number | null;
   us_unit: string | null;
   display_primary: 'metric' | 'us';
 };
 
-const measure = (qty: number | null, unit: string | null): string | null =>
-  qty === null ? null : unit ? `${formatQty(qty)} ${unit}` : formatQty(qty);
+const measure = (qty: number | null, unit: string | null, max?: number | null): string | null => {
+  if (qty === null) return null;
+  const amount = max != null && max > qty ? `${formatQty(qty)}-${formatQty(max)}` : formatQty(qty);
+  return unit ? `${amount} ${unit}` : amount;
+};
 
 /** Primary measure first, the other system in parentheses when both are stored. */
 export function formatMeasure(i: MeasureFields): string {
-  const metric = measure(i.metric_qty, i.metric_unit);
-  const us = measure(i.us_qty, i.us_unit);
+  const metric = measure(i.metric_qty, i.metric_unit, i.metric_qty_max);
+  const us = measure(i.us_qty, i.us_unit, i.us_qty_max);
   const [first, second] = i.display_primary === 'us' ? [us, metric] : [metric, us];
   if (first && second) return `${first} (${second})`;
   return first ?? second ?? '';

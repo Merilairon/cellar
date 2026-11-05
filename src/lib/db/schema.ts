@@ -150,8 +150,11 @@ export const ingredient = sqliteTable(
     note: text('note'),
     rawText: text('raw_text').notNull(),
     metricQty: real('metric_qty'),
+    // Upper bound of a range ("2-3 tbsp"); null for a single quantity.
+    metricQtyMax: real('metric_qty_max'),
     metricUnit: text('metric_unit'),
     usQty: real('us_qty'),
+    usQtyMax: real('us_qty_max'),
     usUnit: text('us_unit'),
     displayPrimary: text('display_primary', { enum: ['metric', 'us'] })
       .notNull()

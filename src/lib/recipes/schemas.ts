@@ -30,20 +30,32 @@ const httpUrl = z
     }
   }, 'invalid_url');
 
-export const ingredientInputSchema = z.object({
-  name: text(200).min(1),
-  note: optText(300),
-  raw_text: optText(500),
-  metric_qty: nonNegNum.nullish(),
-  metric_unit: optText(20),
-  us_qty: nonNegNum.nullish(),
-  us_unit: optText(20),
-  display_primary: displayPrimarySchema.default('metric'),
-  // Client-chosen opaque value; rewritten to fresh ULIDs on write.
-  split_group_id: optText(64),
-  portion_label: optText(60),
-  group_label: optText(120),
-});
+export const ingredientInputSchema = z
+  .object({
+    name: text(200).min(1),
+    note: optText(300),
+    raw_text: optText(500),
+    metric_qty: nonNegNum.nullish(),
+    metric_qty_max: nonNegNum.nullish(),
+    metric_unit: optText(20),
+    us_qty: nonNegNum.nullish(),
+    us_qty_max: nonNegNum.nullish(),
+    us_unit: optText(20),
+    display_primary: displayPrimarySchema.default('metric'),
+    // Client-chosen opaque value; rewritten to fresh ULIDs on write.
+    split_group_id: optText(64),
+    portion_label: optText(60),
+    group_label: optText(120),
+  })
+  .superRefine((v, ctx) => {
+    for (const side of ['metric', 'us'] as const) {
+      const lo = v[`${side}_qty`];
+      const hi = v[`${side}_qty_max`];
+      if (hi != null && (lo == null || hi <= lo)) {
+        ctx.addIssue({ code: 'custom', message: 'qty_range_order', path: [`${side}_qty_max`] });
+      }
+    }
+  });
 
 const spanFields = {
   label: text(80).min(1),

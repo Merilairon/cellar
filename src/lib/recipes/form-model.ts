@@ -134,8 +134,10 @@ function originalFromApi(
     note: i.note ?? null,
     raw_text: i.raw_text ?? null,
     metric_qty: i.metric_qty ?? null,
+    metric_qty_max: i.metric_qty_max ?? null,
     metric_unit: i.metric_unit ?? null,
     us_qty: i.us_qty ?? null,
+    us_qty_max: i.us_qty_max ?? null,
     us_unit: i.us_unit ?? null,
     display_primary: i.display_primary,
     split_group_id: i.split_group_id ?? null,
@@ -146,7 +148,9 @@ function originalFromApi(
 
 const lineOf = (i: IngredientInput): string =>
   i.raw_text ??
-  [i.metric_qty, i.metric_unit, i.us_qty, i.us_unit, i.name].filter((x) => x != null).join(' ');
+  [i.metric_qty, i.metric_qty_max, i.metric_unit, i.us_qty, i.us_qty_max, i.us_unit, i.name]
+    .filter((x) => x != null)
+    .join(' ');
 
 export function formFromRecipe(r: RecipeLike): FormState {
   return {
@@ -224,8 +228,10 @@ export function buildIngredients(text: string, originals: IngredientInput[]): In
       note: f.note,
       raw_text: f.raw_text,
       metric_qty: f.metric_qty,
+      metric_qty_max: f.metric_qty_max,
       metric_unit: f.metric_unit,
       us_qty: f.us_qty,
+      us_qty_max: f.us_qty_max,
       us_unit: f.us_unit,
       display_primary: f.display_primary,
       split_group_id: keep?.split_group_id ?? null,

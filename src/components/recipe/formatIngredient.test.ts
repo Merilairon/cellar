@@ -37,6 +37,17 @@ describe('formatMeasure', () => {
     expect(m({ us_qty: 1, us_unit: 'cup', display_primary: 'metric' })).toBe('1 cup');
     expect(m({ metric_qty: 200, metric_unit: 'g', display_primary: 'us' })).toBe('200 g');
   });
+  it('renders ranges on the side that has an upper bound', () => {
+    expect(m({ us_qty: 2, us_qty_max: 3, us_unit: 'tbsp', display_primary: 'us' })).toBe(
+      '2-3 tbsp',
+    );
+    expect(m({ metric_qty: 2, metric_qty_max: 3 })).toBe('2-3');
+    expect(
+      m({ metric_qty: 1, metric_qty_max: 1.5, metric_unit: 'kg', us_qty: 2, us_unit: 'lb' }),
+    ).toBe('1-1½ kg (2 lb)');
+    expect(m({ metric_qty: 2, metric_qty_max: 2, metric_unit: 'g' })).toBe('2 g');
+    expect(m({ metric_qty: 2, metric_qty_max: null, metric_unit: 'g' })).toBe('2 g');
+  });
   it('handles counts and empty', () => {
     expect(m({ metric_qty: 2 })).toBe('2');
     expect(m({})).toBe('');

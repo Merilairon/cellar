@@ -283,8 +283,10 @@ export type IngredientFields = {
   note: string | null;
   raw_text: string;
   metric_qty: number | null;
+  metric_qty_max: number | null;
   metric_unit: string | null;
   us_qty: number | null;
+  us_qty_max: number | null;
   us_unit: string | null;
   display_primary: UnitSystem;
 };
@@ -293,7 +295,8 @@ export type IngredientFields = {
  * Map a parsed line to the stored columns. Known metric units fill `metric_*`, known US
  * units fill `us_*`, dual units fill both (display_primary = first written). Counts and
  * other units (can, clove, pinch) go to `metric_qty` with the unit text as written
- * (null for plain counts). Nothing is converted: a missing side stays null.
+ * (null for plain counts). Nothing is converted: a missing side stays null. A range ("2-3") fills `*_qty_max`
+ * on the primary side only.
  */
 export function toIngredientFields(p: ParsedIngredient): IngredientFields {
   const f: IngredientFields = {
@@ -301,31 +304,37 @@ export function toIngredientFields(p: ParsedIngredient): IngredientFields {
     note: p.note,
     raw_text: p.raw_text,
     metric_qty: null,
+    metric_qty_max: null,
     metric_unit: null,
     us_qty: null,
+    us_qty_max: null,
     us_unit: null,
     display_primary: 'metric',
   };
   if (p.unparsed || p.qty === null) return f;
   const sys = unitSystem(p.unit);
-  const put = (system: UnitSystem, qty: number, unit: string | null) => {
+  const put = (system: UnitSystem, qty: number, unit: string | null, qtyMax: number | null) => {
     if (system === 'us') {
       f.us_qty = qty;
+      f.us_qty_max = qtyMax;
       f.us_unit = unit;
     } else {
       f.metric_qty = qty;
+      f.metric_qty_max = qtyMax;
       f.metric_unit = unit;
     }
   };
+  // A range only counts when the upper bound is above the lower one.
+  const max = p.qtyMax !== undefined && p.qtyMax > p.qty ? p.qtyMax : null;
   if (sys === null) {
-    put('metric', p.qty, p.unit);
+    put('metric', p.qty, p.unit, max);
     return f;
   }
   f.display_primary = sys;
-  put(sys, p.qty, p.unit);
+  put(sys, p.qty, p.unit, max);
   if (p.altQty !== undefined && p.altUnit) {
     const altSys = unitSystem(p.altUnit);
-    if (altSys && altSys !== sys) put(altSys, p.altQty, p.altUnit);
+    if (altSys && altSys !== sys) put(altSys, p.altQty, p.altUnit, null);
   }
   return f;
 }
