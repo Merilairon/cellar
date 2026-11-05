@@ -1,0 +1,7 @@
+{
+  "expect": "draft",
+  "kind": "HowToSection",
+  "title": "Layer Cake",
+  "min_ingredients": 4,
+  "min_steps": 3
+}

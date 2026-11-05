@@ -1,0 +1,5 @@
+{
+  "expect": "out_of_slice",
+  "kind": "microdata-only: itemprop markup, no JSON-LD",
+  "carry": "3b microdata parser"
+}

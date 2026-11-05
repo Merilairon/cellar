@@ -1,0 +1,4 @@
+{
+  "expect": "no_recipe",
+  "kind": "incomplete: Recipe with ingredients but no instructions"
+}

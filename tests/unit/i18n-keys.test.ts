@@ -2,6 +2,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import en from '../../messages/en.json';
+import { IMPORT_ERROR_CODES } from '../../src/lib/import/errors';
 
 const root = join(__dirname, '../..');
 
@@ -58,5 +59,10 @@ describe('message catalog', () => {
       });
     }
     expect(offenders).toEqual([]);
+  });
+
+  it('has a message for every import error_code', () => {
+    const missing = IMPORT_ERROR_CODES.filter((c) => !catalogKeys.has(`import.errors.${c}`));
+    expect(missing).toEqual([]);
   });
 });

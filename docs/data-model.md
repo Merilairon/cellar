@@ -128,7 +128,17 @@ Either measure may be null; the missing one is derived by the conversion engine 
 `tag(id, name unique)`, `recipe_tag(recipe_id, tag_id)`.
 
 ### photo
-`id`, `recipe_id`, `file_path`, `width`, `height`, `position`, `is_cover`.
+(migration `0003_import_photo`)
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | text PK | ULID |
+| recipe_id | text FK recipe | `ON DELETE CASCADE`; the recipe delete service also removes the files (best effort) |
+| file_path | text | relative to the uploads dir (`UPLOADS_DIR`, `/data/uploads` in Docker), server-generated `<ulid>.webp`, never absolute or user-supplied |
+| width / height | integer | pixels after re-encode |
+| position | integer | default 0 |
+| is_cover | integer (boolean) | default 0; unique partial index `photo(recipe_id) WHERE is_cover = 1` allows one cover per recipe |
+| created_at | text | |
 
 ### note
 `id`, `recipe_id`, `user_id`, `body`, `shared` (bool: visible to everyone who can see the recipe), `created_at`.
@@ -137,7 +147,22 @@ Either measure may be null; the missing one is derived by the conversion engine 
 `recipe_id`, `user_id`, `stars` (1–5); PK `(recipe_id, user_id)`.
 
 ### import_job
-(created in M3) `id`, `user_id`, `url`, `status` (`queued|fetching|parsed|needs_review|failed|saved`), `method` (`static|headless|paste`), `error_code`, `raw_html_path` (nullable), `draft_json`, `created_at`.
+(migration `0003_import_photo`)
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | text PK | ULID |
+| user_id | text FK user | `ON DELETE CASCADE` (drafts are disposable) |
+| url | text | nullable (paste jobs have none) |
+| status | text | `queued\|fetching\|parsed\|needs_review\|failed\|saved`, default `queued` |
+| method | text | nullable until decided: `static\|headless\|paste` (`headless` is written from v0.3.2 only) |
+| error_code | text | nullable: `blocked\|no_recipe\|timeout\|invalid_url\|private_address\|too_large\|fetch_failed` |
+| raw_html_path | text | nullable; only set when `KEEP_RAW_HTML` is on |
+| draft_json | text | nullable; the normalized draft (includes tags, which have no table until M4) |
+| recipe_id | text FK recipe | nullable, `ON DELETE SET NULL`; set on save |
+| created_at / updated_at | text | |
+
+Indexes: `import_job(user_id, created_at)`, `import_job(recipe_id)`. CHECK constraints enforce the three enums. `recipe(source_url)` is indexed (migration `0003`) for duplicate detection; the stored value is the normalized form (see `src/lib/import/source-url.ts`).
 
 ### recipe_fts
 FTS5 virtual table over `title`, `description`, ingredient names, tags, notes; kept in sync by triggers.
@@ -184,6 +209,8 @@ row \ col   (banner rows span full width)
 
 ## 3. Import Pipeline
 
+> Status: v0.3.0 implements the static path only (fetch, JSON-LD, normalize, paste fallback, review, save in list view). Headless rendering and the auto-mapper below are planned for v0.3.2 and v0.3.1.
+
 ```
 URL ─► SSRF check ─► fetch (static) ─► JSON-LD Recipe found? ─┐
                          │ no / blocked                       │ yes
@@ -218,7 +245,7 @@ URL ─► SSRF check ─► fetch (static) ─► JSON-LD Recipe found? ─┐
 6. Compute a confidence score; low confidence leaves `view_mode = list`.
 
 **Safety**
-The instance is internet-exposed (PRD §6), so this is a hard requirement. Block private/loopback/link-local IPs after DNS resolution, limit redirects (≤ 5), response size (≤ 5 MB), timeout (10 s static / 30 s headless), allow only http(s). **Headless sidecar:** its own container on an isolated Docker network with no route to the host, LAN, or app database; intercept every browser request and apply the same IP checks (resolve once, then pin the IP to defeat DNS rebinding); disable downloads, `file://` and extensions; fresh context per job; memory/CPU limits; hard 30 s kill.
+The instance is internet-exposed (PRD §6), so this is a hard requirement. Block private/loopback/link-local IPs after DNS resolution, limit redirects (≤ 5), response size (≤ 5 MB), timeout (10 s static / 30 s headless), allow only http(s) on ports 80 and 443 (implemented in v0.3.0 for the static path). **Headless sidecar:** its own container on an isolated Docker network with no route to the host, LAN, or app database; intercept every browser request and apply the same IP checks (resolve once, then pin the IP to defeat DNS rebinding); disable downloads, `file://` and extensions; fresh context per job; memory/CPU limits; hard 30 s kill.
 
 ## 4. Unit Conversion & Scaling
 
@@ -240,8 +267,10 @@ The instance is internet-exposed (PRD §6), so this is a hard requirement. Block
 | POST/DELETE | /api/recipes/:id/share-link | Create / rotate / revoke the public link token |
 | POST | /api/recipes/:id/copy | **Save a copy** of a visible recipe into the caller's book |
 | GET | /r/:share_token | Public read-only page |
-| POST | /api/import | Start import `{url}` or `{text}` → returns draft |
-| POST | /api/import/:id/save | Persist reviewed draft |
+| POST | /api/import | Start import `{url}` or `{text}` (exactly one; text max 500 KB) → `{ id, status, method, draft, warnings, error_code, duplicate }`. A failed fetch or no recipe returns 200 with `status: 'failed'` and `error_code`; 4xx is for bad input (400, 401, 403, 415, 422) and 429 with `Retry-After` |
+| GET | /api/import/:id | Owner only: restore a review after reload |
+| POST | /api/import/:id/save | Persist the edited draft (same schema as recipe create, plus `import_cover`); 201 `{ id }`, 404 if not the caller's job, 409 if already saved |
+| GET | /api/photos/:id | Authenticated cover image, gated by the recipe's read permission |
 | POST | /api/recipes/:id/photos | Upload photo |
 | PUT | /api/recipes/:id/rating | Set own rating |
 | POST/GET | /api/recipes/:id/notes | Notes |

@@ -122,8 +122,79 @@
     "sharedBadge": "Shared with all users"
   },
   "import": {
-    "title": "Import",
-    "empty": "Recipe import is not available yet."
+    "title": "Import a recipe",
+    "intro": "Bring in a recipe from a web page. The imported text is shown as plain text, and you can edit everything before saving.",
+    "tabs": {
+      "label": "Import source",
+      "url": "From a web address",
+      "paste": "Paste the recipe"
+    },
+    "url": {
+      "label": "Recipe web address",
+      "placeholder": "https://example.com/my-recipe",
+      "hint": "Only pages that publish structured recipe data can be read."
+    },
+    "paste": {
+      "label": "Recipe text or page source",
+      "placeholder": "Paste the recipe text, or the HTML of the page",
+      "hint": "Plain text needs the headings Ingredients and Instructions. Up to {max} characters.",
+      "tooLong": "This text is longer than {max} characters.",
+      "empty": "Paste some text first."
+    },
+    "submit": "Import recipe",
+    "cancel": "Cancel import",
+    "progress": {
+      "label": "Import progress",
+      "fetching": "Fetching the page",
+      "parsing": "Reading the recipe",
+      "rendering": "Rendering the page"
+    },
+    "errors": {
+      "title": "The recipe could not be imported",
+      "blocked": "The site did not allow us to read this page.",
+      "no_recipe": "No recipe was found on this page.",
+      "timeout": "The site took too long to respond.",
+      "invalid_url": "Enter a valid web address starting with http:// or https://.",
+      "private_address": "This address cannot be imported because it points to a private or internal network.",
+      "too_large": "This page is too large to import.",
+      "fetch_failed": "The page could not be fetched.",
+      "pasteHint": "You can paste the recipe text or the page source instead.",
+      "rateLimited": "Too many imports. Try again in {seconds, plural, one {# second} other {# seconds}}.",
+      "network": "The request failed. Check your connection and try again.",
+      "generic": "Something went wrong. Try again."
+    },
+    "review": {
+      "title": "Review the imported recipe",
+      "intro": "Check the recipe and fix anything that was read wrongly, then save it.",
+      "attribution": "Imported text stays attributed to its source. Check the source's terms before sharing.",
+      "source": "Source: {name}",
+      "duplicate": "You already have a recipe from this address: {title}.",
+      "duplicateLink": "Open the existing recipe",
+      "importAnyway": "Import anyway",
+      "warnings": "Things to check",
+      "includeCover": "Include the cover image from the source",
+      "coverNote": "The image is downloaded when you save. It is not shown here.",
+      "tags": "Tags found on the page",
+      "tagsNote": "Tags are not saved yet.",
+      "save": "Save imported recipe",
+      "saving": "Saving",
+      "discard": "Discard",
+      "saveFailed": "The recipe could not be saved. Check your connection and try again.",
+      "alreadySaved": "This import was already saved.",
+      "coverFailed": "The recipe was saved, but the cover image could not be downloaded."
+    },
+    "warning": {
+      "yield_unparsed": "The number of servings could not be read.",
+      "ingredients_truncated": "The ingredient list was too long and was shortened.",
+      "ingredients_unparsed": "{count, plural, one {# ingredient line was not recognised and is kept as written.} other {# ingredient lines were not recognised and are kept as written.}}",
+      "steps_truncated": "The step list was too long and was shortened.",
+      "prepTime_invalid": "The prep time could not be read.",
+      "cookTime_invalid": "The cook time could not be read.",
+      "times_missing": "No prep or cook time was found.",
+      "image_dropped": "The image on the page could not be used.",
+      "draft_invalid": "Some parts of the recipe could not be read.",
+      "generic": "The page had something we could not read."
+    }
   },
   "profile": {
     "title": "Profile",

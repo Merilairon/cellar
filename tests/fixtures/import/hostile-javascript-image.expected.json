@@ -1,0 +1,9 @@
+{
+  "expect": "draft",
+  "kind": "hostile: javascript:/data: image URLs",
+  "title": "Simple Pancakes",
+  "min_ingredients": 4,
+  "min_steps": 3,
+  "forbid": ["javascript:", "data:"],
+  "cover_image": null
+}

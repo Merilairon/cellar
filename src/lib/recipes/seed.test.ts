@@ -4,7 +4,7 @@ import { runMigrations } from '@/lib/db/migrate';
 import { getRecipeFull } from '@/lib/db/recipes';
 import { listRecipeIdsByOwner } from '@/lib/db/test-helpers';
 import { user } from '@/lib/db/schema';
-import { seedSamples } from './seed';
+import { seedGuard, seedSamples } from './seed';
 
 let db: Db;
 afterEach(() => db.$client.close());
@@ -54,5 +54,30 @@ describe('seedSamples', () => {
     expect(seedSamples(db, 'M@x.test').ok).toBe(true);
     expect(listRecipeIdsByOwner(db, m.id)).toHaveLength(2);
     expect(seedSamples(db, 'nobody@x.test')).toMatchObject({ ok: false });
+  });
+});
+
+describe('seedGuard', () => {
+  const base = {
+    nodeEnv: 'production',
+    args: [] as string[],
+    confirmEnv: undefined,
+    databasePath: '/data/app.db',
+  };
+
+  it('refuses in production and names the database', () => {
+    expect(seedGuard(base)).toMatch(/refusing to seed in production.*\/data\/app\.db/);
+    expect(seedGuard({ ...base, args: ['--user', 'a@x.test'], confirmEnv: '0' })).not.toBeNull();
+  });
+
+  it('allows production with --yes or SEED_CONFIRM=1', () => {
+    expect(seedGuard({ ...base, args: ['--yes'] })).toBeNull();
+    expect(seedGuard({ ...base, confirmEnv: '1' })).toBeNull();
+  });
+
+  it('allows development, test and unset NODE_ENV without a flag', () => {
+    for (const nodeEnv of ['development', 'test', undefined]) {
+      expect(seedGuard({ ...base, nodeEnv })).toBeNull();
+    }
   });
 });

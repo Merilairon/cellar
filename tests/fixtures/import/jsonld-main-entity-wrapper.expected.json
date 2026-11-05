@@ -1,0 +1,7 @@
+{
+  "expect": "draft",
+  "kind": "Recipe under WebPage.mainEntity",
+  "title": "Simple Pancakes",
+  "min_ingredients": 4,
+  "min_steps": 3
+}

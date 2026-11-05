@@ -13,6 +13,8 @@ import {
   type RecipeGuard,
   type RecipeTree,
 } from '@/lib/db/recipes';
+import { listPhotoPathsByRecipe } from '@/lib/db/photos';
+import { removeUploadFiles } from '@/lib/import/uploads';
 import { joinQtyRange } from '@/lib/import/ingredient-parser';
 import { validateRecipeGrid } from '@/lib/grid/validate';
 import { canRead, canWrite } from './access';
@@ -242,10 +244,24 @@ export function updateRecipeFor(
   return { ok: true, recipe: toApiRecipe(getRecipeFull(db, id)!, true) };
 }
 
-export function deleteRecipeFor(db: Db, actor: Actor, id: string): Result<object> {
+/**
+ * `uploadsDir`, when given, makes the delete also remove the recipe's photo files
+ * (best effort, after the DB delete succeeded; failures are logged).
+ */
+export function deleteRecipeFor(
+  db: Db,
+  actor: Actor,
+  id: string,
+  opts: { uploadsDir?: string } = {},
+): Result<object> {
+  const files = opts.uploadsDir ? listPhotoPathsByRecipe(db, id) : [];
   const res = guarded(() => deleteRecipe(db, id, writeGuard(actor)));
   if (!res.ok) return res;
-  return res.value ? { ok: true } : { ok: false, status: 404 };
+  if (!res.value) return { ok: false, status: 404 };
+  if (opts.uploadsDir && files.length > 0) {
+    removeUploadFiles(opts.uploadsDir, files);
+  }
+  return { ok: true };
 }
 
 export function setVisibilityFor(

@@ -7,7 +7,7 @@ cp .env.example .env   # set SESSION_SECRET: openssl rand -base64 48
 docker compose -f docker-compose.yml -f docker-compose.direct.yml up -d --build
 ```
 
-`docker-compose.direct.yml` is an explicit opt-in file that publishes the app on `${APP_PORT:-3000}`; nothing is auto-loaded, so the app port is never published by accident. Keep `TRUSTED_PROXIES` empty in this mode. Data lives in the `app-data` volume mounted at `/data` (`DATABASE_PATH=/data/app.db`). Migrations run automatically at app start. The app refuses to start in production if `SESSION_SECRET` is shorter than 32 characters or a known placeholder.
+`docker-compose.direct.yml` is an explicit opt-in file that publishes the app on `${APP_PORT:-3000}`; nothing is auto-loaded, so the app port is never published by accident. Keep `TRUSTED_PROXIES` empty in this mode. Data lives in the `app-data` volume mounted at `/data` (`DATABASE_PATH=/data/app.db`). Migrations run automatically at app start. Uploads (imported cover images) are written to `/data/uploads` in the same volume; set `UPLOADS_DIR` to change that. If `KEEP_RAW_HTML=true`, raw HTML goes to `/data/import-raw`. Back up the whole volume. The app refuses to start in production if `SESSION_SECRET` is shorter than 32 characters or a known placeholder.
 
 > **Warning:** if you change `APP_PORT`, set `BASE_URL` to the same port (`APP_PORT=3412` needs `BASE_URL=http://localhost:3412`). Otherwise the origin allowlist rejects every POST with a 403 and `/setup` silently fails. Compose defaults `BASE_URL` from `APP_PORT`, but set it explicitly for any other host name.
 
@@ -45,3 +45,10 @@ docker buildx build --platform linux/amd64,linux/arm64 -t cellar:multi .
 ```
 
 Add `--push -t registry/name:tag` to publish (CI never pushes). Native modules (`better-sqlite3`, `argon2`) use upstream prebuilt binaries when available; the build stage includes python3/make/g++ so `node-gyp` can compile them otherwise. The runtime stage has no toolchain. Cross-building arm64 on amd64 needs QEMU (`docker run --privileged --rm tonistiigi/binfmt --install arm64`).
+
+## Import feature notes (v0.3.0)
+
+- The app makes outbound HTTP(S) requests on ports 80 and 443 when a user imports a URL. Allow that egress if you filter outbound traffic. Private and internal addresses are refused by the app itself, not by Docker.
+- `IMPORT_ALLOW_LOCAL_FETCH` must stay unset in Docker: it disables that protection and the app refuses to start with it in production.
+- `sharp` (cover re-encoding) was added as a dependency. CI runs `require('sharp')` inside the built image for each platform it builds. **Unverified:** that the standalone image includes the sharp native binary for linux/arm64 and works on a Raspberry Pi, and that a cover import works end to end inside Docker on arm64. The v0.3.0 gate ran on amd64 only. Check this before relying on cover images on arm64; imports without a cover do not depend on it.
+- Seeding in the image needs confirmation: `docker compose exec app npm run seed -- --yes` (or `SEED_CONFIRM=1`).

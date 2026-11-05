@@ -1,0 +1,7 @@
+{
+  "expect": "draft",
+  "kind": "script type with charset parameter",
+  "title": "Simple Pancakes",
+  "min_ingredients": 4,
+  "min_steps": 3
+}

@@ -1,0 +1,5 @@
+{
+  "expect": "no_recipe",
+  "kind": "malformed: truncated JSON-LD that cannot be repaired",
+  "note": "Recipe present in HTML but JSON-LD is cut off mid-string; deliberately unrecoverable."
+}

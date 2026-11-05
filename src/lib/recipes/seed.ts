@@ -10,6 +10,21 @@ import { prepareRecipe } from './service';
 export type SeedResult =
   { ok: true; owner: User; created: string[]; skipped: string[] } | { ok: false; error: string };
 
+/**
+ * Production guard: the seed writes sample recipes into the real database, so in production it
+ * needs an explicit `--yes` or `SEED_CONFIRM=1`. Returns an error message, or null when allowed.
+ */
+export function seedGuard(opts: {
+  nodeEnv: string | undefined;
+  args: string[];
+  confirmEnv: string | undefined;
+  databasePath: string;
+}): string | null {
+  if (opts.nodeEnv !== 'production') return null;
+  if (opts.args.includes('--yes') || opts.confirmEnv === '1') return null;
+  return `refusing to seed in production: it would write sample recipes into ${opts.databasePath}. Pass --yes or set SEED_CONFIRM=1 to continue.`;
+}
+
 /** Pick the target owner: `--user <email>` or the oldest active admin. */
 export function resolveSeedOwner(db: Db, email?: string): User | undefined {
   if (email) {

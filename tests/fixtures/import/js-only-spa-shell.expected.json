@@ -1,0 +1,5 @@
+{
+  "expect": "out_of_slice",
+  "kind": "JS-rendered: empty SPA root",
+  "carry": "3c headless"
+}

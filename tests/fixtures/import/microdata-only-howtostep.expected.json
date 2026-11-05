@@ -1,0 +1,5 @@
+{
+  "expect": "out_of_slice",
+  "kind": "microdata-only: HowToStep itemprops",
+  "carry": "3b microdata parser"
+}

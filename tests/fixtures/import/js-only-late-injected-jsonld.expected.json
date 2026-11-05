@@ -1,0 +1,5 @@
+{
+  "expect": "out_of_slice",
+  "kind": "JS-rendered: JSON-LD injected by script at runtime",
+  "carry": "3c headless"
+}

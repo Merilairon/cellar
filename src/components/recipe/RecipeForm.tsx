@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
@@ -43,7 +43,31 @@ const STEP_LABELS: Record<string, string> = {
   minutes_max: 'recipe.form.step.minutesMax',
 };
 
-export function RecipeForm({ recipeId, initial }: { recipeId?: string; initial?: FormState }) {
+/** Lets another screen (the import review) reuse this form with its own endpoint and chrome. */
+export type FormTarget = {
+  url: string;
+  method: string;
+  /** Merged into the payload, e.g. { import_cover }. */
+  extra?: Record<string, unknown>;
+  /** Where to go after a successful save. */
+  redirect: (res: { id: string; warnings?: string[] }) => string;
+  saveLabel: string;
+  failedText: string;
+  cancelLabel: string;
+  onCancel: () => void;
+};
+
+export function RecipeForm({
+  recipeId,
+  initial,
+  target,
+  header,
+}: {
+  recipeId?: string;
+  initial?: FormState;
+  target?: FormTarget;
+  header?: ReactNode;
+}) {
   const t = useTranslations();
   const router = useRouter();
   const [form, setForm] = useState<FormState>(() => initial ?? emptyForm());
@@ -90,15 +114,17 @@ export function RecipeForm({ recipeId, initial }: { recipeId?: string; initial?:
     if (!v.ok) return fail(v.errors);
     setErrors([]);
     setSubmitting(true);
-    const res = await call(
-      recipeId ? `/api/recipes/${recipeId}` : '/api/recipes',
-      recipeId ? 'PUT' : 'POST',
-      v.payload,
-    );
+    const res = target
+      ? await call(target.url, target.method, { ...v.payload, ...target.extra })
+      : await call(
+          recipeId ? `/api/recipes/${recipeId}` : '/api/recipes',
+          recipeId ? 'PUT' : 'POST',
+          v.payload,
+        );
     setSubmitting(false);
     if (res?.ok) {
-      const saved = (await res.json()) as { id: string };
-      router.push(`/recipes/${saved.id}`);
+      const saved = (await res.json()) as { id: string; warnings?: string[] };
+      router.push(target ? target.redirect(saved) : `/recipes/${saved.id}`);
       router.refresh();
     } else if (res?.status === 422) {
       fail(((await res.json()) as { errors: ApiFieldError[] }).errors);
@@ -135,6 +161,7 @@ export function RecipeForm({ recipeId, initial }: { recipeId?: string; initial?:
 
   return (
     <form onSubmit={submit} noValidate className="flex max-w-3xl flex-col gap-4">
+      {header}
       {(errors.length > 0 || failed) && (
         <div
           ref={summary}
@@ -143,7 +170,7 @@ export function RecipeForm({ recipeId, initial }: { recipeId?: string; initial?:
           className="rounded border border-red-700 p-3 text-red-800 dark:border-red-400 dark:text-red-300"
         >
           {failed ? (
-            <p>{t('recipe.errors.saveFailed')}</p>
+            <p>{target?.failedText ?? t('recipe.errors.saveFailed')}</p>
           ) : (
             <>
               <p className="font-semibold">
@@ -278,10 +305,10 @@ export function RecipeForm({ recipeId, initial }: { recipeId?: string; initial?:
 
       <div className="flex gap-2">
         <button type="submit" className={btnPrimary} disabled={submitting}>
-          {t('recipe.form.save')}
+          {target?.saveLabel ?? t('recipe.form.save')}
         </button>
-        <button type="button" className={btn} onClick={() => router.back()}>
-          {t('recipe.actions.cancel')}
+        <button type="button" className={btn} onClick={target?.onCancel ?? (() => router.back())}>
+          {target?.cancelLabel ?? t('recipe.actions.cancel')}
         </button>
       </div>
     </form>
