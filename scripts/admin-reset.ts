@@ -1,5 +1,6 @@
 import { runAdminReset } from '@/lib/auth/admin-reset';
 import { openDb } from '@/lib/db/connection';
+import { runMigrations } from '@/lib/db/migrate';
 import { parseEnv } from '@/lib/env';
 
 // Thin CLI entry: container-exec only, no HTTP surface. No next/* imports.
@@ -8,6 +9,7 @@ try {
   const env = parseEnv(process.env);
   const db = openDb(env.DATABASE_PATH);
   try {
+    runMigrations(db); // idempotent; makes the CLI work on a fresh volume
     code = runAdminReset(db, process.argv.slice(2), env.BASE_URL, console);
   } finally {
     db.$client.close();
