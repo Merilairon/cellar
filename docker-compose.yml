@@ -1,0 +1,64 @@
+# Direct use:   docker compose up -d --build        (docker-compose.override.yml publishes :3000)
+# Behind Caddy: docker compose -f docker-compose.yml --profile caddy up -d --build
+#   (naming the file explicitly skips the override, so the app port is NOT published)
+services:
+  app:
+    build: .
+    image: recipe-book:local
+    restart: unless-stopped
+    environment:
+      DATABASE_PATH: /data/app.db
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in .env (openssl rand -base64 48)}
+      BASE_URL: ${BASE_URL:-http://localhost:3000}
+      # Comma-separated IPs/CIDRs whose X-Forwarded-* headers are trusted. Empty = none.
+      # With the caddy profile set it to 172.28.0.10 (Caddy's fixed address below).
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+    volumes:
+      - app-data:/data
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    networks:
+      default: {}
+    expose:
+      - '3000'
+
+  caddy:
+    profiles: [caddy]
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      # Public host name only (no scheme), e.g. recipes.example.com
+      SITE_ADDRESS: ${SITE_ADDRESS:-localhost}
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      default:
+        ipv4_address: 172.28.0.10
+
+volumes:
+  app-data:
+  caddy-data:
+  caddy-config:
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24

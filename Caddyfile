@@ -1,0 +1,8 @@
+# Automatic HTTPS (Let's Encrypt) for SITE_ADDRESS. Ports 80/443 must be
+# reachable from the internet and the DNS name must point at this host.
+{$SITE_ADDRESS} {
+	encode zstd gzip
+	# Caddy sets X-Forwarded-For/Proto/Host itself and drops client-supplied values.
+	# The app only trusts them from TRUSTED_PROXIES (= Caddy's fixed IP, 172.28.0.10).
+	reverse_proxy app:3000
+}
