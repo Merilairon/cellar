@@ -81,9 +81,11 @@ describe('migrations', () => {
     runMigrations(db);
     expect(existsSync(path)).toBe(true);
     expect(names(db)).toEqual([
+      'import_job',
       'ingredient',
       'invite',
       'password_reset',
+      'photo',
       'recipe',
       'section',
       'session',
@@ -102,7 +104,7 @@ describe('migrations', () => {
     const n = db2.$client.prepare('SELECT count(*) AS n FROM __drizzle_migrations').get() as {
       n: number;
     };
-    expect(n.n).toBe(3);
+    expect(n.n).toBe(4);
   });
 
   it('enforces uniqueness, defaults, ULID ids and FK cascade', () => {

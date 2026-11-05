@@ -352,3 +352,32 @@ describe('visibility and copy', () => {
     expect(copy.ok && copy.recipe.copied_from_id).toBeNull();
   });
 });
+
+describe('deleteRecipeFor photo cleanup', () => {
+  it('removes the recipe photo files, tolerating missing files and path escapes', async () => {
+    const fs = await import('node:fs');
+    const os = await import('node:os');
+    const path = await import('node:path');
+    const { insertCoverPhoto } = await import('@/lib/db/photos');
+    const { photo } = await import('@/lib/db/schema');
+    const { owner } = setup();
+    const id = okRecipe(createRecipeFor(db, owner, clone())).id;
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'uploads-'));
+    const outside = path.join(path.dirname(dir), `outside-${path.basename(dir)}.txt`);
+    try {
+      fs.writeFileSync(path.join(dir, 'a.webp'), 'x');
+      fs.writeFileSync(outside, 'keep');
+      insertCoverPhoto(db, id, { filePath: 'a.webp', width: 1, height: 1 });
+      insertCoverPhoto(db, id, { filePath: 'gone.webp', width: 1, height: 1 });
+      db.insert(photo)
+        .values({ recipeId: id, filePath: `../${path.basename(outside)}`, width: 1, height: 1 })
+        .run();
+      expect(deleteRecipeFor(db, owner, id, { uploadsDir: dir }).ok).toBe(true);
+      expect(fs.existsSync(path.join(dir, 'a.webp'))).toBe(false);
+      expect(fs.existsSync(outside)).toBe(true);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+      fs.rmSync(outside, { force: true });
+    }
+  });
+});

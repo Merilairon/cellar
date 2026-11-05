@@ -1,3 +1,4 @@
+import { getEnv } from '@/lib/env';
 import { getDb } from '@/lib/db';
 import { authenticate, failure, json, readJson } from '@/lib/recipes/http';
 import { deleteRecipeFor, getRecipeFor, updateRecipeFor } from '@/lib/recipes/service';
@@ -25,6 +26,8 @@ export async function PUT(request: Request, { params }: Ctx) {
 export async function DELETE(request: Request, { params }: Ctx) {
   const auth = await authenticate(request);
   if (auth instanceof Response) return auth;
-  const result = deleteRecipeFor(getDb(), auth.user, (await params).id);
+  const result = deleteRecipeFor(getDb(), auth.user, (await params).id, {
+    uploadsDir: getEnv().UPLOADS_DIR,
+  });
   return result.ok ? new Response(null, { status: 204 }) : failure(result);
 }

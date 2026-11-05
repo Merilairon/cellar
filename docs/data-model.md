@@ -128,7 +128,17 @@ Either measure may be null; the missing one is derived by the conversion engine 
 `tag(id, name unique)`, `recipe_tag(recipe_id, tag_id)`.
 
 ### photo
-`id`, `recipe_id`, `file_path`, `width`, `height`, `position`, `is_cover`.
+(migration `0003_import_photo`)
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | text PK | ULID |
+| recipe_id | text FK recipe | `ON DELETE CASCADE`; the recipe delete service also removes the files (best effort) |
+| file_path | text | relative to the uploads dir (`UPLOADS_DIR`, `/data/uploads` in Docker), server-generated `<ulid>.webp`, never absolute or user-supplied |
+| width / height | integer | pixels after re-encode |
+| position | integer | default 0 |
+| is_cover | integer (boolean) | default 0; unique partial index `photo(recipe_id) WHERE is_cover = 1` allows one cover per recipe |
+| created_at | text | |
 
 ### note
 `id`, `recipe_id`, `user_id`, `body`, `shared` (bool: visible to everyone who can see the recipe), `created_at`.
@@ -137,7 +147,22 @@ Either measure may be null; the missing one is derived by the conversion engine 
 `recipe_id`, `user_id`, `stars` (1–5); PK `(recipe_id, user_id)`.
 
 ### import_job
-(created in M3) `id`, `user_id`, `url`, `status` (`queued|fetching|parsed|needs_review|failed|saved`), `method` (`static|headless|paste`), `error_code`, `raw_html_path` (nullable), `draft_json`, `created_at`.
+(migration `0003_import_photo`)
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | text PK | ULID |
+| user_id | text FK user | `ON DELETE CASCADE` (drafts are disposable) |
+| url | text | nullable (paste jobs have none) |
+| status | text | `queued\|fetching\|parsed\|needs_review\|failed\|saved`, default `queued` |
+| method | text | nullable until decided: `static\|headless\|paste` (`headless` is written from v0.3.2 only) |
+| error_code | text | nullable: `blocked\|no_recipe\|timeout\|invalid_url\|private_address\|too_large\|fetch_failed` |
+| raw_html_path | text | nullable; only set when `KEEP_RAW_HTML` is on |
+| draft_json | text | nullable; the normalized draft (includes tags, which have no table until M4) |
+| recipe_id | text FK recipe | nullable, `ON DELETE SET NULL`; set on save |
+| created_at / updated_at | text | |
+
+Indexes: `import_job(user_id, created_at)`, `import_job(recipe_id)`. CHECK constraints enforce the three enums. `recipe(source_url)` is indexed (migration `0003`) for duplicate detection; the stored value is the normalized form (see `src/lib/import/source-url.ts`).
 
 ### recipe_fts
 FTS5 virtual table over `title`, `description`, ingredient names, tags, notes; kept in sync by triggers.

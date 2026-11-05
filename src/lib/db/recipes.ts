@@ -1,4 +1,4 @@
-import { asc, desc, eq, or } from 'drizzle-orm';
+import { and, asc, desc, eq, or } from 'drizzle-orm';
 import { ulid } from 'ulid';
 import type { Db } from './connection';
 import { ingredient, nowIso, recipe, section, step, user } from './schema';
@@ -304,4 +304,26 @@ function stripKeys<T extends { id: string; recipeId: string; sectionId: string; 
   delete rest.sectionId;
   delete rest.position;
   return rest as Omit<T, 'id' | 'recipeId' | 'sectionId' | 'position'>;
+}
+
+/**
+ * Recipes the user may read (own, or shared with all users) whose stored `source_url`
+ * equals `sourceUrl` exactly. Callers pass the normalized form (see import/source-url.ts).
+ */
+export function findReadableRecipesBySourceUrl(
+  db: Db,
+  userId: string,
+  sourceUrl: string,
+): Array<{ id: string; title: string }> {
+  return db
+    .select({ id: recipe.id, title: recipe.title })
+    .from(recipe)
+    .where(
+      and(
+        eq(recipe.sourceUrl, sourceUrl),
+        or(eq(recipe.ownerId, userId), eq(recipe.visibility, 'users')),
+      ),
+    )
+    .orderBy(desc(recipe.updatedAt))
+    .all();
 }
