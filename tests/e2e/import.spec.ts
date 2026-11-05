@@ -229,11 +229,16 @@ test('paste fallback: plain text with headings -> review -> save', async () => {
   await sp.getByRole('button', { name: 'Import recipe' }).click();
 
   await expect(sp.getByLabel('Title', { exact: true })).toHaveValue('Pasted Porridge');
-  await expect(sp.getByLabel('Ingredients')).toHaveValue('1 cup oats\n2 cups milk');
+  // Since 3b the steps map confidently: the proposal is applied, ingredients are in the order
+  // the steps use them (milk is heated first) and the recipe is saved as a grid.
+  await expect(
+    sp.getByRole('region', { name: 'Automatic grid' }).getByText('Good match'),
+  ).toBeVisible();
+  await expect(sp.getByLabel('Ingredients')).toHaveValue('2 cups milk\n1 cup oats');
   await sp.getByRole('button', { name: 'Save imported recipe' }).click();
   await expect(sp).toHaveURL(/\/recipes\/[0-9A-Z]{26}$/);
   await expect(sp.getByRole('heading', { name: 'Pasted Porridge', level: 1 })).toBeVisible();
-  await expect(sp.getByRole('button', { name: 'List' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(sp.getByRole('button', { name: 'Grid' })).toHaveAttribute('aria-pressed', 'true');
   expect(await recipeCount(seamCtx)).toBe(before + 1);
 });
 
