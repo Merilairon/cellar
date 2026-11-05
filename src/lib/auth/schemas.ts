@@ -22,6 +22,11 @@ const token = z.string().min(20).max(100);
 
 export const inviteCreateSchema = z.object({ email: optionalEmail });
 export const userIdSchema = z.object({ userId: z.string().min(1).max(40) });
+const userId = z.string().min(1).max(40);
+export const deleteUserSchema = z.discriminatedUnion('recipes', [
+  z.object({ userId, recipes: z.literal('delete') }),
+  z.object({ userId, recipes: z.literal('reassign'), reassignTo: userId }),
+]);
 export const registerSchema = z.object({
   token,
   email: optionalEmail,

@@ -1,11 +1,12 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   createInviteAction,
   createResetAction,
   deactivateAction,
+  deleteUserAction,
   type ActionState,
 } from './actions';
 
@@ -75,5 +76,63 @@ export function DeactivateButton({ userId }: { userId: string }) {
       </button>
       <Feedback state={state} linkLabel="" />
     </form>
+  );
+}
+
+export function DeleteButton({
+  userId,
+  reassignOptions,
+}: {
+  userId: string;
+  reassignOptions: { id: string; label: string }[];
+}) {
+  const t = useTranslations();
+  const [state, action, pending] = useActionState(deleteUserAction, initial);
+  const [choice, setChoice] = useState<'delete' | 'reassign'>('delete');
+  const targets = reassignOptions.filter((o) => o.id !== userId);
+  return (
+    <details>
+      <summary className="cursor-pointer underline">{t('admin.users.delete')}</summary>
+      <form action={action} className="flex flex-col gap-1">
+        <input type="hidden" name="userId" value={userId} />
+        <p>{t('admin.users.deleteWarning')}</p>
+        <fieldset className="flex flex-col gap-1">
+          <legend>{t('admin.users.recipesLegend')}</legend>
+          <label>
+            <input
+              type="radio"
+              name="recipes"
+              value="delete"
+              checked={choice === 'delete'}
+              onChange={() => setChoice('delete')}
+            />{' '}
+            {t('admin.users.recipesDelete')}
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="recipes"
+              value="reassign"
+              checked={choice === 'reassign'}
+              onChange={() => setChoice('reassign')}
+            />{' '}
+            {t('admin.users.recipesReassign')}
+          </label>
+          {choice === 'reassign' && (
+            <select name="reassignTo" required aria-label={t('admin.users.reassignTo')}>
+              {targets.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          )}
+        </fieldset>
+        <button type="submit" disabled={pending} className="bg-red-600 p-2 text-white">
+          {t('admin.users.deleteConfirm')}
+        </button>
+        <Feedback state={state} linkLabel="" />
+      </form>
+    </details>
   );
 }

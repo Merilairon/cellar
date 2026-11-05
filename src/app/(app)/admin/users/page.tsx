@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { listUsersForAdmin } from '@/lib/auth/admin';
 import { requireAdmin } from '@/lib/auth/current-user';
 import { getDb } from '@/lib/db';
-import { DeactivateButton, InviteForm, ResetButton } from './forms';
+import { DeactivateButton, DeleteButton, InviteForm, ResetButton } from './forms';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,6 +12,9 @@ export default async function AdminUsersPage() {
   const admin = await requireAdmin();
   if (!admin.ok) redirect(admin.status === 401 ? '/login' : '/');
   const users = listUsersForAdmin(getDb());
+  const reassignOptions = users
+    .filter((u) => u.active)
+    .map((u) => ({ id: u.id, label: `${u.displayName} (${u.email})` }));
   return (
     <main>
       <h1 className="mb-6 text-2xl font-bold">{t('admin.users.title')}</h1>
@@ -49,6 +52,7 @@ export default async function AdminUsersPage() {
                       <DeactivateButton userId={u.id} />
                     </>
                   )}
+                  <DeleteButton userId={u.id} reassignOptions={reassignOptions} />
                 </td>
               </tr>
             ))}

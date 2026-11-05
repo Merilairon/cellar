@@ -1,12 +1,12 @@
 'use server';
 
 import { headers } from 'next/headers';
-import { deactivateUser } from '@/lib/auth/admin';
+import { deactivateUser, deleteUser } from '@/lib/auth/admin';
 import { requireAdmin } from '@/lib/auth/current-user';
 import { isCsrfSafe } from '@/lib/auth/csrf';
 import { createInvite } from '@/lib/auth/invites';
 import { issuePasswordReset } from '@/lib/auth/resets';
-import { inviteCreateSchema, userIdSchema } from '@/lib/auth/schemas';
+import { deleteUserSchema, inviteCreateSchema, userIdSchema } from '@/lib/auth/schemas';
 import { getDb } from '@/lib/db';
 import { getEnv } from '@/lib/env';
 import { revalidatePath } from 'next/cache';
@@ -64,4 +64,21 @@ export async function deactivateAction(_: ActionState, form: FormData): Promise<
   if (result !== 'ok') return { error: errors[result] };
   revalidatePath('/admin/users');
   return { message: 'admin.users.deactivated' };
+}
+
+export async function deleteUserAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const g = await guard();
+  if ('error' in g) return g;
+  const parsed = deleteUserSchema.safeParse(Object.fromEntries(form));
+  if (!parsed.success) return { error: 'admin.users.errors.invalidInput' };
+  const { userId, ...choice } = parsed.data;
+  const result = deleteUser(getDb(), userId, choice);
+  const errors = {
+    last_admin: 'admin.users.errors.lastAdminDelete',
+    not_found: 'admin.users.errors.notFound',
+    invalid_reassign_target: 'admin.users.errors.invalidReassign',
+  } as const;
+  if (result !== 'ok') return { error: errors[result] };
+  revalidatePath('/admin/users');
+  return { message: 'admin.users.deleted' };
 }

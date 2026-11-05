@@ -117,3 +117,19 @@ test('shell: nav visibility by role, profile unit_pref, theme, logout, 375px nav
   await expect(m).toHaveURL(/\/login$/);
   await ctx.close();
 });
+
+test('admin deletes a member, last admin is protected', async ({ page }) => {
+  await page.goto('/login');
+  await page.getByLabel('Email').fill(ADMIN.email);
+  await page.getByLabel('Password').fill(ADMIN.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await page.goto('/admin/users');
+  const row = page.getByRole('row', { name: new RegExp(MEMBER.email) });
+  await row.getByText('Delete user').click();
+  await row.getByRole('button', { name: 'Delete permanently' }).click();
+  await expect(page.getByRole('row', { name: new RegExp(MEMBER.email) })).toHaveCount(0);
+  const admin = page.getByRole('row', { name: new RegExp(ADMIN.email) });
+  await admin.getByText('Delete user').click();
+  await admin.getByRole('button', { name: 'Delete permanently' }).click();
+  await expect(page.getByRole('alert')).toContainText('last active admin cannot be deleted');
+});

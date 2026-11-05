@@ -74,6 +74,46 @@ export function deactivateUserGuarded(
   );
 }
 
+export type DeleteResult = 'ok' | 'not_found' | 'last_admin' | 'invalid_reassign_target';
+
+/**
+ * Delete a user; sessions, invites and password resets cascade via foreign keys
+ * (reset `created_by` is set to null). Refuses, race-safely in one BEGIN IMMEDIATE
+ * transaction, to delete the last active admin or to reassign to a missing,
+ * deactivated or same user.
+ * TODO(M2): when recipes exist, reassign or delete the user's recipes here, in this
+ * same transaction, before the user row is removed.
+ */
+export function deleteUserGuarded(
+  db: Db,
+  id: string,
+  opts: { reassignTo?: string } = {},
+): DeleteResult {
+  return db.transaction(
+    (tx) => {
+      const target = tx.select().from(user).where(eq(user.id, id)).get();
+      if (!target) return 'not_found';
+      if (opts.reassignTo !== undefined) {
+        const to = tx.select().from(user).where(eq(user.id, opts.reassignTo)).get();
+        if (!to || to.deactivatedAt || to.id === id) return 'invalid_reassign_target';
+      }
+      if (target.role === 'admin' && !target.deactivatedAt) {
+        const admins =
+          tx
+            .select({ n: count() })
+            .from(user)
+            .where(and(eq(user.role, 'admin'), isNull(user.deactivatedAt)))
+            .get()?.n ?? 0;
+        if (admins <= 1) return 'last_admin';
+      }
+      tx.delete(session).where(eq(session.userId, id)).run();
+      tx.delete(user).where(eq(user.id, id)).run();
+      return 'ok';
+    },
+    { behavior: 'immediate' },
+  );
+}
+
 export type UnitPref = User['unitPref'];
 
 /** Set the user's unit preference; returns false if the user does not exist. */
