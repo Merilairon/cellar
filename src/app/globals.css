@@ -75,7 +75,7 @@
   background: var(--rg-surface);
   color: var(--rg-ink);
   /* Keep a focused step out from under the sticky ingredient column. */
-  scroll-padding-inline-start: 250px;
+  scroll-padding-inline-start: 308px;
 }
 .rg-scroller:focus-visible,
 .rg-stepbtn:focus-visible {
@@ -125,8 +125,10 @@
   left: 0;
   z-index: 2;
   background: var(--rg-surface);
-  min-width: 170px;
-  max-width: 320px;
+  /* One fixed width per breakpoint so every section's table lines up (tiers below). */
+  width: 300px;
+  min-width: 300px;
+  max-width: 300px;
   box-shadow: 1px 0 0 var(--rg-line);
 }
 .rg-table td.rg-empty {
@@ -192,16 +194,17 @@
   top: 2px;
   bottom: 2px;
   right: 2px;
-  width: 36px;
+  /* Narrow so it never washes out a step label; the arrow carries the cue. */
+  width: 14px;
   border-radius: 0 4px 4px 0;
   background: linear-gradient(to right, transparent, var(--rg-surface));
 }
 .rg-arrow {
   pointer-events: none;
   position: absolute;
-  top: 50%;
-  right: 8px;
-  transform: translateY(-50%);
+  /* Sits in the bottom-right corner, over the border/padding strip, not centred on step labels. */
+  bottom: 6px;
+  right: 6px;
   width: 22px;
   height: 22px;
   border-radius: 999px;
@@ -218,8 +221,28 @@
   .rg-table td.rg-empty {
     min-width: 96px;
   }
+}
+/* Tablet: a narrower ingredient column and tighter steps so five step columns fit at 768. */
+@container (min-width: 640px) and (max-width: 899px) {
   .rg-table th.rg-ing {
-    min-width: 240px;
+    width: 190px;
+    min-width: 190px;
+    max-width: 190px;
+    font-size: 0.92rem;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.3;
+  }
+  .rg-table th,
+  .rg-table td {
+    padding: 8px;
+  }
+  .rg-table td.rg-step,
+  .rg-table td.rg-empty {
+    min-width: 76px;
+  }
+  .rg-scroller {
+    scroll-padding-inline-start: 198px;
   }
 }
 /* When the table scrolls sideways, keep banner text in the visible area instead of the full width. */
