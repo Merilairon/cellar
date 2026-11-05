@@ -3,12 +3,14 @@
 
 import { parseIngredientLine, toIngredientFields } from './ingredient-parser';
 import { MAP_LIMITS, type MapStepInput } from './map-types';
-import { singularize, tokenize } from './text-tokens';
+import { safeSlice, singularize, tokenize } from './text-tokens';
 import { VERBS } from './step-verbs';
 import type { IngredientInput } from '@/lib/recipes/schemas';
 
 const MAX_HEADING_CHARS = 60;
 const MAX_TITLE_WORDS = 5;
+/** Per-line cap before an ingredient line reaches the parser (matches raw_text). */
+const MAX_LINE_CHARS = 500;
 
 const NOT_A_TITLE = new Set(['best', 'results', 'result', 'tip', 'tips', 'note', 'notes', 'sake']);
 const PREFIXES: ReadonlyArray<readonly string[]> = [
@@ -132,18 +134,19 @@ export function ingredientsFromLines(
 ): IngredientInput[] {
   const out: IngredientInput[] = [];
   let label: string | null = null;
-  for (const line of lines.slice(0, MAP_LIMITS.ingredients * 2)) {
+  for (const rawLine of lines.slice(0, MAP_LIMITS.ingredients * 2)) {
+    const line = safeSlice(String(rawLine), MAX_LINE_CHARS);
     const heading = ingredientHeadingTitle(line, known);
     if (heading !== null) {
-      label = heading.slice(0, 120);
+      label = safeSlice(heading, 120);
       continue;
     }
     if (out.length >= MAP_LIMITS.ingredients) break;
     const f = toIngredientFields(parseIngredientLine(line));
     out.push({
-      name: f.name.slice(0, MAP_LIMITS.ingredientNameChars) || 'ingredient',
+      name: safeSlice(f.name, MAP_LIMITS.ingredientNameChars) || 'ingredient',
       note: f.note,
-      raw_text: f.raw_text.slice(0, 500),
+      raw_text: safeSlice(f.raw_text, MAX_LINE_CHARS),
       metric_qty: f.metric_qty,
       metric_qty_max: f.metric_qty_max,
       metric_unit: f.metric_unit,
@@ -171,7 +174,7 @@ export function groupSteps(steps: readonly MapStepInput[]): StepGroup[] {
   let curHint: string | null = null;
   for (const st of steps) {
     const hint =
-      st.section !== null && st.section.trim() !== '' ? st.section.trim().slice(0, 120) : null;
+      st.section !== null && st.section.trim() !== '' ? safeSlice(st.section.trim(), 120) : null;
     if (hint !== null) {
       if (cur === null || curHint !== hint) {
         cur = { title: hint, steps: [] };
@@ -183,7 +186,7 @@ export function groupSteps(steps: readonly MapStepInput[]): StepGroup[] {
     }
     const title = stepHeadingTitle(st.text);
     if (title !== null) {
-      cur = { title: title.slice(0, 120), steps: [] };
+      cur = { title: safeSlice(title, 120), steps: [] };
       curHint = null;
       groups.push(cur);
       continue;

@@ -3,7 +3,7 @@
 // other languages fall back to 3a labels and low confidence (known limitation).
 
 import { pattern } from './map-patterns';
-import { tokenizeDetailed, type Token } from './text-tokens';
+import { safeSlice, tokenizeDetailed, type Token } from './text-tokens';
 
 export type VerbClass = 'combine' | 'cook' | 'prep' | 'finish';
 
@@ -137,7 +137,7 @@ export function fallbackLabel(text: string): string {
   let label = words.join(' ');
   while (label.length > 0 && '.,;:!?'.includes(label[label.length - 1]!))
     label = label.slice(0, -1);
-  if (label.length > 24) label = label.slice(0, 24).trim();
+  if (label.length > 24) label = safeSlice(label, 24).trim();
   return label || 'step';
 }
 
@@ -424,7 +424,7 @@ export function classifyTokens(text: string, tokens: Token[]): StepClass {
   const d = durations[0];
   let verb = found ? found.verb : null;
   if (prepVerb && (!verb || verb !== prepVerb)) verb = prepVerb;
-  const label = verb ? verb.slice(0, 24).trim() : fallbackLabel(text);
+  const label = verb ? safeSlice(verb, 24).trim() : fallbackLabel(text);
   return {
     verb,
     label: label || 'step',

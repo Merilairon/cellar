@@ -30,28 +30,13 @@ import {
   type MapResult,
   type MapStepInput,
   type MappingSignals,
-  type MappingWarning,
 } from './map-types';
+import { Warnings } from './map-warnings';
 import { classifyTokens, type StepClass } from './step-verbs';
-import { singularize, tokenizeDetailed, type Tokenized } from './text-tokens';
+import { safeSlice, singularize, tokenizeDetailed, type Tokenized } from './text-tokens';
 
 type SectionsOut = RecipeInput['sections'];
 type StepOut = SectionsOut[number]['steps'][number];
-
-const MAX_WARNINGS = 60;
-
-class Warnings {
-  private readonly set = new Set<MappingWarning>();
-  add(w: MappingWarning): void {
-    this.set.add(w);
-  }
-  has(w: MappingWarning): boolean {
-    return this.set.has(w);
-  }
-  list(): MappingWarning[] {
-    return [...this.set].slice(0, MAX_WARNINGS);
-  }
-}
 
 // -- input coercion -----------------------------------------------------------------------
 
@@ -59,7 +44,7 @@ const isObj = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
 
 const str = (v: unknown, max: number): string | null =>
-  typeof v === 'string' && v.trim() !== '' ? v.trim().slice(0, max) : null;
+  typeof v === 'string' && v.trim() !== '' ? safeSlice(v.trim(), max) : null;
 
 const num = (v: unknown): number | null =>
   typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1_000_000 ? v : null;
@@ -112,7 +97,7 @@ function coerce(
     let t = text.trim();
     if (t === '') continue;
     if (t.length > MAP_LIMITS.stepChars) {
-      t = t.slice(0, MAP_LIMITS.stepChars);
+      t = safeSlice(t, MAP_LIMITS.stepChars);
       warn.add('input_truncated');
     }
     if (total + t.length > MAP_LIMITS.totalStepChars) {
@@ -253,6 +238,8 @@ function mapSection(
   for (let i = top; i < n; i++) {
     const p = steps[i]!;
     for (const m of ments[i]!) {
+      // Candidate filtering below is O(ids): charge it (security F1).
+      spend(budget, m.ids.length);
       mentionEvents++;
       let id: number | null = null;
       if (!m.ambiguous) {
@@ -362,7 +349,7 @@ function mapSection(
     if (!u.portion) return base;
     let gid = groupIds.get(u.id);
     if (!gid) {
-      gid = `split:${rowKey(src.name).slice(0, 40)}:${totals.splitCounter++}`;
+      gid = `split:${safeSlice(rowKey(src.name), 40)}:${totals.splitCounter++}`;
       groupIds.set(u.id, gid);
     }
     return { ...base, ...u.portion.fields, split_group_id: gid, portion_label: u.portion.label };
@@ -421,12 +408,7 @@ function mapSection(
 
 // -- entry point --------------------------------------------------------------------------
 
-function run(input: unknown, opts: MapOptions | undefined): MapResult {
-  const limit =
-    typeof opts?.budget === 'number' && Number.isFinite(opts.budget) && opts.budget > 0
-      ? Math.floor(opts.budget)
-      : MAP_LIMITS.budget;
-  const budget: Budget = { used: 0, limit };
+function run(input: unknown, budget: Budget): MapResult {
   const warn = new Warnings();
   const { ings, steps } = coerce(input, warn);
   if (ings.length === 0 || steps.length === 0) {
@@ -523,12 +505,24 @@ function run(input: unknown, opts: MapOptions | undefined): MapResult {
 
 /** Map imported ingredients and steps to a grid proposal. Total: never throws. */
 export function mapGrid(input: MapInput, opts?: MapOptions): MapResult {
+  // A caller can lower the budget but never raise it above the default (security F6).
+  const limit =
+    typeof opts?.budget === 'number' && Number.isFinite(opts.budget) && opts.budget > 0
+      ? Math.min(MAP_LIMITS.budget, Math.floor(opts.budget))
+      : MAP_LIMITS.budget;
+  const budget: Budget = { used: 0, limit };
   try {
-    return run(input, opts);
+    return run(input, budget);
   } catch (e) {
     if (e instanceof BudgetExceeded) {
       return { mapped: false, reason: 'budget', warnings: ['mapping_budget'] };
     }
     return { mapped: false, reason: 'error', warnings: [] };
+  } finally {
+    try {
+      opts?.onUsed?.(budget.used);
+    } catch {
+      // a faulty observer must not break the total contract
+    }
   }
 }

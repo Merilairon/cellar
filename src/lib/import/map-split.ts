@@ -3,7 +3,7 @@
 // share a temporary `split_group_id`, but only when the quantities are resolvable.
 
 import type { IngredientInput } from '@/lib/recipes/schemas';
-import type { Token, Tokenized } from './text-tokens';
+import { safeSlice, type Token, type Tokenized } from './text-tokens';
 
 export type PartialMarker =
   | { kind: 'half' }
@@ -232,7 +232,7 @@ export function resolveSplit(ing: IngredientInput, events: SplitEvent[]): SplitR
       ok: true,
       portions: [
         {
-          label: `${round2(m.qty)}${m.unit ? ' ' + m.unit : ''}`.slice(0, 60),
+          label: safeSlice(`${round2(m.qty)}${m.unit ? ' ' + m.unit : ''}`, 60),
           step: steps[0]!.step,
           fields: scaled(ing, m.qty / total),
         },
@@ -257,7 +257,7 @@ export function resolveSplit(ing: IngredientInput, events: SplitEvent[]): SplitR
     return {
       ok: true,
       portions: q.map((m, i) => ({
-        label: `${round2(m.qty)}${unit ? ' ' + unit : ''}`.slice(0, 60),
+        label: safeSlice(`${round2(m.qty)}${unit ? ' ' + unit : ''}`, 60),
         step: steps[i]!.step,
         fields: scaled(ing, m.qty / sum),
       })),

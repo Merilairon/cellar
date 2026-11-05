@@ -161,30 +161,32 @@ const UNCHANGED = new Set([
   'sprinkles',
 ]);
 
-const IRREGULAR: Record<string, string> = {
-  leaves: 'leaf',
-  loaves: 'loaf',
-  halves: 'half',
-  knives: 'knife',
-  calves: 'calf',
-  cookies: 'cookie',
-  brownies: 'brownie',
-  smoothies: 'smoothie',
-  veggies: 'veggie',
-  calories: 'calorie',
-  pies: 'pie',
-  ties: 'tie',
-  cheeses: 'cheese',
-  mice: 'mouse',
-  geese: 'goose',
-  feet: 'foot',
-};
+const IRREGULAR: ReadonlyMap<string, string> = new Map(
+  Object.entries({
+    leaves: 'leaf',
+    loaves: 'loaf',
+    halves: 'half',
+    knives: 'knife',
+    calves: 'calf',
+    cookies: 'cookie',
+    brownies: 'brownie',
+    smoothies: 'smoothie',
+    veggies: 'veggie',
+    calories: 'calorie',
+    pies: 'pie',
+    ties: 'tie',
+    cheeses: 'cheese',
+    mice: 'mouse',
+    geese: 'goose',
+    feet: 'foot',
+  }),
+);
 
 export function singularize(word: string): string {
   const w = word;
   if (w.length <= 3) return w;
   if (UNCHANGED.has(w)) return w;
-  const irr = IRREGULAR[w];
+  const irr = IRREGULAR.get(w);
   if (irr !== undefined) return irr;
   if (w.endsWith('ss') || w.endsWith('us') || w.endsWith('is')) return w;
   if (w.endsWith('ies') && w.length > 4) return w.slice(0, -3) + 'y';
@@ -194,4 +196,16 @@ export function singularize(word: string): string {
   }
   if (w.endsWith('s')) return w.slice(0, -1);
   return w;
+}
+
+/**
+ * `s.slice(0, max)` that never leaves a lone high surrogate at the end (a cut inside a
+ * surrogate pair drops the whole character). Results are always well formed when `s` is.
+ */
+export function safeSlice(s: string, max: number): string {
+  if (s.length <= max) return s;
+  if (max <= 0) return '';
+  const last = s.charCodeAt(max - 1);
+  const end = last >= 0xd800 && last <= 0xdbff ? max - 1 : max;
+  return s.slice(0, end);
 }

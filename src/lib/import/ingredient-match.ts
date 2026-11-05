@@ -132,6 +132,8 @@ type Variant = {
   seq: string[];
   /** Candidate ingredient ids per match level 1..4 (index 0..3). */
   byLevel: [Set<number>, Set<number>, Set<number>, Set<number>];
+  /** Lazy sorted copies of `byLevel`. */
+  sorted?: [number[] | null, number[] | null, number[] | null, number[] | null];
 };
 
 export type NameIndex = {
@@ -189,6 +191,12 @@ export function buildIndex(names: string[], budget?: Budget): NameIndex {
   return { byFirst, keys };
 }
 
+/** Sorted candidate ids of a variant at a level, computed once per variant and level. */
+function sortedIds(v: Variant, level: 1 | 2 | 3 | 4): number[] {
+  v.sorted ??= [null, null, null, null];
+  return (v.sorted[level - 1] ??= [...v.byLevel[level - 1]!].sort((a, b) => a - b));
+}
+
 function bestLevel(v: Variant): 1 | 2 | 3 | 4 {
   for (let l = 0; l < 4; l++) if (v.byLevel[l]!.size > 0) return (l + 1) as 1 | 2 | 3 | 4;
   return 4;
@@ -229,10 +237,13 @@ export function findMentions(words: string[], index: NameIndex, budget: Budget):
       i++;
       continue;
     }
-    const ids = [...best.v.byLevel[best.level - 1]!].sort((a, b) => a - b);
+    const set = best.v.byLevel[best.level - 1]!;
+    // The sort and the every() below cost O(k) and O(k log k): charge them (security F1).
+    spend(budget, set.size);
+    const ids = sortedIds(best.v, best.level);
     const sameKey = ids.every((id) => index.keys[id] === index.keys[ids[0]!]);
     out.push({
-      ids,
+      ids: [...ids],
       level: best.level,
       at: i,
       len: best.v.seq.length,

@@ -40,7 +40,9 @@ export type MappingWarning =
   | 'time_ambiguous'
   | 'mapping_invalid'
   | 'mapping_budget'
-  | 'mapping_too_large';
+  | 'mapping_too_large'
+  /** Number of data-carrying warnings left out of the list (see `Warnings`). */
+  | `warnings_more:${number}`;
 
 export type MappingLevel = 'high' | 'medium' | 'low';
 
@@ -73,4 +75,9 @@ export type MapResult =
   | { mapped: true; proposal: MappingProposal }
   | { mapped: false; reason: MapFailureReason; warnings: MappingWarning[] };
 
-export type MapOptions = { budget?: number };
+export type MapOptions = {
+  /** Lowers the operation budget; values above `MAP_LIMITS.budget` are clamped to it. */
+  budget?: number;
+  /** Test/diagnostic hook: receives the operations counted, also on failure. */
+  onUsed?: (used: number) => void;
+};

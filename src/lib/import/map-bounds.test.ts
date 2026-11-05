@@ -1,6 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { mapGrid } from './map-grid';
+import { Warnings } from './map-warnings';
+import { nameTokens } from './ingredient-match';
+import { parseIngredientLine, toIngredientFields } from './ingredient-parser';
+import { ingredientsFromLines } from './map-sections';
+import { safeSlice, singularize } from './text-tokens';
 import { MAPPER_PATTERNS } from './map-patterns';
 import { MAP_LIMITS, type MapInput } from './map-types';
 // Importing the modules registers their patterns.
@@ -14,7 +19,9 @@ import type { IngredientInput } from '@/lib/recipes/schemas';
 
 // Security checkpoint for weekend 1 (tasklist T9, G10, Security note): the mapper consumes
 // attacker-controlled text, so every pattern, every input cap and the operation budget is
-// exercised here. Wall-clock limits are regression tripwires; the guard is the budget.
+// exercised here. The assertions are on the deterministic operation count (`onUsed`), never on
+// elapsed time; the only wall-clock checks are very generous backstops (BACKSTOP_MS) that
+// catch an outright hang and cannot flake on a loaded CI runner.
 
 const MAPPER_FILES = [
   'ingredient-match',
@@ -24,6 +31,7 @@ const MAPPER_FILES = [
   'map-sections',
   'map-split',
   'map-types',
+  'map-warnings',
   'step-verbs',
   'text-tokens',
 ].map((n) => `src/lib/import/${n}.ts`);
@@ -44,6 +52,16 @@ const ing = (name: string, extra: Partial<IngredientInput> = {}): IngredientInpu
   group_label: null,
   ...extra,
 });
+
+/** Generous hang detector only; correctness is asserted on operation counts. */
+const BACKSTOP_MS = 10_000;
+
+/** Run the mapper and report the operations it counted. */
+function counted(input: MapInput, budget?: number) {
+  let used = -1;
+  const value = mapGrid(input, { budget, onUsed: (u) => (used = u) });
+  return { value, used };
+}
 
 function timed<T>(fn: () => T): { value: T; ms: number } {
   const t0 = performance.now();
@@ -79,18 +97,114 @@ describe('pattern registry', () => {
 
   for (const { name, re } of MAPPER_PATTERNS) {
     for (const [label, input] of Object.entries(adversarial)) {
-      it(`${name} survives "${label}" in under 20 ms`, () => {
+      it(`${name} survives "${label}"`, () => {
         const { ms } = timed(() => {
           re.lastIndex = 0;
           return re.test(input);
         });
-        expect(ms).toBeLessThan(20);
+        expect(ms).toBeLessThan(BACKSTOP_MS);
       });
     }
   }
 });
 
+/**
+ * Regular-expression literals of a TypeScript source, found by a small scanner that skips
+ * comments, strings and template literals. A `/` starts a regex when the previous
+ * significant character cannot end an expression.
+ */
+function regexLiterals(src: string): Array<{ literal: string; before: string }> {
+  const out: Array<{ literal: string; before: string }> = [];
+  let i = 0;
+  let prev = '';
+  const n = src.length;
+  while (i < n) {
+    const c = src[i]!;
+    const d = src[i + 1];
+    if (c === '/' && d === '/') {
+      while (i < n && src[i] !== '\n') i++;
+      continue;
+    }
+    if (c === '/' && d === '*') {
+      const end = src.indexOf('*/', i + 2);
+      i = end < 0 ? n : end + 2;
+      continue;
+    }
+    if (c === "'" || c === '"' || c === '`') {
+      i++;
+      while (i < n && src[i] !== c) i += src[i] === '\\' ? 2 : 1;
+      i++;
+      prev = c;
+      continue;
+    }
+    if (c === '/') {
+      const startsRegex = prev === '' || '(,=:[!&|?{};+-*%<>~^'.includes(prev);
+      if (startsRegex) {
+        const start = i;
+        i++;
+        let inClass = false;
+        while (i < n && src[i] !== '\n') {
+          if (src[i] === '\\') i += 2;
+          else if (src[i] === '[' || src[i] === ']') {
+            inClass = src[i] === '[';
+            i++;
+          } else if (src[i] === '/' && !inClass) break;
+          else i++;
+        }
+        i++;
+        while (i < n && /[a-z]/.test(src[i]!)) i++;
+        out.push({
+          literal: src.slice(start, i),
+          before: src.slice(Math.max(0, start - 60), start),
+        });
+        prev = '/';
+        continue;
+      }
+    }
+    if (!/\s/.test(c)) prev = c;
+    i++;
+  }
+  return out;
+}
+
+describe('regex literal scanner (self-test)', () => {
+  it('finds bare literals and ignores strings, comments and division', () => {
+    const src = [
+      'const A = /(a+)+$/; // /not/',
+      "const s = 'x/y/z' + `/t/`; const q = a / b / c;",
+      "/* /c/ */ const R = pattern('r', /^[\\p{L}/]$/u);",
+      "x.replace(/a/g, '');",
+    ].join('\n');
+    expect(regexLiterals(src).map((r) => r.literal)).toEqual([
+      '/(a+)+$/',
+      '/^[\\p{L}/]$/u',
+      '/a/g',
+    ]);
+  });
+});
+
 describe('source scan of the mapper modules', () => {
+  it('has no regex literal outside a registered pattern() call', () => {
+    const bad: string[] = [];
+    for (const f of MAPPER_FILES) {
+      if (f.endsWith('map-patterns.ts')) continue;
+      for (const { literal, before } of regexLiterals(readFileSync(f, 'utf8'))) {
+        if (!/pattern\(\s*'[\w-]+'\s*,\s*$/.test(before)) bad.push(`${f}: ${literal}`);
+      }
+    }
+    expect(bad).toEqual([]);
+  });
+
+  it('every registered pattern call is a literal that the registry lists', () => {
+    let calls = 0;
+    for (const f of MAPPER_FILES) {
+      if (f.endsWith('map-patterns.ts')) continue;
+      calls += [...readFileSync(f, 'utf8').matchAll(/pattern\(\s*'([\w-]+)'/g)].length;
+    }
+    expect(MAPPER_PATTERNS.length).toBe(calls);
+    expect(calls).toBeGreaterThanOrEqual(2);
+  });
+
   const sources = MAPPER_FILES.map((f) => ({ f, src: readFileSync(f, 'utf8') }));
   const forbidden: Array<[string, RegExp]> = [
     ['new RegExp(', /new\s+RegExp\s*\(/],
@@ -140,6 +254,11 @@ describe('source scan of the mapper modules', () => {
     for (const f of extra) {
       const src = readFileSync(f, 'utf8');
       expect(src).not.toMatch(/from\s+['"](node:|fs|net|dns|react|next|@\/lib\/db)/);
+      // The parser owns many regex literals (fuzzed below). Its two `new RegExp` calls
+      // interpolate constant tables only (NUM_SRC, VF); pin the count so that any new one
+      // needs a review.
+      expect(src.match(/new\s+RegExp\s*\(/g)).toHaveLength(2);
+      expect(src).not.toMatch(/Date\.now|Math\.random|\beval\s*\(/);
     }
   });
 });
@@ -274,14 +393,283 @@ describe('maximum-size inputs finish quickly and deterministically', () => {
   };
   for (const [label, make] of Object.entries(cases)) {
     it(`${label}`, () => {
-      const input = make();
-      const a = timed(() => mapGrid(input));
-      const b = mapGrid(make());
-      expect(a.ms).toBeLessThan(250);
-      expect(typeof a.value.mapped).toBe('boolean');
-      expect(a.value).toEqual(b);
+      const a = counted(make());
+      const b = counted(make());
+      // Work is bounded by the budget (one spend may overshoot by at most the candidate
+      // count of a single mention) and a budget stop is a clean list-mode failure.
+      expect(a.used).toBeGreaterThanOrEqual(0);
+      expect(a.used).toBeLessThanOrEqual(MAP_LIMITS.budget + MAP_LIMITS.ingredients);
+      if (a.value.mapped) expect(a.used).toBeLessThanOrEqual(MAP_LIMITS.budget);
+      else if (a.value.reason === 'budget') {
+        expect(a.value.warnings).toEqual(['mapping_budget']);
+      }
+      // Deterministic: same result and same operation count.
+      expect(a.value).toEqual(b.value);
+      expect(a.used).toBe(b.used);
     });
   }
+
+  it('finishes all maximum-size cases within the hang backstop', () => {
+    const { ms } = timed(() => {
+      for (const make of Object.values(cases)) mapGrid(make());
+    });
+    expect(ms).toBeLessThan(BACKSTOP_MS * 3);
+  });
+});
+
+describe('per-mention candidate work is charged (security F1)', () => {
+  // 200 ingredients "w<i> s" all share the level-4 head noun "s"; 75 steps of 799 "s".
+  const manyCandidates = (): MapInput => ({
+    ingredients: Array.from({ length: 200 }, (_, i) => ing(`w${i} s`)),
+    steps: Array.from({ length: 75 }, () => ({ text: 's '.repeat(799), section: null })),
+  });
+
+  it('the shape that cost ~300 ms uncharged now exhausts the budget', () => {
+    const r = counted(manyCandidates());
+    expect(r.value).toMatchObject({ mapped: false, reason: 'budget' });
+    expect(r.used).toBeGreaterThan(MAP_LIMITS.budget);
+  });
+
+  it('charges at least the candidate-set size for each mention', () => {
+    // Same ingredient count and step shape; only the candidate set of the mention differs.
+    const shared: MapInput = {
+      ingredients: Array.from({ length: 200 }, (_, i) => ing(`w${i} s`)),
+      steps: [{ text: 'Stir s.', section: null }],
+    };
+    const unique: MapInput = {
+      ingredients: Array.from({ length: 200 }, (_, i) => ing(`w${i} s${i}`)),
+      steps: [{ text: 'Stir s0.', section: null }],
+    };
+    expect(counted(shared).used - counted(unique).used).toBeGreaterThanOrEqual(199);
+  });
+
+  it('200 identical names are one candidate set per mention and stay bounded', () => {
+    const r = counted({
+      ingredients: Array.from({ length: 200 }, () => ing('sugar')),
+      steps: Array.from({ length: 100 }, () => ({
+        text: 'Stir the sugar. '.repeat(250),
+        section: null,
+      })),
+    });
+    expect(r.used).toBeLessThanOrEqual(MAP_LIMITS.budget + MAP_LIMITS.ingredients);
+  });
+});
+
+describe('caller budget is clamped to the default (security F6)', () => {
+  const shared = (): MapInput => ({
+    ingredients: Array.from({ length: 200 }, (_, i) => ing(`${'a '.repeat(7)}b${i}`)),
+    steps: Array.from({ length: 100 }, () => ({ text: 'a '.repeat(790) + 'b1', section: null })),
+  });
+  it('a huge budget behaves like the default', () => {
+    for (const huge of [1e12, Number.MAX_SAFE_INTEGER, Infinity]) {
+      const r = counted(shared(), huge);
+      const d = counted(shared());
+      expect(r.value).toEqual(d.value);
+      expect(r.used).toBe(d.used);
+    }
+    expect(counted(shared(), 1e12).value).toMatchObject({ mapped: false, reason: 'budget' });
+  });
+  it('a smaller budget is honoured', () => {
+    expect(counted(shared(), 1000).used).toBeLessThan(MAP_LIMITS.budget);
+  });
+});
+
+describe('warnings never drop meaningful codes (security F4)', () => {
+  const twoDurations = 'Bake 10 minutes, then rest 5 minutes.';
+  const unmentioned = (n: number): MapInput => ({
+    ingredients: [ing('flour'), ...Array.from({ length: n }, (_, i) => ing(`item${i}`))],
+    steps: [
+      { text: 'Stir the flour.', section: null },
+      { text: twoDurations, section: null },
+    ],
+  });
+  it('200 unmentioned ingredients still report time_ambiguous', () => {
+    const r = mapGrid(unmentioned(199));
+    expect(r.mapped).toBe(true);
+    const w = r.mapped ? r.proposal.warnings : [];
+    expect(w).toContain('time_ambiguous');
+    expect(w.filter((x) => x.startsWith('ingredient_unmentioned:'))).toHaveLength(10);
+    expect(w).toContain('warnings_more:189');
+    expect(w.length).toBeLessThanOrEqual(60);
+  });
+  it('few unmentioned ingredients are all listed with no summary', () => {
+    const r = mapGrid(unmentioned(3));
+    const w = r.mapped ? r.proposal.warnings : [];
+    expect(w.filter((x) => x.startsWith('ingredient_unmentioned:'))).toHaveLength(3);
+    expect(w.some((x) => x.startsWith('warnings_more:'))).toBe(false);
+  });
+  it('fixed codes come first and are never cut, whatever the volume', () => {
+    const w = new Warnings();
+    for (let i = 0; i < 500; i++) w.add(`ingredient_unmentioned:n${i}`);
+    for (let i = 0; i < 500; i++) w.add(`ambiguous_name:t${i}`);
+    for (let i = 0; i < 500; i++) w.add(`split_unresolved:s${i}`);
+    w.add('mapping_invalid');
+    w.add('time_ambiguous');
+    const list = w.list();
+    expect(list.slice(0, 2)).toEqual(['mapping_invalid', 'time_ambiguous']);
+    expect(list).toContain('warnings_more:1470');
+    expect(list.length).toBe(2 + 30 + 1);
+    expect(w.has('mapping_invalid')).toBe(true);
+  });
+  it('the budget failure keeps mapping_budget', () => {
+    expect(mapGrid(unmentioned(199), { budget: 5 })).toMatchObject({
+      mapped: false,
+      warnings: ['mapping_budget'],
+    });
+  });
+});
+
+describe('plain-object lookups are gone (security F5)', () => {
+  it('singularize never returns a non-string for inherited property names', () => {
+    for (const w of ['constructor', 'prototype', 'hasownproperty', 'tostring', 'valueof']) {
+      expect(typeof singularize(w)).toBe('string');
+    }
+    expect(singularize('constructor')).toBe('constructor');
+    expect(nameTokens('constructor')).toEqual(['constructor']);
+  });
+  it('an ingredient named "constructor" is mapped by name, with sane ids', () => {
+    const r = mapGrid({
+      ingredients: [ing('flour'), ing('constructor')],
+      steps: [
+        { text: 'Mix the constructor with the flour.', section: null },
+        { text: 'Bake.', section: null },
+      ],
+    });
+    expect(r.mapped).toBe(true);
+    if (!r.mapped) return;
+    const rows = r.proposal.sections[0]!.ingredients;
+    expect(rows.map((i) => i.name)).toEqual(['constructor', 'flour']);
+    for (const i of rows) expect(i.split_group_id).toBeNull();
+    expect(r.proposal.warnings.some((w) => w.includes('function'))).toBe(false);
+  });
+  it('two distinct constructor-like names do not collide', () => {
+    const r = mapGrid({
+      ingredients: [ing('constructor'), ing('prototype')],
+      steps: [{ text: 'Stir the constructor, then the prototype.', section: null }],
+    });
+    expect(r.mapped).toBe(true);
+    if (r.mapped) {
+      expect(r.proposal.sections[0]!.ingredients.map((i) => i.name)).toEqual([
+        'constructor',
+        'prototype',
+      ]);
+    }
+  });
+});
+
+describe('slicing never leaves a lone surrogate (security F7)', () => {
+  const wellFormed = (s: string) => s.isWellFormed();
+  it('safeSlice cuts before a split pair', () => {
+    expect(safeSlice('ab\u{1F600}cd', 3)).toBe('ab');
+    expect(safeSlice('ab\u{1F600}cd', 4)).toBe('ab\u{1F600}');
+    expect(safeSlice('abc', 10)).toBe('abc');
+    expect(safeSlice('abc', 0)).toBe('');
+  });
+  it('step label, ingredient name, detail and heading stay well formed', () => {
+    const pair = '\u{1F600}';
+    const name = 'x'.repeat(199) + pair + 'tail';
+    const longStep = 'Stir the flour. ' + 'y'.repeat(MAP_LIMITS.stepChars - 17) + pair + 'zzz';
+    const r = mapGrid({
+      ingredients: [ing(name), ing('flour')],
+      steps: [
+        { text: 'x'.repeat(23) + pair + ' stir the flour.', section: null },
+        { text: longStep, section: null },
+      ],
+    });
+    expect(r.mapped).toBe(true);
+    if (!r.mapped) return;
+    for (const s of r.proposal.sections) {
+      for (const i of s.ingredients) expect(wellFormed(i.name)).toBe(true);
+      for (const st of s.steps) {
+        expect(wellFormed(st.label)).toBe(true);
+        expect(wellFormed(st.detail)).toBe(true);
+      }
+    }
+    expect(r.proposal.sections[0]!.steps[1]!.detail.length).toBeLessThanOrEqual(
+      MAP_LIMITS.stepChars,
+    );
+    expect(r.proposal.warnings.every(wellFormed)).toBe(true);
+  });
+  it('ingredientsFromLines caps a line without splitting a pair', () => {
+    const out = ingredientsFromLines(['1 cup ' + 'x'.repeat(494) + '\u{1F600}\u{1F600}']);
+    expect(out[0]!.raw_text!.length).toBeLessThanOrEqual(500);
+    expect(wellFormed(out[0]!.raw_text!)).toBe(true);
+    expect(wellFormed(out[0]!.name)).toBe(true);
+  });
+});
+
+describe('ingredient parser is bounded and linear (security F2)', () => {
+  const runs = [';', ',', ':', ' ', '-', '.', '1', '(', ')', '1/', ' 1 ', '\t'];
+  for (const run of runs) {
+    for (const n of [4000, 80_000]) {
+      it(`parseIngredientLine copes with ${n} x ${JSON.stringify(run)} (cap, then parse)`, () => {
+        const lines = [
+          '1 cup flour' + run.repeat(n) + 'x',
+          run.repeat(n) + '1 cup flour',
+          '2 ' + run.repeat(n),
+        ];
+        for (const line of lines) {
+          const p = parseIngredientLine(line);
+          expect(p.raw_text!.length).toBeLessThanOrEqual(500);
+          const f = toIngredientFields(p);
+          expect(f.name.length).toBeLessThanOrEqual(500);
+          expect(f.raw_text.length).toBeLessThanOrEqual(500);
+        }
+      });
+    }
+  }
+  it('ingredientsFromLines passes at most 500 characters per line to the parser', () => {
+    const out = ingredientsFromLines(['1 cup flour' + ';'.repeat(500_000) + 'x']);
+    expect(out).toHaveLength(1);
+    expect(out[0]!.raw_text!.length).toBeLessThanOrEqual(500);
+    expect(out[0]!.name.length).toBeLessThanOrEqual(MAP_LIMITS.ingredientNameChars);
+  });
+  it('mapGrid with a 500k-character ingredient line completes within the backstop', () => {
+    const { ms, value } = timed(() =>
+      mapGrid({
+        ingredients: ingredientsFromLines(['1 cup flour' + ';'.repeat(500_000) + 'x']),
+        steps: [{ text: 'Stir the flour.', section: null }],
+      }),
+    );
+    expect(value.mapped).toBe(true);
+    expect(ms).toBeLessThan(BACKSTOP_MS);
+  });
+});
+
+describe('unicode normalization keeps offsets aligned (v0.3.0 F2 class)', () => {
+  const total = (): IngredientInput =>
+    ing('sugar', { metric_qty: 300, metric_unit: 'g', raw_text: '300 g sugar' });
+  it('lengths that change under NFKC do not shift split portions', () => {
+    // "İ" lowercases to two code units, "ﬃ" expands to three under NFKC.
+    const r = mapGrid({
+      ingredients: [total(), ing('butter')],
+      steps: [
+        { text: 'İİİ ﬃ stir 100 g sugar into the butter.', section: null },
+        { text: 'Add the remaining sugar.', section: null },
+        { text: 'Bake.', section: null },
+      ],
+    });
+    expect(r.mapped).toBe(true);
+    if (!r.mapped) return;
+    const sugar = r.proposal.sections[0]!.ingredients.filter((i) => i.name === 'sugar');
+    expect(sugar.map((i) => i.metric_qty)).toEqual([100, 200]);
+    expect(sugar.map((i) => i.portion_label)).toEqual(['100 g', 'remaining']);
+  });
+  it('a "half" marker after "İ" still resolves', () => {
+    const r = mapGrid({
+      ingredients: [ing('sugar', { metric_qty: 200, metric_unit: 'g' }), ing('butter')],
+      steps: [
+        { text: 'İİİ cream the butter with half of the sugar.', section: null },
+        { text: 'Fold in the remaining sugar.', section: null },
+        { text: 'Bake.', section: null },
+      ],
+    });
+    expect(r.mapped).toBe(true);
+    if (!r.mapped) return;
+    const sugar = r.proposal.sections[0]!.ingredients.filter((i) => i.name === 'sugar');
+    expect(sugar.map((i) => i.portion_label)).toEqual(['half', 'remaining']);
+    expect(sugar.map((i) => i.metric_qty)).toEqual([100, 100]);
+  });
 });
 
 describe('operation budget', () => {
@@ -354,11 +742,16 @@ describe('hostile content stays inert data', () => {
       ],
     };
     const r = mapGrid(input);
-    expect(typeof r.mapped).toBe('boolean');
+    expect(r.mapped).toBe(true);
     if (r.mapped) {
       expect(r.proposal.sections.flatMap((s) => s.ingredients.map((i) => i.name)).sort()).toEqual(
         [...names].sort(),
       );
+      const constructorRow = r.proposal.sections[0]!.ingredients.find(
+        (i) => i.name === 'constructor',
+      )!;
+      expect(constructorRow.split_group_id).toBeNull();
+      expect(r.proposal.warnings.every((w) => typeof w === 'string')).toBe(true);
     }
     expect(({} as Record<string, unknown>)['polluted']).toBeUndefined();
   });
