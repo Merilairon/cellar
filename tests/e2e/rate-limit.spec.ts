@@ -33,3 +33,17 @@ test('invite registration is limited per trusted client IP', async ({ request })
   // A different client IP is unaffected.
   expect((await attempt('203.0.113.21')).status()).toBe(303);
 });
+
+test('successful logins and malformed requests do not consume the login budget', async ({
+  request,
+}) => {
+  const post = (form: Record<string, string>) =>
+    request.post('/api/auth/login', { headers: headers('203.0.113.30'), form, maxRedirects: 0 });
+  // Per-IP max is 20 and per-email max is 5 in e2e: exceed both with requests that must not count.
+  for (let i = 0; i < 25; i++) expect((await post({})).status()).toBe(303);
+  for (let i = 0; i < 7; i++) {
+    const ok = await post({ email: 'admin@example.test', password: 'admin-password-123' });
+    expect(ok.status()).toBe(303);
+    expect(new URL(ok.headers()['location']).pathname).toBe('/');
+  }
+});

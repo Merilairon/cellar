@@ -32,6 +32,17 @@ describe('rate limiter', () => {
     l.reset('a');
     expect(l.hit('a').allowed).toBe(true);
   });
+  it('refund gives back one attempt and never goes below zero', () => {
+    const { l } = setup(2);
+    l.hit('a');
+    l.hit('a');
+    l.refund('a');
+    expect(l.hit('a').allowed).toBe(true);
+    l.refund('missing');
+    l.reset('b');
+    l.refund('b');
+    expect(l.hit('b').remaining).toBe(1);
+  });
   it('prunes expired entries', () => {
     const { l, advance } = setup();
     for (let i = 0; i < 50; i++) l.hit(`k${i}`);

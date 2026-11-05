@@ -6,7 +6,12 @@ import { createSession } from '@/lib/auth/session';
 import { getDb } from '@/lib/db';
 import { getUserByEmail } from '@/lib/db/users';
 import { getEnv } from '@/lib/env';
-import { authLimiters, getClientIp, limitOrResponse } from '@/lib/security/auth-limits';
+import {
+  authLimiters,
+  getClientIp,
+  limitClientOrResponse,
+  limitOrResponse,
+} from '@/lib/security/auth-limits';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,11 +23,13 @@ export async function POST(request: Request) {
     return new Response(null, { status: 403 });
   }
   const limits = authLimiters();
-  const blocked = await limitOrResponse(limits.loginIp, getClientIp(request.headers));
-  if (blocked) return blocked;
+  // Malformed requests are rejected before any budget is spent: they cost no password hash.
   const form = await request.formData().catch(() => null);
   const parsed = loginSchema.safeParse(Object.fromEntries(form ?? []));
   if (!parsed.success) return redirect('/login?error=invalid');
+  const ip = getClientIp(request.headers);
+  const blocked = await limitClientOrResponse(limits.loginIp, ip);
+  if (blocked) return blocked;
   const emailKey = parsed.data.email.toLowerCase();
   const blockedEmail = await limitOrResponse(limits.loginEmail, emailKey);
   if (blockedEmail) return blockedEmail;
@@ -35,7 +42,9 @@ export async function POST(request: Request) {
     : (await verifyDummy(parsed.data.password), false);
   if (!found || !ok || found.deactivatedAt) return redirect('/login?error=invalid');
 
+  // Only failed attempts count: a successful login gives its budget back.
   limits.loginEmail.reset(emailKey);
+  limits.loginIp.refund(ip);
   const { token, expiresAt } = createSession(db, found.id);
   await setSessionCookie(token, expiresAt);
   return redirect('/');

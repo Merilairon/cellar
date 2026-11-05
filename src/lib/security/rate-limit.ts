@@ -23,6 +23,8 @@ export interface RateLimitResult {
 export interface RateLimiter {
   /** Counts one attempt for `key` and reports whether it is within the limit. */
   hit(key: string): RateLimitResult;
+  /** Gives back one counted attempt (e.g. a login that turned out to succeed). */
+  refund(key: string): void;
   /** Forgets a key (e.g. after a successful login). */
   reset(key: string): void;
   /** Number of tracked keys (for tests and metrics). */
@@ -57,6 +59,10 @@ export function createRateLimiter(config: RateLimitConfig): RateLimiter {
       const retryAfterSec = Math.max(1, Math.ceil((e.resetAt - t) / 1000));
       if (e.count > limit) return { allowed: false, remaining: 0, retryAfterSec };
       return { allowed: true, remaining: limit - e.count, retryAfterSec };
+    },
+    refund(key) {
+      const e = entries.get(key);
+      if (e && e.count > 0) e.count -= 1;
     },
     reset(key) {
       entries.delete(key);

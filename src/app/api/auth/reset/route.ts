@@ -3,7 +3,7 @@ import { resetPasswordWithToken } from '@/lib/auth/resets';
 import { resetSchema } from '@/lib/auth/schemas';
 import { getDb } from '@/lib/db';
 import { getEnv } from '@/lib/env';
-import { authLimiters, getClientIp, limitOrResponse } from '@/lib/security/auth-limits';
+import { authLimiters, getClientIp, limitClientOrResponse } from '@/lib/security/auth-limits';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,7 +14,7 @@ export async function POST(request: Request) {
   if (!isCsrfSafe(request.method, request.headers, getEnv().BASE_URL)) {
     return new Response(null, { status: 403 });
   }
-  const blocked = await limitOrResponse(authLimiters().reset, getClientIp(request.headers));
+  const blocked = await limitClientOrResponse(authLimiters().reset, getClientIp(request.headers));
   if (blocked) return blocked;
   const form = await request.formData().catch(() => null);
   const raw = Object.fromEntries(form ?? []);

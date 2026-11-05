@@ -101,11 +101,13 @@ Validated at startup in `src/lib/env.ts`. See `.env.example` for a template.
 | `SESSION_SECRET` | yes | none | At least 32 characters. In production, known placeholders (`changeme`, `replace-with...`, `your-...`, a single repeated character) are rejected. |
 | `BASE_URL` | in production | `http://localhost:3000` (non-production only) | Public origin, for example `https://recipes.example.com`. No path, no trailing slash. Used for invite and reset links and the origin allowlist. HSTS is sent when it starts with `https://`. |
 | `TRUSTED_PROXIES` | no | empty (trust none) | Comma-separated IPs or CIDRs whose `X-Forwarded-*` headers are trusted. With the Caddy profile use `172.28.0.10`. |
-| `RATE_LIMIT_LOGIN_MAX` | no | `20` | Login attempts per client IP per window. |
-| `RATE_LIMIT_LOGIN_EMAIL_MAX` | no | `10` | Login attempts per account email per window. |
+| `RATE_LIMIT_LOGIN_MAX` | no | `20` | Failed login attempts per client IP per window (successful logins and malformed requests are not counted). Skipped when the client IP is unknown. |
+| `RATE_LIMIT_LOGIN_EMAIL_MAX` | no | `10` | Failed login attempts per account email per window (reset on a successful login). Always enforced. |
 | `RATE_LIMIT_LOGIN_WINDOW_SEC` | no | `900` | Login window in seconds. |
-| `RATE_LIMIT_REGISTER_MAX` | no | `10` | Invite registration, reset and setup POSTs per IP per window. |
+| `RATE_LIMIT_REGISTER_MAX` | no | `10` | Invite registration, reset and setup POSTs per client IP per window. Skipped when the client IP is unknown. |
 | `RATE_LIMIT_REGISTER_WINDOW_SEC` | no | `3600` | Registration window in seconds. |
+
+**Rate limiting and unknown clients.** Per-IP limits only work when the app can tell clients apart, which needs `TRUSTED_PROXIES` to match your reverse proxy. Without it (the default for plain `docker compose up` or `npm run dev`) every visitor looks like the same "unknown" client; rather than let a few bad requests lock everybody out, the per-IP limits are then skipped and only the per-email login limit applies. Register and reset links carry unguessable tokens, so they stay safe without a per-IP limit. Counters are in memory and reset on restart.
 
 Docker-only variables read by Compose (not by the app): `APP_PORT` (published host port, default `3000`) and `SITE_ADDRESS` (Caddy host name, default `localhost`).
 
