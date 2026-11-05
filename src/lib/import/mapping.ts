@@ -1,3 +1,4 @@
+import { sectionInputSchema } from '@/lib/recipes/schemas';
 import { mapGrid as defaultMapGrid } from './map-grid';
 import type { MapInput, MapResult, MappingProposal } from './map-types';
 import type { Draft } from './normalize';
@@ -58,6 +59,7 @@ export function attachMapping(
   return { draft: withMapping, warnings: [] };
 }
 
+const sectionsSchema = sectionInputSchema.array().min(1).max(20);
 const LEVELS: ReadonlySet<unknown> = new Set(['high', 'medium', 'low']);
 
 /** Structural check of a proposal read back from `draft_json` (old or tampered rows give null). */
@@ -70,6 +72,8 @@ export function readMapping(v: unknown): MappingProposal | null {
   }
   if (!LEVELS.has(m['level'])) return null;
   if (!Array.isArray(m['sections']) || m['sections'].length === 0) return null;
+  // The review screen builds its form from these sections, so they must be real sections.
+  if (!sectionsSchema.safeParse(m['sections']).success) return null;
   if (!Array.isArray(m['warnings']) || !m['warnings'].every((w) => typeof w === 'string')) {
     return null;
   }

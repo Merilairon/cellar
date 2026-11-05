@@ -252,7 +252,7 @@ describe('readMapping (old and tampered drafts, G21)', () => {
   const good = (): MappingProposal => ({
     confidence: 0.8,
     level: 'high',
-    sections: [{ title: null, ingredients: [], steps: [] }],
+    sections: SAMPLE_SKILLET_COOKIES.sections,
     warnings: [],
     signals: {} as never,
     version: 1,
@@ -268,6 +268,11 @@ describe('readMapping (old and tampered drafts, G21)', () => {
     ['confidence NaN', { ...good(), confidence: NaN }],
     ['bad level', { ...good(), level: 'great' }],
     ['no sections', { ...good(), sections: [] }],
+    ['sections that are not sections', { ...good(), sections: [{ foo: 'bar' }] }],
+    [
+      'span of the wrong type',
+      { ...good(), sections: [{ title: null, ingredients: [], steps: [{ kind: 'column' }] }] },
+    ],
     ['non-string warning', { ...good(), warnings: [1] }],
     ['no signals', { ...good(), signals: null }],
   ])('rejects %s', (_n, v) => expect(readMapping(v)).toBeNull());
