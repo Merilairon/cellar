@@ -111,7 +111,7 @@ What this has not been tested against: a real network. TLS certificate and SNI h
 
 ### Import fixture report
 
-`npm run test:import` runs the import pipeline offline (a fake fetcher, no network) over the 44 hand-written fixtures in `tests/fixtures/import/` and prints a table and a success rate. It currently reports 34 of 34 valid drafts (100 percent, target 85 percent), 5 of 5 deliberate rejections, and 5 out-of-slice pages.
+`npm run test:import` runs the import pipeline offline (a fake fetcher, no network) over the 47 hand-written fixtures in `tests/fixtures/import/` and prints a table and a success rate. It currently reports 37 of 37 valid drafts (100 percent, target 85 percent), 5 of 5 deliberate rejections, and 5 out-of-slice pages.
 
 What the 100 percent means: every fixture that a static JSON-LD reader should handle produces a draft that passes the recipe schema, and the pages that must be rejected are rejected. What it does not mean: that 100 percent of real recipe sites import. The fixtures are small hand-written pages written for this reader, so they cannot predict real-world markup. The 5 out-of-slice pages (3 JavaScript-only, 2 microdata-only) are excluded from the rate by definition and currently produce `no_recipe`. Expect a lower rate on real sites; the report is a regression guard, not a coverage measurement.
 
