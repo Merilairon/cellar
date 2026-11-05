@@ -2,16 +2,18 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests/e2e',
-  fullyParallel: true,
+  fullyParallel: false,
+  workers: 1,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? 'github' : 'list',
   use: { baseURL: 'http://localhost:3100', trace: 'on-first-retry' },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
-    command: 'npm run build && npm run start -- -p 3100',
-    url: 'http://localhost:3100',
-    reuseExistingServer: !process.env.CI,
+    command:
+      'rm -f data/e2e.db data/e2e.db-wal data/e2e.db-shm && npm run build && npm run start -- -p 3100',
+    url: 'http://localhost:3100/login',
+    reuseExistingServer: false, // the setup test needs a fresh DB
     timeout: 180_000,
     env: {
       SESSION_SECRET: 'e2e-secret-e2e-secret-e2e-secret-e2e',

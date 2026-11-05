@@ -1,7 +1,9 @@
 import { cookies } from 'next/headers';
 import { getEnv } from '@/lib/env';
 
-export const SESSION_COOKIE = 'rb_session';
+import { SESSION_COOKIE } from './cookie-name';
+
+export { SESSION_COOKIE };
 
 /** Secure iff BASE_URL is https (G3). */
 export function cookieOptions(baseUrl: string, expires: Date) {
