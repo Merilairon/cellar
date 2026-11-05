@@ -22,6 +22,10 @@ const WIDTHS = [
   { w: 1280, h: 800 },
 ] as const;
 
+// Sample B guard (v0.2 carryover): the cake and frosting tables share one ingredient column
+// width, so the two grids line up. Widths in CSS px at each viewport.
+const ING_COL_PX: Record<number, number> = { 375: 138, 768: 190, 1280: 300 };
+
 const me = account('visual');
 const ids = { cookie: '', cake: '' };
 let setupCtx: BrowserContext;
@@ -90,6 +94,13 @@ for (const { w, h } of WIDTHS) {
     );
     await expect(tables.nth(0).locator('tbody th[scope="row"]')).toHaveCount(8);
     await expect(tables.nth(1).locator('tbody th[scope="row"]')).toHaveCount(4);
+    const ingWidths = await tables.evaluateAll((ts) =>
+      ts.map((t) => {
+        const th = t.querySelector('tbody th.rg-ing');
+        return th ? Math.round(th.getBoundingClientRect().width) : -1;
+      }),
+    );
+    expect(ingWidths).toEqual([ING_COL_PX[w], ING_COL_PX[w]]);
     await shot(page, `cake-${w}.png`);
     await close();
   });
