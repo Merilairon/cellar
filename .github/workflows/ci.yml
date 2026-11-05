@@ -19,3 +19,21 @@ jobs:
       - run: npm test
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+      - uses: docker/setup-buildx-action@v3
+      # Multi-arch build, nothing is pushed.
+      - name: Build linux/amd64 + linux/arm64
+        run: docker buildx build --platform linux/amd64,linux/arm64 .
+      - name: Verify native modules load on each platform
+        run: |
+          for p in linux/amd64 linux/arm64; do
+            docker buildx build --platform "$p" --load -t "rb:${p#*/}" .
+            docker run --rm --platform "$p" "rb:${p#*/}" node -e "require('argon2'); require('better-sqlite3'); console.log('$p native ok')"
+          done
