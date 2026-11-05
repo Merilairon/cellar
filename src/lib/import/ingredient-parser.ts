@@ -69,6 +69,11 @@ const CONTAINERS = new Set([
 /** Vague amounts: "a pinch of salt" reads as one pinch. */
 const VAGUE = new Set(['pinch', 'pinches', 'dash', 'dashes', 'handful', 'handfuls', 'splash']);
 
+/** "2", or "2-3" for a range; the shared plain-text form used when raw text is rebuilt. */
+export function joinQtyRange(qty: number, max: number | null | undefined): string {
+  return max != null && max > qty ? `${qty}-${max}` : String(qty);
+}
+
 export function unitSystem(unit: string | null): UnitSystem | null {
   return unit ? (UNITS.get(unit.toLowerCase().replace(/\./g, ''))?.system ?? null) : null;
 }

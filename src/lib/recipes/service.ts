@@ -13,6 +13,7 @@ import {
   type RecipeGuard,
   type RecipeTree,
 } from '@/lib/db/recipes';
+import { joinQtyRange } from '@/lib/import/ingredient-parser';
 import { validateRecipeGrid } from '@/lib/grid/validate';
 import { canRead, canWrite } from './access';
 import {
@@ -41,7 +42,7 @@ function composeRawText(i: RecipeInput['sections'][number]['ingredients'][number
     i.display_primary === 'us'
       ? [i.us_qty, i.us_qty_max, i.us_unit]
       : [i.metric_qty, i.metric_qty_max, i.metric_unit];
-  const amount = qty != null && max != null ? `${qty}-${max}` : qty;
+  const amount = qty != null ? joinQtyRange(qty, max) : null;
   return [amount, unit, i.name].filter((x) => x != null && x !== '').join(' ');
 }
 

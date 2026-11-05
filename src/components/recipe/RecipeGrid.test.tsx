@@ -130,13 +130,19 @@ describe('ingredient ranges ("2-3 tbsp")', () => {
     return r;
   };
   it('shows both bounds in the grid ingredient column', () => {
-    expect(grid(ranged())).toContain('2-3 tbsp');
+    const html = grid(ranged());
+    expect(html).toMatch(/<span class="rg-qty">2-3 tbsp(<!-- -->)? <\/span>/);
+    expect(html).not.toMatch(/<span class="rg-qty">2 tbsp/);
   });
   it('shows both bounds in the list view', () => {
     const api = apiFromInput(ranged());
-    expect(wrap(<RecipeList sections={api.sections} />)).toContain('2-3 tbsp');
+    const html = wrap(<RecipeList sections={api.sections} />);
+    expect(html).toContain('2-3 tbsp');
+    expect(html).not.toMatch(/(^|[>\s])2 tbsp/);
   });
   it('keeps single quantities unchanged', () => {
-    expect(grid(SAMPLE_SKILLET_COOKIES)).not.toMatch(/\d-\d+ (tbsp|g|oz)/);
+    const html = grid(SAMPLE_SKILLET_COOKIES);
+    expect(html).not.toMatch(/\d-\d+ (tbsp|g|oz)/);
+    expect(html).toMatch(/<span class="rg-qty">[^<]+<\/span>/);
   });
 });

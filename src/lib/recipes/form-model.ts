@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { parseIngredientLine, toIngredientFields } from '@/lib/import/ingredient-parser';
+import {
+  joinQtyRange,
+  parseIngredientLine,
+  toIngredientFields,
+} from '@/lib/import/ingredient-parser';
 import { validateRecipeGrid } from '@/lib/grid/validate';
 import {
   recipeInputSchema,
@@ -148,7 +152,13 @@ function originalFromApi(
 
 const lineOf = (i: IngredientInput): string =>
   i.raw_text ??
-  [i.metric_qty, i.metric_qty_max, i.metric_unit, i.us_qty, i.us_qty_max, i.us_unit, i.name]
+  [
+    i.metric_qty != null ? joinQtyRange(i.metric_qty, i.metric_qty_max) : null,
+    i.metric_unit,
+    i.us_qty != null ? joinQtyRange(i.us_qty, i.us_qty_max) : null,
+    i.us_unit,
+    i.name,
+  ]
     .filter((x) => x != null)
     .join(' ');
 

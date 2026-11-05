@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { recipeInputSchema } from './schemas';
-import { SAMPLE_VANILLA_CAKE } from './samples';
+import { SAMPLE_SKILLET_COOKIES, SAMPLE_VANILLA_CAKE } from './samples';
 import {
   buildIngredients,
   emptyForm,
@@ -54,6 +54,24 @@ describe('ingredient ranges', () => {
       recipeInputSchema.shape.sections.element.shape.ingredients.element.safeParse(again[0])
         .success,
     ).toBe(true);
+  });
+});
+
+describe('ingredient range fallback text', () => {
+  it('rebuilds "a-b" per side when raw_text is missing', () => {
+    const api = apiShaped(SAMPLE_SKILLET_COOKIES);
+    const ing = api.sections[0]!.ingredients[0]!;
+    Object.assign(ing, {
+      raw_text: null,
+      name: 'honey',
+      metric_qty: null,
+      metric_unit: null,
+      us_qty: 2,
+      us_qty_max: 3,
+      us_unit: 'tbsp',
+    });
+    const form = formFromRecipe(api);
+    expect(form.sections[0]!.ingredientsText.split('\n')[0]).toBe('2-3 tbsp honey');
   });
 });
 

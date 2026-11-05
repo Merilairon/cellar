@@ -188,6 +188,10 @@ describe('toIngredientFields (no conversion)', () => {
     expect(f('3-2 tbsp honey')).toMatchObject({ us_qty: 3, us_qty_max: null });
     expect(f('2-2 tbsp honey')).toMatchObject({ us_qty: 2, us_qty_max: null });
   });
+  it('pins degenerate ranges to a single quantity', () => {
+    expect(f('3-2 tbsp honey')).toMatchObject({ us_qty: 3, us_qty_max: null });
+    expect(f('1-1 g salt')).toMatchObject({ metric_qty: 1, metric_qty_max: null });
+  });
   it('a range with a dual unit keeps the upper bound on the primary side only', () => {
     expect(f('2-3 cups (480 mL) stock')).toMatchObject({
       us_qty: 2,
