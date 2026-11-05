@@ -19,12 +19,12 @@ Not in v0.2: URL import, search and tags, unit conversion and scaling, photos, n
 
 ## Routes
 
-| Route | What it shows |
-| ----- | ------------- |
-| `/recipes` | Your recipes and recipes shared with you. Shows an empty state with calls to action when there are none. |
-| `/recipes/new` | Form to create a recipe. |
-| `/recipes/:id` | A recipe in grid or list view, with a toggle. The owner and admins see edit, delete and share controls; other users see a read-only view with **Save a copy**. |
-| `/recipes/:id/edit` | Form to edit a recipe you own (admins can edit any recipe). Saving replaces the recipe's sections, ingredients and steps. |
+| Route               | What it shows                                                                                                                                                  |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/recipes`          | Your recipes and recipes shared with you. Shows an empty state with calls to action when there are none.                                                       |
+| `/recipes/new`      | Form to create a recipe.                                                                                                                                       |
+| `/recipes/:id`      | A recipe in grid or list view, with a toggle. The owner and admins see edit, delete and share controls; other users see a read-only view with **Save a copy**. |
+| `/recipes/:id/edit` | Form to edit a recipe you own (admins can edit any recipe). Saving replaces the recipe's sections, ingredients and steps.                                      |
 
 The JSON API lives under `/api/recipes` (`/api/recipes`, `/api/recipes/:id`, `/api/recipes/:id/copy`, `/api/recipes/:id/visibility`). See [docs/data-model.md](docs/data-model.md).
 
@@ -53,18 +53,20 @@ Open <http://localhost:3000>. You are redirected to `/login`; see [First run](#f
 
 The database is created at `DATABASE_PATH` (`./data/app.db` in `.env.example`) and migrations run on app start.
 
-| Command                              | What it does                                                                                                                                                          |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm run dev`                        | Dev server                                                                                                                                                            |
-| `npm run build`                      | Production build (standalone output). To run it, see [Run the production build locally](#run-the-production-build-locally)                                           |
-| `npm test`                           | Unit tests (Vitest)                                                                                                                                                   |
+> **Dev database note (v0.2).** If your local dev database already applied the earlier, unreleased `0001` migration from a v0.2 work-in-progress branch, it no longer matches the released migrations and must be reset: stop the dev server and delete the file at `DATABASE_PATH` (`./data/app.db`, plus any `app.db-wal` and `app.db-shm` next to it), then start again to recreate it (and create the admin again at `/setup`). Databases created by v0.1 (including Docker volumes) need nothing: migrations `0001` and later apply automatically on start.
+
+| Command                              | What it does                                                                                                                                                                                                                                                                          |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run dev`                        | Dev server                                                                                                                                                                                                                                                                            |
+| `npm run build`                      | Production build (standalone output). To run it, see [Run the production build locally](#run-the-production-build-locally)                                                                                                                                                            |
+| `npm test`                           | Unit tests (Vitest)                                                                                                                                                                                                                                                                   |
 | `npm run test:e2e`                   | End-to-end tests (Playwright), including the visual and accessibility specs. Builds the app and serves it on port 3100 with a throwaway `data/e2e.db`. If browsers are missing, run `npx playwright install chromium` first. See [Visual end-to-end tests](#visual-end-to-end-tests). |
-| `npm run seed`                       | Insert the two sample recipes. Dev and demo only; see [Sample data](#sample-data). |
-| `npm run lint` / `npm run typecheck` | ESLint / TypeScript                                                                                                                                                   |
+| `npm run seed`                       | Insert the two sample recipes. Dev and demo only; see [Sample data](#sample-data).                                                                                                                                                                                                    |
+| `npm run lint` / `npm run typecheck` | ESLint / TypeScript                                                                                                                                                                                                                                                                   |
 
 ### Sample data
 
-`npm run seed` inserts two self-written sample recipes for demos and development: *Mocha Skillet Cookie* (one section) and *Vanilla Cake with Frosting* (two sections, a split ingredient and a bottom banner). Both open in grid view.
+`npm run seed` inserts two self-written sample recipes for demos and development: _Mocha Skillet Cookie_ (one section) and _Vanilla Cake with Frosting_ (two sections, a split ingredient and a bottom banner). Both open in grid view.
 
 The seed needs an existing user to own the recipes. Create the first admin at `/setup` first (see [First run](#first-run)). Without `--user` it uses the oldest active admin; with `--user` it uses that active account. If no matching user exists, it prints an error and exits with code 1. It is safe to run twice: a sample whose title the owner already has is skipped.
 
@@ -83,7 +85,14 @@ created: Mocha Skillet Cookie (owner admin@example.com)
 created: Vanilla Cake with Frosting (owner admin@example.com)
 ```
 
-**Docker:** the runtime image does not contain `tsx` or `scripts/seed.ts`, so `docker compose exec app npm run seed` does not work. The image only maps `admin:reset`. To seed a Docker instance, stop the app and run the seed from a checkout with `DATABASE_PATH` pointing at a copy of the database file, or create the recipes in the UI. If you copy the database back into the volume, delete any stale `app.db-wal` and `app.db-shm` files there first, or the seeded rows are silently lost.
+**Docker:** the image ships the seed as an esbuild bundle (`dist/seed.mjs`) and maps it like `admin:reset`, so this works against a running instance, after the first admin exists:
+
+```bash
+docker compose exec app npm run seed
+docker compose exec app npm run seed -- --user member@example.com
+```
+
+It opens the same SQLite file as the app (WAL mode), so the app does not need to be stopped and no database file needs to be copied around.
 
 ### Visual end-to-end tests
 
@@ -187,17 +196,17 @@ The volume name is `<compose project>_app-data`; check with `docker volume ls`.
 
 Validated at startup in `src/lib/env.ts`. See `.env.example` for a template.
 
-| Variable                         | Required      | Default                                       | Description                                                                                                                                                                                                     |
-| -------------------------------- | ------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_PATH`                  | no            | `/data/app.db`                                | Path of the SQLite file. The directory is created if missing. Compose sets it to `/data/app.db`; `.env.example` uses `./data/app.db` for local runs.                                                            |
-| `SESSION_SECRET`                 | yes           | none                                          | At least 32 characters. In production, known placeholders (`changeme`, `replace-with...`, `your-...`, a single repeated character) are rejected.                                                                |
+| Variable                         | Required      | Default                                       | Description                                                                                                                                                                                                                                                                                                         |
+| -------------------------------- | ------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_PATH`                  | no            | `/data/app.db`                                | Path of the SQLite file. The directory is created if missing. Compose sets it to `/data/app.db`; `.env.example` uses `./data/app.db` for local runs.                                                                                                                                                                |
+| `SESSION_SECRET`                 | yes           | none                                          | At least 32 characters. In production, known placeholders (`changeme`, `replace-with...`, `your-...`, a single repeated character) are rejected.                                                                                                                                                                    |
 | `BASE_URL`                       | in production | `http://localhost:3000` (non-production only) | Public origin, for example `https://recipes.example.com`. **Must use the same port you open in the browser (`APP_PORT`); on a mismatch every POST gets 403.** No path, no trailing slash. Used for invite and reset links and the origin allowlist. With `https://`, the CSP also gets `upgrade-insecure-requests`. |
-| `TRUSTED_PROXIES`                | no            | empty (trust none)                            | Comma-separated IPs or CIDRs whose `X-Forwarded-*` headers are trusted. With the Caddy profile use `172.28.0.10`.                                                                                               |
-| `RATE_LIMIT_LOGIN_MAX`           | no            | `20`                                          | Failed login attempts per client IP per window (successful logins and malformed requests are not counted). Skipped when the client IP is unknown.                                                               |
-| `RATE_LIMIT_LOGIN_EMAIL_MAX`     | no            | `10`                                          | Failed login attempts per account email per window (reset on a successful login). Always enforced.                                                                                                              |
-| `RATE_LIMIT_LOGIN_WINDOW_SEC`    | no            | `900`                                         | Login window in seconds.                                                                                                                                                                                        |
-| `RATE_LIMIT_REGISTER_MAX`        | no            | `10`                                          | Invite registration, reset and setup POSTs per client IP per window. Skipped when the client IP is unknown.                                                                                                     |
-| `RATE_LIMIT_REGISTER_WINDOW_SEC` | no            | `3600`                                        | Registration window in seconds.                                                                                                                                                                                 |
+| `TRUSTED_PROXIES`                | no            | empty (trust none)                            | Comma-separated IPs or CIDRs whose `X-Forwarded-*` headers are trusted. With the Caddy profile use `172.28.0.10`.                                                                                                                                                                                                   |
+| `RATE_LIMIT_LOGIN_MAX`           | no            | `20`                                          | Failed login attempts per client IP per window (successful logins and malformed requests are not counted). Skipped when the client IP is unknown.                                                                                                                                                                   |
+| `RATE_LIMIT_LOGIN_EMAIL_MAX`     | no            | `10`                                          | Failed login attempts per account email per window (reset on a successful login). Always enforced.                                                                                                                                                                                                                  |
+| `RATE_LIMIT_LOGIN_WINDOW_SEC`    | no            | `900`                                         | Login window in seconds.                                                                                                                                                                                                                                                                                            |
+| `RATE_LIMIT_REGISTER_MAX`        | no            | `10`                                          | Invite registration, reset and setup POSTs per client IP per window. Skipped when the client IP is unknown.                                                                                                                                                                                                         |
+| `RATE_LIMIT_REGISTER_WINDOW_SEC` | no            | `3600`                                        | Registration window in seconds.                                                                                                                                                                                                                                                                                     |
 
 **Rate limiting and unknown clients.** Per-IP limits only work when the app can tell clients apart, which needs `TRUSTED_PROXIES` to match your reverse proxy. Without it (the default for direct mode or `npm run dev`) every visitor looks like the same "unknown" client; rather than let a few bad requests lock everybody out, the per-IP limits are then skipped and only the per-email login limit applies. Register and reset links carry unguessable tokens, so they stay safe without a per-IP limit. Counters are in memory and reset on restart.
 

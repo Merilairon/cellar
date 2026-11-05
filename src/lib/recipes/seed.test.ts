@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { openDb, type Db } from '@/lib/db/connection';
 import { runMigrations } from '@/lib/db/migrate';
-import { getRecipeFull, listRecipeIdsByOwner } from '@/lib/db/recipes';
+import { getRecipeFull } from '@/lib/db/recipes';
+import { listRecipeIdsByOwner } from '@/lib/db/test-helpers';
 import { user } from '@/lib/db/schema';
 import { seedSamples } from './seed';
 

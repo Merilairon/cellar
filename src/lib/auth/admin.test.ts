@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { openDb, type Db } from '@/lib/db/connection';
 import { runMigrations } from '@/lib/db/migrate';
-import { createRecipe, getRecipeFull, listRecipeIdsByOwner } from '@/lib/db/recipes';
+import { createRecipe, getRecipeFull } from '@/lib/db/recipes';
+import { listRecipeIdsByOwner } from '@/lib/db/test-helpers';
 import { invite, passwordReset, recipe, session, user } from '@/lib/db/schema';
 import { copyRecipe } from '@/lib/db/recipes';
 import { toTree } from '@/lib/recipes/service';

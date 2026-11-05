@@ -305,13 +305,3 @@ function stripKeys<T extends { id: string; recipeId: string; sectionId: string; 
   delete rest.position;
   return rest as Omit<T, 'id' | 'recipeId' | 'sectionId' | 'position'>;
 }
-
-/** Ids of recipes owned by a user (used by the user-deletion flow and tests). */
-export function listRecipeIdsByOwner(db: Db, ownerId: string): string[] {
-  return db
-    .select({ id: recipe.id })
-    .from(recipe)
-    .where(eq(recipe.ownerId, ownerId))
-    .all()
-    .map((r) => r.id);
-}

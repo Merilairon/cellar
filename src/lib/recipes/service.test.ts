@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { openDb, type Db } from '@/lib/db/connection';
 import { runMigrations } from '@/lib/db/migrate';
+import { deactivateUser } from '@/lib/auth/admin';
 import { user } from '@/lib/db/schema';
 import { SAMPLE_SKILLET_COOKIES, SAMPLE_VANILLA_CAKE } from './samples';
 import {
@@ -32,6 +33,60 @@ const okRecipe = (r: ReturnType<typeof createRecipeFor>) => {
   if (!r.ok) throw new Error(JSON.stringify(r));
   return r.recipe;
 };
+
+describe('owner deactivation', () => {
+  it('keeps users-visible recipes readable and copyable; admins still read and write any recipe', () => {
+    const { owner, other, admin } = setup();
+    const shared = okRecipe(createRecipeFor(db, owner, { ...clone(), visibility: 'users' })).id;
+    const priv = okRecipe(createRecipeFor(db, owner, { ...clone(), visibility: 'private' })).id;
+    expect(deactivateUser(db, owner.id)).toBe('ok');
+
+    expect(getRecipeFor(db, other, shared)).toMatchObject({ ok: true });
+    expect(listRecipes(db, other).map((r) => r.id)).toContain(shared);
+    expect(copyRecipeFor(db, other, shared)).toMatchObject({ ok: true });
+    expect(getRecipeFor(db, other, priv)).toEqual({ ok: false, status: 404 });
+
+    expect(getRecipeFor(db, admin, priv)).toMatchObject({ ok: true });
+    expect(updateRecipeFor(db, admin, priv, { ...clone(), title: 'Edited' })).toMatchObject({
+      ok: true,
+    });
+    expect(deleteRecipeFor(db, admin, priv)).toMatchObject({ ok: true });
+  });
+});
+
+describe('ingredient ranges', () => {
+  it('round-trip through create, get, update and copy', () => {
+    const { owner } = setup();
+    const body = {
+      title: 'Glaze',
+      sections: [
+        {
+          ingredients: [
+            { name: 'honey', us_qty: 2, us_qty_max: 3, us_unit: 'tbsp', display_primary: 'us' },
+            { name: 'flour', metric_qty: 100, metric_qty_max: 150, metric_unit: 'g' },
+            { name: 'salt', metric_qty: 1 },
+          ],
+          steps: [],
+        },
+      ],
+    };
+    const made = okRecipe(createRecipeFor(db, owner, body));
+    const [honey, flour, salt] = made.sections[0]!.ingredients;
+    expect(honey).toMatchObject({ us_qty: 2, us_qty_max: 3, metric_qty_max: null });
+    expect(flour).toMatchObject({ metric_qty: 100, metric_qty_max: 150, us_qty_max: null });
+    expect(salt).toMatchObject({ metric_qty_max: null, us_qty_max: null });
+    expect(honey!.raw_text).toBe('2-3 tbsp honey');
+
+    const upd = updateRecipeFor(db, owner, made.id, { ...body, title: 'Glaze 2' });
+    expect(upd.ok && upd.recipe.sections[0]!.ingredients[0]).toMatchObject({ us_qty_max: 3 });
+
+    const copy = copyRecipeFor(db, owner, made.id) as { id: string };
+    const got = getRecipeFor(db, owner, copy.id);
+    expect(got.ok && got.recipe.sections[0]!.ingredients[1]).toMatchObject({
+      metric_qty_max: 150,
+    });
+  });
+});
 
 describe('create', () => {
   it('defaults to private, owner = caller, grid for valid samples', () => {
