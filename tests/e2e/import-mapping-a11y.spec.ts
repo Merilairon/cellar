@@ -153,7 +153,11 @@ const focusName = (page: Page) =>
   page.evaluate(() => {
     const e = document.activeElement as HTMLElement | null;
     if (!e) return '';
-    return (e.getAttribute('aria-label') ?? e.textContent ?? e.id).trim().slice(0, 40);
+    // The disclosure chevron is aria-hidden text; leave it out like a screen reader does.
+    return (e.getAttribute('aria-label') ?? e.textContent ?? e.id)
+      .replace('▸', '')
+      .trim()
+      .slice(0, 40);
   });
 
 test('keyboard only: tab order of the panel, disclosure toggles, skip link', async ({

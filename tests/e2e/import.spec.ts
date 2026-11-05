@@ -181,11 +181,8 @@ test('URL import -> review -> edit -> save lands in list view with source link a
   await expect(sp).toHaveURL(/\/recipes\/[0-9A-Z]{26}$/);
   await expect(sp.getByRole('heading', { name: 'Edited Lemon Cake', level: 1 })).toBeVisible();
   await expect(sp.getByRole('button', { name: 'List' })).toHaveAttribute('aria-pressed', 'true');
-  // The stored source URL is the normalized form, which is always https (source-url.ts).
-  await expect(sp.getByRole('link', { name: '127.0.0.1' })).toHaveAttribute(
-    'href',
-    `${fx.replace('http:', 'https:')}/cake`,
-  );
+  // T13 stores the scheme the user entered (normalization is only for comparison).
+  await expect(sp.getByRole('link', { name: '127.0.0.1' })).toHaveAttribute('href', `${fx}/cake`);
   await expect(sp.getByText('the cover image could not be downloaded')).toHaveCount(0);
   expect(sp.url()).not.toContain('notice=');
   expect(await recipeCount(seamCtx)).toBe(before + 1);
