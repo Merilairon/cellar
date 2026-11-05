@@ -113,3 +113,30 @@ describe('RecipeList', () => {
     expect(count(html, /<ol/g)).toBe(2);
   });
 });
+
+describe('ingredient ranges ("2-3 tbsp")', () => {
+  const ranged = () => {
+    const r = structuredClone(SAMPLE_SKILLET_COOKIES);
+    Object.assign(r.sections[0].ingredients[0], {
+      name: 'honey',
+      metric_qty: null,
+      metric_unit: null,
+      metric_qty_max: null,
+      us_qty: 2,
+      us_qty_max: 3,
+      us_unit: 'tbsp',
+      display_primary: 'us',
+    });
+    return r;
+  };
+  it('shows both bounds in the grid ingredient column', () => {
+    expect(grid(ranged())).toContain('2-3 tbsp');
+  });
+  it('shows both bounds in the list view', () => {
+    const api = apiFromInput(ranged());
+    expect(wrap(<RecipeList sections={api.sections} />)).toContain('2-3 tbsp');
+  });
+  it('keeps single quantities unchanged', () => {
+    expect(grid(SAMPLE_SKILLET_COOKIES)).not.toMatch(/\d-\d+ (tbsp|g|oz)/);
+  });
+});
