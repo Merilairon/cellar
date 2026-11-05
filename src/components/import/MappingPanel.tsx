@@ -109,8 +109,14 @@ export function MappingPanel(p: MappingPanelProps) {
   );
 
   const details = (
-    <details open={level !== 'high'} className="rounded">
+    <details open={level !== 'high'} className="group rounded">
       <summary className="flex min-h-11 cursor-pointer items-center font-semibold">
+        <span
+          aria-hidden="true"
+          className="mr-2 inline-block transition-transform group-open:rotate-90 motion-reduce:transition-none"
+        >
+          ▸
+        </span>
         {t('import.review.mapping.details.summary')}
       </summary>
       <p>{t('import.review.mapping.details.score', { score: mapping.confidence.toFixed(2) })}</p>
@@ -145,8 +151,14 @@ export function MappingPanel(p: MappingPanelProps) {
       {level !== 'low' && actions}
       {details}
       <p>{t('import.review.mapping.fixHint')}</p>
-      <details>
+      <details className="group">
         <summary className="flex min-h-11 cursor-pointer items-center">
+          <span
+            aria-hidden="true"
+            className="mr-2 inline-block transition-transform group-open:rotate-90 motion-reduce:transition-none"
+          >
+            ▸
+          </span>
           {t('import.review.mapping.explain.summary')}
         </summary>
         <p>{t('import.review.mapping.explain.body')}</p>
@@ -156,13 +168,19 @@ export function MappingPanel(p: MappingPanelProps) {
         <details
           open={p.previewOpen}
           onToggle={(e) => p.onPreviewToggle(e.currentTarget.open)}
-          className="rounded p-2"
+          className="group rounded p-2"
         >
           <summary
             id="map-preview-summary"
             aria-describedby={summaryId}
             className="flex min-h-11 cursor-pointer items-center text-lg font-semibold"
           >
+            <span
+              aria-hidden="true"
+              className="mr-2 inline-block transition-transform group-open:rotate-90 motion-reduce:transition-none"
+            >
+              ▸
+            </span>
             {t('import.review.mapping.preview.heading')}
           </summary>
           <p id={summaryId} className="sr-only">

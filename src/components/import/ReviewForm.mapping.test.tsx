@@ -89,7 +89,9 @@ describe('ReviewForm mapping panel', () => {
     expect(h).not.toContain('class="rg-table"');
     expect(h).toContain('Match score: 0.55 out of 1');
     expect(h).toContain('A step says');
-    expect(h).toMatch(/<details open=""[^>]*><summary[^>]*>Why this score/);
+    expect(h).toMatch(
+      /<details open=""[^>]*><summary[^>]*>(<span[^>]*>[^<]*<\/span>)?Why this score/,
+    );
   });
 
   it('low: secondary "Try the grid anyway" after the reasons, fallback reason', () => {
