@@ -1,6 +1,0 @@
-# Auto-loaded by plain `docker compose up`: publishes the app directly.
-# Skipped when you pass `-f docker-compose.yml` (the Caddy setup).
-services:
-  app:
-    ports:
-      - '${APP_PORT:-3000}:3000'

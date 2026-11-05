@@ -4,20 +4,20 @@
 
 ```sh
 cp .env.example .env   # set SESSION_SECRET: openssl rand -base64 48
-docker compose up -d --build
+docker compose -f docker-compose.yml -f docker-compose.direct.yml up -d --build
 ```
 
-Plain `docker compose up` also loads `docker-compose.override.yml`, which publishes the app on `${APP_PORT:-3000}`. Data lives in the `app-data` volume mounted at `/data` (`DATABASE_PATH=/data/app.db`). Migrations run automatically at app start. The app refuses to start in production if `SESSION_SECRET` is shorter than 32 characters or a known placeholder.
+`docker-compose.direct.yml` is an explicit opt-in file that publishes the app on `${APP_PORT:-3000}`; nothing is auto-loaded, so the app port is never published by accident. Keep `TRUSTED_PROXIES` empty in this mode. Data lives in the `app-data` volume mounted at `/data` (`DATABASE_PATH=/data/app.db`). Migrations run automatically at app start. The app refuses to start in production if `SESSION_SECRET` is shorter than 32 characters or a known placeholder.
 
 ## Caddy profile (automatic HTTPS)
 
 Set in `.env`: `SITE_ADDRESS=recipes.example.com`, `BASE_URL=https://recipes.example.com`, `TRUSTED_PROXIES=172.28.0.10` (Caddy's fixed address). Then:
 
 ```sh
-docker compose -f docker-compose.yml --profile caddy up -d --build
+docker compose --profile caddy up -d --build
 ```
 
-Naming `-f docker-compose.yml` skips the override file, so the app port is not published; only Caddy exposes 80/443. DNS must point to the host and ports 80/443 must be reachable for certificate issuance (manual check; not automatable offline). `X-Forwarded-*` headers are honored only from `TRUSTED_PROXIES`.
+`docker-compose.yml` alone does not publish the app port; only Caddy exposes 80/443. Do not add `docker-compose.direct.yml` here. DNS must point to the host and ports 80/443 must be reachable for certificate issuance (manual check; not automatable offline). `X-Forwarded-*` headers are honored only from `TRUSTED_PROXIES`.
 
 ## Admin password reset
 

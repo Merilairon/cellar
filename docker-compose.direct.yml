@@ -1,0 +1,9 @@
+# Opt-in direct mode: publishes the app port without a reverse proxy.
+#   docker compose -f docker-compose.yml -f docker-compose.direct.yml up -d --build
+# Not auto-loaded on purpose, so `docker compose --profile caddy up` can never publish the
+# app port. Leave TRUSTED_PROXIES empty in this mode (anyone who reaches the port could
+# forge X-Forwarded-For otherwise).
+services:
+  app:
+    ports:
+      - '${APP_PORT:-3000}:3000'

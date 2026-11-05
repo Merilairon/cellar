@@ -1,6 +1,7 @@
-# Direct use:   docker compose up -d --build        (docker-compose.override.yml publishes :3000)
-# Behind Caddy: docker compose -f docker-compose.yml --profile caddy up -d --build
-#   (naming the file explicitly skips the override, so the app port is NOT published)
+# Direct use:   docker compose -f docker-compose.yml -f docker-compose.direct.yml up -d --build
+#   (docker-compose.direct.yml publishes the app on :3000)
+# Behind Caddy: docker compose --profile caddy up -d --build
+#   (this file alone never publishes the app port; only Caddy listens on 80/443)
 services:
   app:
     build: .

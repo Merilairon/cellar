@@ -44,12 +44,12 @@ The database is created at `DATABASE_PATH` (`./data/app.db` in `.env.example`) a
 ```bash
 cp .env.example .env
 # set SESSION_SECRET in .env (openssl rand -base64 48)
-docker compose up -d --build
+docker compose -f docker-compose.yml -f docker-compose.direct.yml up -d --build
 ```
 
 Open <http://localhost:3000> (change the host port with `APP_PORT` in `.env`). Compose refuses to start if `SESSION_SECRET` is unset, and the app refuses to start in production if it is shorter than 32 characters or a known placeholder such as the one in `.env.example`.
 
-Plain `docker compose up` also loads `docker-compose.override.yml`, which publishes the app port. Data lives in the `app-data` volume, mounted at `/data`.
+`docker-compose.direct.yml` is the opt-in file that publishes the app port; it is not loaded automatically, so a plain `docker compose up` or `--profile caddy` run never exposes the app port by accident. Data lives in the `app-data` volume, mounted at `/data`.
 
 ### Caddy profile (automatic HTTPS)
 
@@ -64,10 +64,10 @@ TRUSTED_PROXIES=172.28.0.10
 `172.28.0.10` is the fixed address Caddy gets on the compose network. DNS must point at the host, and ports 80 and 443 must be reachable. Then start with:
 
 ```bash
-docker compose -f docker-compose.yml --profile caddy up -d --build
+docker compose --profile caddy up -d --build
 ```
 
-Naming `-f docker-compose.yml` explicitly skips the override file, so the app port is **not** published; only Caddy listens (80, 443). If you leave out `-f docker-compose.yml`, the app port is published as well and `TRUSTED_PROXIES` can be spoofed (see [Known limitations](#known-limitations)).
+The app port is **not** published in this mode; only Caddy listens (80, 443). Do not combine this with `docker-compose.direct.yml`: with the app port reachable, `TRUSTED_PROXIES` can be spoofed (see [Known limitations](#known-limitations)).
 
 The app does not send `Strict-Transport-Security`. If you want HSTS, let Caddy add it, for example `header Strict-Transport-Security "max-age=15552000"` inside the site block of `Caddyfile`. Only do this once you are sure the host will stay on HTTPS.
 
@@ -109,7 +109,7 @@ Validated at startup in `src/lib/env.ts`. See `.env.example` for a template.
 | `RATE_LIMIT_REGISTER_MAX`        | no            | `10`                                          | Invite registration, reset and setup POSTs per client IP per window. Skipped when the client IP is unknown.                                                                                                     |
 | `RATE_LIMIT_REGISTER_WINDOW_SEC` | no            | `3600`                                        | Registration window in seconds.                                                                                                                                                                                 |
 
-**Rate limiting and unknown clients.** Per-IP limits only work when the app can tell clients apart, which needs `TRUSTED_PROXIES` to match your reverse proxy. Without it (the default for plain `docker compose up` or `npm run dev`) every visitor looks like the same "unknown" client; rather than let a few bad requests lock everybody out, the per-IP limits are then skipped and only the per-email login limit applies. Register and reset links carry unguessable tokens, so they stay safe without a per-IP limit. Counters are in memory and reset on restart.
+**Rate limiting and unknown clients.** Per-IP limits only work when the app can tell clients apart, which needs `TRUSTED_PROXIES` to match your reverse proxy. Without it (the default for direct mode or `npm run dev`) every visitor looks like the same "unknown" client; rather than let a few bad requests lock everybody out, the per-IP limits are then skipped and only the per-email login limit applies. Register and reset links carry unguessable tokens, so they stay safe without a per-IP limit. Counters are in memory and reset on restart.
 
 Docker-only variables read by Compose (not by the app): `APP_PORT` (published host port, default `3000`) and `SITE_ADDRESS` (Caddy host name, default `localhost`).
 
@@ -143,7 +143,7 @@ Deactivated accounts are not reactivated: the command exits with an error for th
 
 - **Rate limiting is in memory.** Counters reset when the app restarts and are not shared between processes.
 - **Single process only.** Because of the in-memory rate limiter and the single SQLite file, run exactly one app instance.
-- **`TRUSTED_PROXIES` can be spoofed if the app port is reachable.** Any client that can connect directly from a trusted address can forge `X-Forwarded-For` and evade per-IP limits. Behind Caddy, do not publish the app port (use `-f docker-compose.yml` as shown above).
+- **`TRUSTED_PROXIES` can be spoofed if the app port is reachable.** Any client that can connect directly from a trusted address can forge `X-Forwarded-For` and evade per-IP limits. Behind Caddy, do not publish the app port (do not add `docker-compose.direct.yml` as shown above).
 - **`style-src` allows `'unsafe-inline'`.** Scripts use a per-request nonce, but styles do not.
 
 ## License
