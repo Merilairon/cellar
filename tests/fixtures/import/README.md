@@ -34,6 +34,12 @@ Runner: `scripts/import-corpus.ts`. Each fixture is `name.html` plus `name.expec
   `warnings_include`. The `map-*` fixtures prove the normalize -> mapper wiring end to end
   (HowToSection plus ingredient group headings, string steps, pasted `For the sauce:`).
 
+## Microdata status
+
+`microdata-only-basic` and `microdata-only-howtostep` are still `out_of_slice` ("carry: 3b microdata parser"). The v0.3.1 microdata extractor (T14) was a cuttable stretch and was not built, so both still return `no_recipe` and stay excluded from the success rate. Re-carried to 03c or 04; see `docs/tasks/v0.3.1-carryover.md`.
+
+The `map-*` fixtures (v0.3.1) additionally check the auto-mapper proposal through the `map` block. They test the wiring, not mapper accuracy: that is `tests/fixtures/mapper/` (see its README).
+
 ## Success rate
 
 `valid drafts / fixtures with expect = "draft"`, target >= 85%. The report also prints every
