@@ -7,7 +7,8 @@ import { runMigrations } from '@/lib/db/migrate';
 import { createRecipe } from '@/lib/db/recipes';
 import { importJob, recipe, user } from '@/lib/db/schema';
 import { ImportError } from './errors';
-import { createImport, getImportFor } from './service';
+import { markImportJobSaved } from '@/lib/db/import-jobs';
+import { createImport, getImportFor, STALE_FETCHING_MS } from './service';
 import type { SafeFetchOptions, SafeFetchResult } from './safe-fetch';
 
 const enc = new TextEncoder();
@@ -220,5 +221,64 @@ describe('getImportFor', () => {
     expect(getImportFor(db, a, res.id)).toMatchObject({ id: res.id, status: 'needs_review' });
     expect(getImportFor(db, b, res.id)).toBeNull();
     expect(getImportFor(db, a, 'nope')).toBeNull();
+  });
+});
+
+describe('stale fetching jobs (lazy recovery)', () => {
+  const stuck = (userId: string, ageMs: number) =>
+    db
+      .insert(importJob)
+      .values({
+        id: `J${ageMs}${userId}`,
+        userId,
+        status: 'fetching',
+        updatedAt: new Date(Date.now() - ageMs).toISOString(),
+      })
+      .returning()
+      .get();
+
+  it('getImportFor fails an old fetching job, leaves a fresh one and other users alone', async () => {
+    const old = stuck(a.id, STALE_FETCHING_MS + 60_000);
+    const fresh = stuck(a.id, 1000);
+    const theirs = stuck(b.id, STALE_FETCHING_MS + 60_000);
+    expect(getImportFor(db, a, old.id)).toMatchObject({
+      status: 'failed',
+      error_code: 'fetch_failed',
+    });
+    expect(getImportFor(db, a, fresh.id)?.status).toBe('fetching');
+    expect(
+      db
+        .select()
+        .from(importJob)
+        .all()
+        .find((j) => j.id === theirs.id)?.status,
+    ).toBe('fetching');
+  });
+
+  it("createImport sweeps the same user's stale jobs", async () => {
+    const old = stuck(a.id, STALE_FETCHING_MS + 60_000);
+    await createImport(db, a, { url: 'https://example.com/p' }, { safeFetch: okFetch() });
+    expect(
+      db
+        .select()
+        .from(importJob)
+        .all()
+        .find((j) => j.id === old.id)?.status,
+    ).toBe('failed');
+  });
+});
+
+describe('markImportJobSaved CAS', () => {
+  it('only flips needs_review jobs', () => {
+    const mkJob = (status: 'failed' | 'fetching' | 'needs_review') =>
+      db
+        .insert(importJob)
+        .values({ id: `C${status}`, userId: a.id, status })
+        .returning()
+        .get();
+    const r = createRecipe(db, a.id, tree(null, 'private'));
+    expect(markImportJobSaved(db, mkJob('failed').id, a.id, r)).toBe(false);
+    expect(markImportJobSaved(db, mkJob('fetching').id, a.id, r)).toBe(false);
+    expect(markImportJobSaved(db, mkJob('needs_review').id, a.id, r)).toBe(true);
   });
 });

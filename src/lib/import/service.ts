@@ -4,6 +4,7 @@ import type { Db } from '@/lib/db/connection';
 import { findRecipeBySourceUrl } from '@/lib/db/recipes';
 import {
   createImportJob,
+  failStaleFetchingJobs,
   getImportJobForUser,
   updateImportJob,
   type ImportJobRow,
@@ -24,6 +25,11 @@ export type ImportServiceDeps = ImportDeps & {
 };
 
 type Actor = { id: string };
+
+/** A job still `fetching` after this long is dead (the fetch itself is bounded by ~10 s). */
+export const STALE_FETCHING_MS = 5 * 60 * 1000;
+const failStale = (db: Db, actor: Actor) =>
+  failStaleFetchingJobs(db, actor.id, new Date(Date.now() - STALE_FETCHING_MS).toISOString());
 
 /** What is stored in `import_job.draft_json`. */
 export type StoredDraft = { v: 1; draft: Draft; warnings: string[] };
@@ -86,13 +92,21 @@ export async function createImport(
   input: ImportInput,
   deps: ImportServiceDeps = {},
 ): Promise<ImportJobResponse> {
+  failStale(db, actor);
   const job = createImportJob(db, actor.id, { method: 'text' in input ? 'paste' : 'static' });
   updateImportJob(db, job.id, { status: 'fetching' });
 
   const log = deps.log;
-  const result = await ('text' in input
-    ? runImport(input, { ...deps, log })
-    : limitFetch(() => runImport(input, { ...deps, log })));
+  let result;
+  try {
+    result = await ('text' in input
+      ? runImport(input, { ...deps, log })
+      : limitFetch(() => runImport(input, { ...deps, log })));
+  } catch (e) {
+    // Busy limiter (or any escape): never leave the row `fetching`.
+    updateImportJob(db, job.id, { status: 'failed', errorCode: 'fetch_failed' });
+    throw e;
+  }
 
   const rawHtmlPath =
     deps.keepRawHtml && deps.uploadsDir && result.raw_html
@@ -120,6 +134,7 @@ export async function createImport(
 }
 
 export function getImportFor(db: Db, actor: Actor, id: string): ImportJobResponse | null {
+  failStale(db, actor);
   const job = getImportJobForUser(db, id, actor.id);
   return job ? toJobResponse(db, job, actor) : null;
 }

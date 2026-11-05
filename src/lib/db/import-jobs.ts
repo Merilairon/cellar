@@ -1,4 +1,4 @@
-import { and, eq, ne } from 'drizzle-orm';
+import { and, eq, lt } from 'drizzle-orm';
 import { ulid } from 'ulid';
 import type { Db } from './connection';
 import { importJob, nowIso } from './schema';
@@ -43,14 +43,34 @@ export function updateImportJob(db: Db, id: string, patch: ImportJobPatch): void
 
 /**
  * Atomically move a job to `saved` and link the recipe. Returns false when the job is not
- * the caller's, does not exist, or is already saved (compare-and-set, so a double submit
+ * the caller's, does not exist, or is not `needs_review` (compare-and-set, so a double submit
  * cannot create two recipes when this runs in the same transaction as the insert).
  */
 export function markImportJobSaved(db: Db, id: string, userId: string, recipeId: string): boolean {
   const res = db
     .update(importJob)
     .set({ status: 'saved', recipeId, updatedAt: nowIso() })
-    .where(and(eq(importJob.id, id), eq(importJob.userId, userId), ne(importJob.status, 'saved')))
+    .where(
+      and(eq(importJob.id, id), eq(importJob.userId, userId), eq(importJob.status, 'needs_review')),
+    )
     .run();
   return res.changes === 1;
+}
+
+/**
+ * Lazy recovery for jobs stuck in `fetching` (crash or restart mid-fetch): the user's jobs
+ * not updated since `cutoffIso` become `failed/fetch_failed`. No background process.
+ */
+export function failStaleFetchingJobs(db: Db, userId: string, cutoffIso: string): number {
+  return db
+    .update(importJob)
+    .set({ status: 'failed', errorCode: 'fetch_failed', updatedAt: nowIso() })
+    .where(
+      and(
+        eq(importJob.userId, userId),
+        eq(importJob.status, 'fetching'),
+        lt(importJob.updatedAt, cutoffIso),
+      ),
+    )
+    .run().changes;
 }

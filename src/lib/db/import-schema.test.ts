@@ -110,6 +110,8 @@ describe('import_job', () => {
     const j = createImportJob(db, a.id, { method: 'paste' });
     expect(j.url).toBeNull();
     const r = mkRecipe(a.id);
+    expect(markImportJobSaved(db, j.id, a.id, r.id)).toBe(false); // not yet needs_review
+    db.update(importJob).set({ status: 'needs_review' }).where(eq(importJob.id, j.id)).run();
     expect(markImportJobSaved(db, j.id, b.id, r.id)).toBe(false); // not the owner
     expect(markImportJobSaved(db, j.id, a.id, r.id)).toBe(true);
     expect(markImportJobSaved(db, j.id, a.id, r.id)).toBe(false); // already saved
