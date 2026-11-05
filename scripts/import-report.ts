@@ -23,6 +23,9 @@ async function main(): Promise<void> {
     `\nStatic-handleable: ${report.draftPassed}/${report.draftTotal} valid drafts = ${pct}% (target ${TARGET * 100}%)`,
   );
   console.log(
+    `Overall (all recipe pages incl. out-of-slice): ${report.draftPassed}/${report.draftTotal + report.outOfSlice.length} valid drafts = ${(report.overallRate * 100).toFixed(1)}%`,
+  );
+  console.log(
     `Deliberate no-recipe (paywalled, non-recipe, malformed, incomplete): ${report.negatives.filter((r) => r.pass).length}/${report.negatives.length} correctly rejected`,
   );
   console.log(`Out of slice (reported separately, not in the rate): ${report.outOfSlice.length}`);

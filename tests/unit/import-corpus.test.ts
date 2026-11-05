@@ -11,6 +11,8 @@ describe('import fixture corpus', () => {
       const report = await runCorpus();
       expect(report.rows.length).toBeGreaterThanOrEqual(30);
       expect(report.rate).toBeGreaterThanOrEqual(TARGET);
+      expect(report.overallRate).toBeGreaterThanOrEqual(TARGET);
+      expect(report.overallRate).toBeLessThanOrEqual(report.rate);
       // Deliberate negatives and out-of-slice pages must behave as labelled.
       expect(report.failures.filter((r) => r.expect !== 'draft')).toEqual([]);
       expect(report.outOfSlice.length).toBeGreaterThan(0);

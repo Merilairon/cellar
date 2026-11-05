@@ -38,6 +38,8 @@ export type Report = {
   draftTotal: number;
   draftPassed: number;
   rate: number;
+  /** Valid drafts / all recipe pages (draft + out-of-slice), the stricter reading of the spec. */
+  overallRate: number;
   outOfSlice: Row[];
   /** Fixtures that deliberately yield no recipe (paywalled, non-recipe, malformed). */
   negatives: Row[];
@@ -116,11 +118,13 @@ export async function runCorpus(dir = FIXTURE_DIR): Promise<Report> {
   }
   const drafts = rows.filter((r) => r.expect === 'draft');
   const draftPassed = drafts.filter((r) => r.pass).length;
+  const recipePages = drafts.length + rows.filter((r) => r.expect === 'out_of_slice').length;
   return {
     rows,
     draftTotal: drafts.length,
     draftPassed,
     rate: drafts.length ? draftPassed / drafts.length : 0,
+    overallRate: recipePages ? draftPassed / recipePages : 0,
     outOfSlice: rows.filter((r) => r.expect === 'out_of_slice'),
     negatives: rows.filter((r) => r.expect === 'no_recipe'),
     failures: rows.filter((r) => !r.pass),
