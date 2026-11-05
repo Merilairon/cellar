@@ -2,6 +2,10 @@
 # reachable from the internet and the DNS name must point at this host.
 {$SITE_ADDRESS} {
 	encode zstd gzip
+	# Reject oversized request bodies before they reach the app (forms are tiny).
+	request_body {
+		max_size 1MB
+	}
 	# Caddy sets X-Forwarded-For/Proto/Host itself and drops client-supplied values.
 	# The app only trusts them from TRUSTED_PROXIES (= Caddy's fixed IP, 172.28.0.10).
 	reverse_proxy app:3000

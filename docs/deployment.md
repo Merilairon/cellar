@@ -9,6 +9,8 @@ docker compose -f docker-compose.yml -f docker-compose.direct.yml up -d --build
 
 `docker-compose.direct.yml` is an explicit opt-in file that publishes the app on `${APP_PORT:-3000}`; nothing is auto-loaded, so the app port is never published by accident. Keep `TRUSTED_PROXIES` empty in this mode. Data lives in the `app-data` volume mounted at `/data` (`DATABASE_PATH=/data/app.db`). Migrations run automatically at app start. The app refuses to start in production if `SESSION_SECRET` is shorter than 32 characters or a known placeholder.
 
+Finish `/setup` (first admin) before exposing the host: until then anyone who can reach it can claim the admin account.
+
 ## Caddy profile (automatic HTTPS)
 
 Set in `.env`: `SITE_ADDRESS=recipes.example.com`, `BASE_URL=https://recipes.example.com`, `TRUSTED_PROXIES=172.28.0.10` (Caddy's fixed address). Then:
