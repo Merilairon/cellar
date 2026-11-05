@@ -1,0 +1,266 @@
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import sharp from 'sharp';
+import { eq } from 'drizzle-orm';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { openDb, type Db } from '@/lib/db/connection';
+import { runMigrations } from '@/lib/db/migrate';
+import { getCoverPhoto } from '@/lib/db/photos';
+import { getRecipeFull } from '@/lib/db/recipes';
+import { importJob, recipe, user } from '@/lib/db/schema';
+import { deleteRecipeFor } from '@/lib/recipes/service';
+import { createImport } from './service';
+import { saveImport } from './save';
+import type { SafeFetchOptions, SafeFetchResult } from './safe-fetch';
+
+const enc = new TextEncoder();
+const node = {
+  '@type': 'Recipe',
+  name: 'Pancakes',
+  image: 'https://cdn.example.com/p.jpg',
+  recipeIngredient: ['2 eggs'],
+  recipeInstructions: [{ '@type': 'HowToStep', text: 'Fry.' }],
+};
+const pageFetch = async (): Promise<SafeFetchResult> => ({
+  status: 200,
+  headers: { 'content-type': 'text/html' },
+  body: enc.encode(`<script type="application/ld+json">${JSON.stringify(node)}</script>`),
+  finalUrl: 'https://example.com/p',
+});
+const png = () =>
+  sharp({ create: { width: 64, height: 32, channels: 3, background: '#fa0' } })
+    .png()
+    .toBuffer();
+
+let db: Db;
+let dir: string;
+let a: { id: string; role: 'member' };
+let b: { id: string; role: 'member' };
+const mk = (email: string) =>
+  db
+    .insert(user)
+    .values({ email, displayName: email, passwordHash: 'h', role: 'member' })
+    .returning()
+    .get();
+const draft = (over: Record<string, unknown> = {}) => ({
+  title: 'Pancakes',
+  source_url: 'http://Example.com/p?utm_source=x',
+  sections: [
+    {
+      title: null,
+      ingredients: [{ name: 'eggs' }],
+      steps: [{ kind: 'banner_top', label: 'Fry', detail: 'Hot pan.' }],
+    },
+  ],
+  ...over,
+});
+const start = async (url = 'https://example.com/p') =>
+  (await createImport(db, a, { url }, { safeFetch: pageFetch })).id;
+const deps = (sf?: (u: string, o?: SafeFetchOptions) => Promise<SafeFetchResult>) => ({
+  uploadsDir: join(dir, 'uploads'),
+  safeFetch: sf,
+});
+
+beforeEach(() => {
+  db = openDb(':memory:');
+  runMigrations(db);
+  a = mk('a@x.test') as typeof a;
+  b = mk('b@x.test') as typeof b;
+  dir = mkdtempSync(join(tmpdir(), 'save-'));
+});
+afterEach(() => {
+  db.$client.close();
+  rmSync(dir, { recursive: true, force: true });
+  vi.restoreAllMocks();
+});
+
+describe('saveImport', () => {
+  it('saves an edited draft: normalized source_url, hostname source_name, list, private, job saved', async () => {
+    const id = await start();
+    const r = await saveImport(db, a, id, draft({ title: 'Edited' }), deps());
+    expect(r).toMatchObject({ ok: true, warnings: [] });
+    if (!r.ok || !('id' in r)) throw new Error('unreachable');
+    const full = getRecipeFull(db, r.id)!;
+    expect(full).toMatchObject({
+      title: 'Edited',
+      ownerId: a.id,
+      sourceUrl: 'https://example.com/p',
+      sourceName: 'example.com',
+      viewMode: 'list',
+      visibility: 'private',
+    });
+    expect(db.select().from(importJob).get()).toMatchObject({ status: 'saved', recipeId: r.id });
+  });
+
+  it('re-sanitizes a draft tampered client-side', async () => {
+    const id = await start();
+    const r = await saveImport(
+      db,
+      a,
+      id,
+      draft({
+        title: 'Soup<script>alert(1)</script>',
+        description: '<img src=x onerror=alert(1)>Nice &lt;b&gt;',
+        source_name: '<b>Site</b>',
+        sections: [
+          {
+            title: '<i>Mains</i>',
+            ingredients: [{ name: '<script>x</script>salt', note: '<a href=x>n</a>' }],
+            steps: [
+              {
+                kind: 'banner_top',
+                label: '<script>l</script>Step',
+                detail: '<svg onload=x>do it',
+              },
+            ],
+          },
+        ],
+      }),
+      deps(),
+    );
+    if (!r.ok || !('id' in r)) throw new Error(JSON.stringify(r));
+    const stored = JSON.stringify(getRecipeFull(db, r.id));
+    expect(stored).not.toMatch(/<|onerror|onload|alert/);
+    expect(getRecipeFull(db, r.id)!.title).toBe('Soup');
+  });
+
+  it('rejects non-http source_url with 422 and keeps the job reviewable', async () => {
+    const id = await start();
+    expect(
+      await saveImport(db, a, id, draft({ source_url: 'javascript:alert(1)' }), deps()),
+    ).toMatchObject({ ok: false, status: 422 });
+    expect(db.select().from(importJob).get()!.status).toBe('needs_review');
+  });
+
+  it('falls back to the job URL for source_url when the draft has none', async () => {
+    const id = await start('https://example.com/p?utm_source=q');
+    const r = await saveImport(db, a, id, draft({ source_url: undefined }), deps());
+    if (!r.ok || !('id' in r)) throw new Error('fail');
+    expect(getRecipeFull(db, r.id)!.sourceUrl).toBe('https://example.com/p');
+  });
+
+  it('second save is 409 and creates no second recipe', async () => {
+    const id = await start();
+    await saveImport(db, a, id, draft(), deps());
+    expect(await saveImport(db, a, id, draft(), deps())).toEqual({ ok: false, status: 409 });
+    expect(db.select().from(recipe).all()).toHaveLength(1);
+  });
+
+  it("another user's job and unknown ids are 404; failed jobs are 409", async () => {
+    const id = await start();
+    expect(await saveImport(db, b, id, draft(), deps())).toEqual({ ok: false, status: 404 });
+    expect(await saveImport(db, a, 'nope', draft(), deps())).toEqual({ ok: false, status: 404 });
+    const failed = await createImport(db, a, { url: 'ftp://x/' }, { safeFetch: pageFetch });
+    expect(await saveImport(db, a, failed.id, draft(), deps())).toEqual({ ok: false, status: 409 });
+  });
+
+  it('never yields a grid recipe with null spans: column steps without spans default to list', async () => {
+    const id = await start();
+    const r = await saveImport(
+      db,
+      a,
+      id,
+      draft({
+        sections: [
+          { ingredients: [{ name: 'x' }], steps: [{ kind: 'column', label: 'S', detail: '' }] },
+        ],
+      }),
+      deps(),
+    );
+    if (!r.ok || !('id' in r)) throw new Error('fail');
+    expect(getRecipeFull(db, r.id)!.viewMode).toBe('list');
+    // and an explicit grid with null spans is refused
+    const id2 = await start();
+    const g = await saveImport(
+      db,
+      a,
+      id2,
+      draft({
+        view_mode: 'grid',
+        sections: [
+          { ingredients: [{ name: 'x' }], steps: [{ kind: 'column', label: 'S', detail: '' }] },
+        ],
+      }),
+      deps(),
+    );
+    expect(g).toMatchObject({ ok: false, status: 422 });
+  });
+
+  it('rolls back fully when the recipe insert fails; job stays needs_review', async () => {
+    const id = await start();
+    // Force a failure inside the transaction: a duplicate ingredient name is fine, so break the FK
+    // by making the job update throw after the recipe insert.
+    const jobs = await import('@/lib/db/import-jobs');
+    vi.spyOn(jobs, 'markImportJobSaved').mockImplementation(() => {
+      throw new Error('boom');
+    });
+    await expect(saveImport(db, a, id, draft(), deps())).rejects.toThrow('boom');
+    expect(db.select().from(recipe).all()).toHaveLength(0);
+    expect(db.select().from(importJob).where(eq(importJob.id, id)).get()!.status).toBe(
+      'needs_review',
+    );
+  });
+});
+
+describe('saveImport cover (T8)', () => {
+  it('imports the cover from the STORED draft URL (not the request) via safeFetch accept image', async () => {
+    const id = await start();
+    const sf = vi.fn(async (...[,]: [string, SafeFetchOptions?]): Promise<SafeFetchResult> => ({
+      status: 200,
+      headers: { 'content-type': 'image/png' },
+      body: await png(),
+      finalUrl: 'https://cdn.example.com/p.jpg',
+    }));
+    const r = await saveImport(
+      db,
+      a,
+      id,
+      draft({ import_cover: true, cover_image_url: 'http://169.254.169.254/evil.png' }),
+      deps(sf),
+    );
+    if (!r.ok || !('id' in r)) throw new Error('fail');
+    expect(sf).toHaveBeenCalledTimes(1);
+    expect(sf.mock.calls[0]![0]).toBe('https://cdn.example.com/p.jpg');
+    expect(sf.mock.calls[0]![1]).toMatchObject({ accept: 'image' });
+    const cover = getCoverPhoto(db, r.id)!;
+    expect(cover).toMatchObject({ width: 64, height: 32 });
+    expect(existsSync(join(dir, 'uploads', cover.filePath))).toBe(true);
+
+    // deleting the recipe removes the file
+    deleteRecipeFor(db, a, r.id, { uploadsDir: join(dir, 'uploads') });
+    expect(existsSync(join(dir, 'uploads', cover.filePath))).toBe(false);
+  });
+
+  it('a failed cover never blocks the save: recipe saved, cover_failed warning', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const id = await start();
+    const r = await saveImport(
+      db,
+      a,
+      id,
+      draft({ import_cover: true }),
+      deps(async () => {
+        throw new Error('network down');
+      }),
+    );
+    expect(r).toMatchObject({ ok: true, warnings: ['cover_failed'] });
+    expect(db.select().from(recipe).all()).toHaveLength(1);
+    expect(db.select().from(importJob).get()!.status).toBe('saved');
+  });
+
+  it('does not fetch a cover when import_cover is false', async () => {
+    const id = await start();
+    const sf = vi.fn();
+    await saveImport(db, a, id, draft({ import_cover: false }), deps(sf));
+    expect(sf).not.toHaveBeenCalled();
+  });
+
+  it('a non-boolean import_cover is a 422', async () => {
+    const id = await start();
+    expect(await saveImport(db, a, id, draft({ import_cover: 'yes' }), deps())).toMatchObject({
+      ok: false,
+      status: 422,
+    });
+  });
+});

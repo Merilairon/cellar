@@ -90,20 +90,45 @@ function insertSections(tx: Conn, recipeId: string, sections: RecipeTree['sectio
   });
 }
 
+/** Insert a recipe and its children using an open connection or transaction. Returns the id. */
+export function insertRecipeTree(conn: Conn, ownerId: string, tree: RecipeTree): string {
+  const now = nowIso();
+  const id = ulid();
+  conn
+    .insert(recipe)
+    .values({ ...tree.fields, id, ownerId, createdAt: now, updatedAt: now })
+    .run();
+  insertSections(conn, id, tree.sections);
+  return id;
+}
+
 /** Create a recipe and all children in one transaction; returns the new id. */
 export function createRecipe(db: Db, ownerId: string, tree: RecipeTree): string {
-  return db.transaction(
-    (tx) => {
-      const now = nowIso();
-      const id = ulid();
-      tx.insert(recipe)
-        .values({ ...tree.fields, id, ownerId, createdAt: now, updatedAt: now })
-        .run();
-      insertSections(tx, id, tree.sections);
-      return id;
-    },
-    { behavior: 'immediate' },
-  );
+  return db.transaction((tx) => insertRecipeTree(tx, ownerId, tree), { behavior: 'immediate' });
+}
+
+/**
+ * Duplicate lookup for imports: a recipe with this (already normalized) source URL among
+ * those the caller may see in lists (own, or `users`-visible). Another user's private recipe
+ * is never returned, so it cannot be revealed.
+ */
+export function findRecipeBySourceUrl(
+  db: Db,
+  normalizedUrl: string,
+  userId: string,
+): { id: string; title: string } | undefined {
+  return db
+    .select({ id: recipe.id, title: recipe.title })
+    .from(recipe)
+    .where(
+      and(
+        eq(recipe.sourceUrl, normalizedUrl),
+        or(eq(recipe.ownerId, userId), eq(recipe.visibility, 'users')),
+      ),
+    )
+    .orderBy(desc(recipe.updatedAt), desc(recipe.id))
+    .limit(1)
+    .get();
 }
 
 /**
