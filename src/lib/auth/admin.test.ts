@@ -1,7 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { openDb, type Db } from '@/lib/db/connection';
 import { runMigrations } from '@/lib/db/migrate';
-import { invite, passwordReset, session, user } from '@/lib/db/schema';
+import { createRecipe, getRecipeFull, listRecipeIdsByOwner } from '@/lib/db/recipes';
+import { invite, passwordReset, recipe, session, user } from '@/lib/db/schema';
+import { copyRecipe } from '@/lib/db/recipes';
+import { toTree } from '@/lib/recipes/service';
+import { recipeInputSchema } from '@/lib/recipes/schemas';
+import { SAMPLE_VANILLA_CAKE } from '@/lib/recipes/samples';
 import { deactivateUser, deleteUser, listUsersForAdmin } from './admin';
 import { deleteUserSchema } from './schemas';
 import { createSession, validateSession } from './session';
@@ -108,6 +113,78 @@ describe('deleteUser', () => {
       );
     }
     expect(db.select().from(user).all()).toHaveLength(3);
+  });
+});
+
+describe('deleteUser with recipes', () => {
+  const tree = () => toTree(recipeInputSchema.parse(SAMPLE_VANILLA_CAKE), 'grid');
+  const count = (table: string) =>
+    (db.$client.prepare(`select count(*) n from ${table}`).get() as { n: number }).n;
+
+  it("delete: removes the user's recipes and children; others' copies survive with copied_from_id null", () => {
+    setup();
+    const a = mk('a@x.test', 'admin');
+    const m = mk('m@x.test', 'member');
+    const mine = createRecipe(db, m.id, tree());
+    const keep = createRecipe(db, a.id, tree());
+    const copyOfMine = copyRecipe(db, mine, a.id)!;
+    expect(deleteUser(db, m.id, { recipes: 'delete' })).toBe('ok');
+    expect(getRecipeFull(db, mine)).toBeUndefined();
+    expect(getRecipeFull(db, keep)).toBeDefined();
+    expect(getRecipeFull(db, copyOfMine)?.copiedFromId).toBeNull();
+    expect(listRecipeIdsByOwner(db, a.id).sort()).toEqual([keep, copyOfMine].sort());
+    // Two recipes remain, two sections each; the deleted user's children are gone.
+    expect(count('section')).toBe(4);
+    expect(db.select().from(user).all()).toHaveLength(1);
+  });
+
+  it('reassign: moves every recipe to the target, keeping visibility and children', () => {
+    setup();
+    const a = mk('a@x.test', 'admin');
+    const m = mk('m@x.test', 'member');
+    const r1 = createRecipe(db, m.id, tree());
+    const r2 = createRecipe(db, m.id, tree());
+    expect(deleteUser(db, m.id, { recipes: 'reassign', reassignTo: a.id })).toBe('ok');
+    expect(listRecipeIdsByOwner(db, a.id).sort()).toEqual([r1, r2].sort());
+    expect(getRecipeFull(db, r1)?.sections).toHaveLength(2);
+    expect(db.select().from(user).all()).toHaveLength(1);
+  });
+
+  it('is atomic: a refused reassign or last-admin delete leaves recipes untouched', () => {
+    setup();
+    const a = mk('a@x.test', 'admin');
+    const m = mk('m@x.test', 'member');
+    const d = mk('d@x.test', 'member');
+    deactivateUser(db, d.id);
+    const rm = createRecipe(db, m.id, tree());
+    const ra = createRecipe(db, a.id, tree());
+    for (const reassignTo of ['nope', d.id, m.id]) {
+      expect(deleteUser(db, m.id, { recipes: 'reassign', reassignTo })).toBe(
+        'invalid_reassign_target',
+      );
+    }
+    expect(deleteUser(db, a.id, { recipes: 'delete' })).toBe('last_admin');
+    expect(getRecipeFull(db, rm)?.ownerId).toBe(m.id);
+    expect(getRecipeFull(db, ra)?.ownerId).toBe(a.id);
+    expect(count('recipe')).toBe(2);
+  });
+
+  it('deactivation does not touch recipes', () => {
+    setup();
+    mk('a@x.test', 'admin');
+    const m = mk('m@x.test', 'member');
+    const r = createRecipe(db, m.id, tree());
+    expect(deactivateUser(db, m.id)).toBe('ok');
+    expect(getRecipeFull(db, r)?.ownerId).toBe(m.id);
+    expect(db.select().from(recipe).all()).toHaveLength(1);
+  });
+
+  it('a user who owns recipes can no longer fail on the FK', () => {
+    setup();
+    mk('a@x.test', 'admin');
+    const m = mk('m@x.test', 'member');
+    createRecipe(db, m.id, tree());
+    expect(() => deleteUser(db, m.id, { recipes: 'delete' })).not.toThrow();
   });
 });
 

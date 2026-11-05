@@ -1,6 +1,6 @@
 import { and, asc, count, eq, isNull } from 'drizzle-orm';
 import type { Db } from './connection';
-import { session, user } from './schema';
+import { recipe, session, user } from './schema';
 
 export type User = typeof user.$inferSelect;
 
@@ -80,21 +80,25 @@ export type DeleteResult = 'ok' | 'not_found' | 'last_admin' | 'invalid_reassign
  * Delete a user; sessions, invites and password resets cascade via foreign keys
  * (reset `created_by` is set to null). Refuses, race-safely in one BEGIN IMMEDIATE
  * transaction, to delete the last active admin or to reassign to a missing,
- * deactivated or same user.
- * TODO(M2): when recipes exist, reassign or delete the user's recipes here, in this
- * same transaction, before the user row is removed.
+ * deactivated or same user. The user's recipes are handled in the same transaction,
+ * before the user row goes (`recipe.owner_id` is RESTRICT): `reassign` moves them to
+ * the target, `delete` removes them (children cascade; copies made by others keep
+ * existing with `copied_from_id = null`). Any refusal leaves everything untouched.
  */
 export function deleteUserGuarded(
   db: Db,
   id: string,
-  opts: { reassignTo?: string } = {},
+  opts: { recipes?: 'delete' | 'reassign'; reassignTo?: string } = {},
 ): DeleteResult {
   return db.transaction(
     (tx) => {
       const target = tx.select().from(user).where(eq(user.id, id)).get();
       if (!target) return 'not_found';
-      if (opts.reassignTo !== undefined) {
-        const to = tx.select().from(user).where(eq(user.id, opts.reassignTo)).get();
+      const reassign = opts.recipes === 'reassign' || opts.reassignTo !== undefined;
+      if (reassign) {
+        const to = opts.reassignTo
+          ? tx.select().from(user).where(eq(user.id, opts.reassignTo)).get()
+          : undefined;
         if (!to || to.deactivatedAt || to.id === id) return 'invalid_reassign_target';
       }
       if (target.role === 'admin' && !target.deactivatedAt) {
@@ -105,6 +109,11 @@ export function deleteUserGuarded(
             .where(and(eq(user.role, 'admin'), isNull(user.deactivatedAt)))
             .get()?.n ?? 0;
         if (admins <= 1) return 'last_admin';
+      }
+      if (reassign && opts.reassignTo !== undefined) {
+        tx.update(recipe).set({ ownerId: opts.reassignTo }).where(eq(recipe.ownerId, id)).run();
+      } else {
+        tx.delete(recipe).where(eq(recipe.ownerId, id)).run();
       }
       tx.delete(session).where(eq(session.userId, id)).run();
       tx.delete(user).where(eq(user.id, id)).run();

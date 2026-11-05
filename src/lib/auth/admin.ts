@@ -30,13 +30,15 @@ export type RecipeChoice = { recipes: 'delete' } | { recipes: 'reassign'; reassi
 
 /**
  * Permanently delete a user (sessions, invites, resets cascade). The recipe choice is
- * validated here; it is not persisted until recipes exist.
- * TODO(M2): pass the choice to the db layer to reassign/delete recipes.
+ * applied atomically by the db layer: `delete` removes the user's recipes, `reassign`
+ * moves them to `reassignTo` (validated there before anything changes).
  */
 export function deleteUser(db: Db, targetId: string, choice: RecipeChoice): DeleteResult {
   return deleteUserGuarded(
     db,
     targetId,
-    choice.recipes === 'reassign' ? { reassignTo: choice.reassignTo } : {},
+    choice.recipes === 'reassign'
+      ? { recipes: 'reassign', reassignTo: choice.reassignTo }
+      : { recipes: 'delete' },
   );
 }

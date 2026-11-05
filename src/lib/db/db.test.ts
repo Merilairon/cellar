@@ -28,12 +28,21 @@ const names = (db: Db) =>
     .sort();
 
 describe('migrations', () => {
-  it('creates the DB file (and parent dir) and applies the four tables', () => {
+  it('creates the DB file (and parent dir) and applies the v0.1 and recipe tables', () => {
     const path = join(tmp(), 'nested', 'app.db');
     const db = track(openDb(path));
     runMigrations(db);
     expect(existsSync(path)).toBe(true);
-    expect(names(db)).toEqual(['invite', 'password_reset', 'session', 'user']);
+    expect(names(db)).toEqual([
+      'ingredient',
+      'invite',
+      'password_reset',
+      'recipe',
+      'section',
+      'session',
+      'step',
+      'user',
+    ]);
     expect(db.$client.pragma('journal_mode', { simple: true })).toBe('wal');
     expect(db.$client.pragma('foreign_keys', { simple: true })).toBe(1);
   });
@@ -46,7 +55,7 @@ describe('migrations', () => {
     const n = db2.$client.prepare('SELECT count(*) AS n FROM __drizzle_migrations').get() as {
       n: number;
     };
-    expect(n.n).toBe(1);
+    expect(n.n).toBe(2);
   });
 
   it('enforces uniqueness, defaults, ULID ids and FK cascade', () => {
