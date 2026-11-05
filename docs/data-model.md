@@ -162,7 +162,9 @@ Either measure may be null; the missing one is derived by the conversion engine 
 | recipe_id | text FK recipe | nullable, `ON DELETE SET NULL`; set on save |
 | created_at / updated_at | text | |
 
-Indexes: `import_job(user_id, created_at)`, `import_job(recipe_id)`. CHECK constraints enforce the three enums. `recipe(source_url)` is indexed (migration `0003`) for duplicate detection; the stored value is the normalized form (see `src/lib/import/source-url.ts`).
+Indexes: `import_job(user_id, created_at)`, `import_job(recipe_id)`. CHECK constraints enforce the three enums. `recipe(source_url)` is indexed (migration `0003`) for duplicate detection; `recipe.source_url` is stored in canonical form **with the scheme the user entered** (`storedSourceUrl` in `src/lib/import/source-url.ts`), so an http-only site keeps a working link. Duplicate detection uses a separate comparison key (`normalizeSourceUrl`): always `https`, host lowercased (`www.` kept), fragment, default port, `utm_*`, `fbclid` and `gclid` removed, remaining query parameters sorted, trailing slash removed. The duplicate lookup matches both stored schemes. Rows written by v0.3.0 (always `https`) stay as they are.
+
+v0.3.1 added no migration, table or column. The mapping proposal lives inside `draft_json` (see §3).
 
 ### recipe_fts
 FTS5 virtual table over `title`, `description`, ingredient names, tags, notes; kept in sync by triggers.
@@ -209,7 +211,7 @@ row \ col   (banner rows span full width)
 
 ## 3. Import Pipeline
 
-> Status: v0.3.0 implements the static path only (fetch, JSON-LD, normalize, paste fallback, review, save in list view). Headless rendering and the auto-mapper below are planned for v0.3.2 and v0.3.1.
+> Status: v0.3.0 implemented the static path (fetch, JSON-LD, normalize, paste fallback, review, save). v0.3.1 implements the auto-mapper below (pure TypeScript in `src/lib/import/map-*.ts`, no LLM, no network, no new dependency). Headless rendering is planned for v0.3.2. Microdata (`itemprop`) extraction was not built in v0.3.1.
 
 ```
 URL ─► SSRF check ─► fetch (static) ─► JSON-LD Recipe found? ─┐
@@ -244,6 +246,28 @@ URL ─► SSRF check ─► fetch (static) ─► JSON-LD Recipe found? ─┐
 5b. An ingredient mentioned with a partial quantity in two steps ("half the sugar") is split into two rows (`split_group_id`) only when the quantities are resolvable; otherwise keep one row and lower the confidence.
 6. Compute a confidence score; low confidence leaves `view_mode = list`.
 
+**`Draft.mapping` (v0.3.1)**
+
+`draft_json` keeps `sections` exactly as the normalizer produced them (page order, one section, null spans, list mode) and adds `mapping: MappingProposal | null` (types in `src/lib/import/map-types.ts`):
+
+```
+mapping = {
+  version: 1,
+  confidence: number,            // 0..1, rounded to 2 decimals
+  level: 'high' | 'medium' | 'low',
+  sections: RecipeInput['sections'],  // the proposed grid: reordered rows, spans, banners, splits
+  warnings: MappingWarning[],
+  signals: { cov, unamb, verbs, splitOk, secFactor, groupRefs, columnSteps, distinctSpans }
+}
+```
+
+- `mapping` is `null` when the mapper did not run or its output was rejected (error, operation budget, too many sections, output failing `validateRecipeGrid` or the recipe schema, proposal over 512 KB or draft over 1 MB). Rows stored before v0.3.1 read back as `null` (`readMapping` re-validates the block, so a tampered block also reads as `null`). `null` behaves as in v0.3.0.
+- Thresholds (`CONFIDENCE_THRESHOLDS` in `map-confidence.ts`): `high` >= 0.70, `medium` 0.40 to below 0.70, `low` below 0.40, applied to the rounded score. Score = coverage squared times a weighted sum of unambiguous matches, recognized verbs and resolved splits, times a section factor, minus a group-reference penalty, with caps (fewer than two column steps 0.50, a single distinct span 0.55, more than 30 percent of ingredients unmatched 0.60, no recognized verb at all 0.39).
+- Warning codes (a closed set; the UI maps each to a message, never shows free text): `ingredient_unmentioned:<name>`, `ambiguous_name:<token>`, `split_unresolved:<name>`, `group_reference`, `step_without_ingredients`, `sections_from_ingredients_only`, `section_merged`, `ingredient_shared_across_sections`, `too_many_sections`, `input_truncated`, `time_ambiguous`, `mapping_invalid`, `mapping_budget`, `mapping_too_large`, `warnings_more:<n>`. At most 10 of each data-carrying family are kept; the rest are counted in `warnings_more`.
+- Split groups in a proposal carry temporary ids (`split:<name>:<n>`); the save path rewrites client-supplied group ids to fresh ULIDs.
+- Saving: the review screen sends whatever sections the user ended with, through the normal recipe schema. When a proposal was offered it also sends `view_mode`; the API still enforces valid spans for `grid`.
+- Caps at mapper entry: 200 ingredients, 100 steps, 4000 characters per step, 120 000 step characters in total, 800 tokens per step, 6 sections, and a deterministic operation budget of 2 000 000.
+
 **Safety**
 The instance is internet-exposed (PRD §6), so this is a hard requirement. Block private/loopback/link-local IPs after DNS resolution, limit redirects (≤ 5), response size (≤ 5 MB), timeout (10 s static / 30 s headless), allow only http(s) on ports 80 and 443 (implemented in v0.3.0 for the static path). **Headless sidecar:** its own container on an isolated Docker network with no route to the host, LAN, or app database; intercept every browser request and apply the same IP checks (resolve once, then pin the IP to defeat DNS rebinding); disable downloads, `file://` and extensions; fresh context per job; memory/CPU limits; hard 30 s kill.
 
@@ -267,7 +291,7 @@ The instance is internet-exposed (PRD §6), so this is a hard requirement. Block
 | POST/DELETE | /api/recipes/:id/share-link | Create / rotate / revoke the public link token |
 | POST | /api/recipes/:id/copy | **Save a copy** of a visible recipe into the caller's book |
 | GET | /r/:share_token | Public read-only page |
-| POST | /api/import | Start import `{url}` or `{text}` (exactly one; text max 500 KB) → `{ id, status, method, draft, warnings, error_code, duplicate }`. A failed fetch or no recipe returns 200 with `status: 'failed'` and `error_code`; 4xx is for bad input (400, 401, 403, 415, 422) and 429 with `Retry-After` |
+| POST | /api/import | Start import `{url}` or `{text}` (exactly one; text max 500 KB) → `{ id, status, method, draft, warnings, error_code, duplicate, confidence, mapping_level }` (`confidence` is `draft.mapping.confidence` or `null`; `mapping_level` is `high`, `medium`, `low` or `null`; both are derived from `draft_json`, not stored in their own columns). A failed fetch or no recipe returns 200 with `status: 'failed'` and `error_code`; 4xx is for bad input (400, 401, 403, 415, 422) and 429 with `Retry-After` |
 | GET | /api/import/:id | Owner only: restore a review after reload |
 | POST | /api/import/:id/save | Persist the edited draft (same schema as recipe create, plus `import_cover`); 201 `{ id }`, 404 if not the caller's job, 409 if already saved |
 | GET | /api/photos/:id | Authenticated cover image, gated by the recipe's read permission |

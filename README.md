@@ -2,7 +2,7 @@
 
 A self-hosted recipe book for you and the people you invite. Next.js 16, SQLite, one container.
 
-This is v0.3.0. It builds on v0.2 (manual recipes with a grid view and a list view) and adds importing a recipe from a web address or pasted text. Earlier versions added accounts, invites, password recovery, security hardening and Docker packaging. It runs as a single process with a single SQLite file.
+This is v0.3.1. It builds on v0.2 (manual recipes with a grid view and a list view), v0.3.0 (importing a recipe from a web address or pasted text) and adds an automatic step-to-ingredient grid mapper for imports. Earlier versions added accounts, invites, password recovery, security hardening and Docker packaging. It runs as a single process with a single SQLite file.
 
 ## Features
 
@@ -13,10 +13,10 @@ This is v0.3.0. It builds on v0.2 (manual recipes with a grid view and a list vi
 - **Phone, tablet and desktop layouts.** Tested at 375, 768 and 1280 px. On a phone the ingredient column stays fixed, a scroll cue shows that the grid scrolls sideways, and tapping a step opens it in a bottom sheet.
 - **Sharing and copies.** The owner (or an admin) can share a recipe read-only with all signed-in users. Another user can save an independent private copy.
 - **User deletion.** When an admin deletes a user, they choose to delete that user's recipes or reassign them to another active user.
-- **Recipe import (v0.3.0).** Import a recipe from a web address or from pasted text, review and edit it, then save it. See [Import a recipe](#import-a-recipe).
+- **Recipe import (v0.3.0) with automatic grid mapping (v0.3.1).** Import a recipe from a web address or from pasted text, review and edit it, then save it. Cellar proposes which ingredients each step uses and shows a grid preview. See [Import a recipe](#import-a-recipe).
 - **Sample recipes.** `npm run seed` adds two self-written samples (see [Sample data](#sample-data)).
 
-Not yet available: automatic grid mapping of imported steps (planned v0.3.1), pages that need JavaScript to show the recipe (planned v0.3.2), search and tags, unit conversion and scaling, a photo gallery, notes and ratings, public links, and the drag-and-drop grid editor.
+Not yet available: pages that need JavaScript to show the recipe (planned v0.3.2), search and tags, unit conversion and scaling, a photo gallery, notes and ratings, public links, and the drag-and-drop grid editor.
 
 ## Routes
 
@@ -44,7 +44,29 @@ Open **Import** (`/import`). There are two ways in.
 
 Pasted text is limited to 500,000 characters. A paste import makes no network request.
 
-Either way you land on a review screen. Everything is editable, tags found on the page are shown but not saved yet, and a banner appears when you already have a recipe from the same address (you can still choose **Import anyway**). Imported recipes are saved in list view; nothing is written to your recipes until you press **Save imported recipe**. A failed import never creates a recipe. If **Include the cover image** is checked, the image is downloaded when you save, re-encoded to WebP at up to 1600 px with metadata removed, and stored under the uploads directory. The cover is not displayed in the app yet (planned with the media work in v0.4.2).
+Either way you land on a review screen. Everything is editable, tags found on the page are shown but not saved yet, and a banner appears when you already have a recipe from the same address (you can still choose **Import anyway**). Nothing is written to your recipes until you press **Save imported recipe**. A failed import never creates a recipe. If **Include the cover image** is checked, the image is downloaded when you save, re-encoded to WebP at up to 1600 px with metadata removed, and stored under the uploads directory. The cover is not displayed in the app yet (planned with the media work in v0.4.2).
+
+### Automatic grid mapping
+
+After the recipe is read, Cellar tries to work out which ingredients each step uses, so the recipe can be saved as a grid instead of a plain list. It does this with fixed rules on your server: it matches ingredient names in the step text (singular and plural, a small synonym list, parentheticals ignored), orders the ingredient rows by first use, and gives each step the rows combined so far. Steps before the first ingredient ("Preheat the oven") become top banners, trailing steps with no new ingredient become bottom banners, section headings ("For the frosting") start new sections, and an ingredient used in two steps ("half the sugar now") is split into two rows when the amounts can be worked out. Nothing is sent to an AI service. The step wording is read in English only.
+
+Every proposal gets a match score from 0 to 1 and a level:
+
+| Level                         | Score              | What you see on the review screen                                                                                         |
+| ----------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| High, "Good match"            | 0.70 and above     | The grid is applied and the screen opens with **Grid** selected, with a grid preview above the form.                      |
+| Medium, "Check the mapping"   | 0.40 to below 0.70 | The screen opens in **List** (page order, no row ranges). **Preview as grid** applies the proposal so you can look at it. |
+| Low, "Could not map reliably" | below 0.40         | The screen opens in **List**. **Try the grid anyway** is available but secondary.                                         |
+
+The badge is text plus an icon, and **Why this score** lists the reasons (for example an ingredient that no step mentions, or a name such as "sugar" that could mean two ingredients). If the mapper could not run at all (too long, too many sections, or a failed check), there is no badge and the screen behaves as in v0.3.0.
+
+To correct a mapping, change the ingredient row numbers (first and last row) in a step below the preview; the preview updates as you type. Do not reorder the ingredient lines, change the numbers instead. **Reset to proposal** restores the suggestion and **Use list view instead** goes back to the page order. Both ask before replacing edits to ingredients and steps; title and other details are kept. The score describes the proposal, not your edits.
+
+Saving as a grid requires every step to have a valid row range; otherwise the API refuses it and the recipe stays a list. List view is always available: choose it and save, and the recipe is stored exactly as imported. An imported recipe saved as a list can be converted later with **Convert to grid** on its page.
+
+Limits: the mapper works on at most 200 ingredients and 100 steps (anything longer is cut, with a note), at most 6 sections, and a fixed amount of work per recipe. A proposal that is too large to keep with the draft is dropped. These limits keep untrusted text from tying up the server.
+
+Known weaknesses: spelling variants between the ingredient list and the steps ("yoghurt" and "yogurt"), ingredient names that are also cooking verbs, recipes that run two parallel preparations, and any language other than English. Such recipes usually end at medium or low and stay in list view, but a high score is still a guess: always look at the preview.
 
 ### Error codes
 
@@ -84,13 +106,20 @@ What this has not been tested against: a real network. TLS certificate and SNI h
 - The imported draft is kept in the `import_job` table (`draft_json`) and is not pruned automatically.
 - Raw HTML is **not** stored unless `KEEP_RAW_HTML=true`. When enabled, files are written to `import-raw/` next to the uploads directory and are never deleted automatically.
 - Covers are stored in the uploads directory (`UPLOADS_DIR`; `/data/uploads` in Docker, inside the `app-data` volume, so the [backup](#backup) covers them).
-- `source_url` is stored in a normalized form (host lowercased, fragment and tracking parameters removed, `http` and `https` treated as equal) and is currently always saved with `https`.
+- `source_url` is stored in a normalized form (host lowercased, fragment, default port and tracking parameters removed, query parameters sorted, trailing slash removed) with the scheme you entered, so an `http`-only site keeps a working link. For the duplicate warning, `http` and `https` are treated as equal.
+- The mapping proposal is part of the draft in `draft_json`; no new table or column was added in v0.3.1.
 
 ### Import fixture report
 
 `npm run test:import` runs the import pipeline offline (a fake fetcher, no network) over the 44 hand-written fixtures in `tests/fixtures/import/` and prints a table and a success rate. It currently reports 34 of 34 valid drafts (100 percent, target 85 percent), 5 of 5 deliberate rejections, and 5 out-of-slice pages.
 
 What the 100 percent means: every fixture that a static JSON-LD reader should handle produces a draft that passes the recipe schema, and the pages that must be rejected are rejected. What it does not mean: that 100 percent of real recipe sites import. The fixtures are small hand-written pages written for this reader, so they cannot predict real-world markup. The 5 out-of-slice pages (3 JavaScript-only, 2 microdata-only) are excluded from the rate by definition and currently produce `no_recipe`. Expect a lower rate on real sites; the report is a regression guard, not a coverage measurement.
+
+### Mapper accuracy report
+
+`npm run test:mapper` runs the mapper offline over the hand-written fixtures in `tests/fixtures/mapper/` (53 files) plus five references derived from the sample recipes, and prints a per-fixture table, calibration buckets and pass/fail gates. `npm run test:import` prints the same section. It exits 1 when a gate fails. The last run on this branch: references 5 of 5 exact, clean set 26 of 26 exact (110 of 110 step spans), hard set 13 of 15 exact, 0 recipes wrong at a score of 0.70 or more, negatives 6 of 6 ended as list or no proposal.
+
+What the numbers mean: the fixtures were written by the same people who wrote the mapper, so the clean set at 100 percent is a regression guard, not an accuracy estimate. The hard set is the honest signal: it holds the ambiguous cases, and the two it gets wrong (a "yoghurt" versus "yogurt" spelling difference, and steps with no recognisable verbs) both score below 0.70, which is the behaviour we want. The "no confident wrong answer" gate is only as strong as the fixtures. The mapper has not been measured on real recipe pages. Expect real pages to score lower and to need correction more often.
 
 Imports do not use any AI or LLM service.
 
@@ -128,6 +157,7 @@ The database is created at `DATABASE_PATH` (`./data/app.db` in `.env.example`) a
 | `npm test`                           | Unit tests (Vitest)                                                                                                                                                                                                                                                                   |
 | `npm run test:e2e`                   | End-to-end tests (Playwright), including the visual and accessibility specs. Builds the app and serves it on port 3100 with a throwaway `data/e2e.db`. If browsers are missing, run `npx playwright install chromium` first. See [Visual end-to-end tests](#visual-end-to-end-tests). |
 | `npm run test:import`                | Import fixture report: runs the pipeline offline over `tests/fixtures/import/` and prints the success rate (exits 1 below 85 percent). See the README in that folder.                                                                                                                 |
+| `npm run test:mapper`                | Auto-mapper accuracy report over `tests/fixtures/mapper/` (exits 1 when a gate fails). See [Mapper accuracy report](#mapper-accuracy-report).                                                                                                                                         |
 | `npm run seed`                       | Insert the two sample recipes. Dev and demo only; see [Sample data](#sample-data).                                                                                                                                                                                                    |
 | `npm run lint` / `npm run typecheck` | ESLint / TypeScript                                                                                                                                                                                                                                                                   |
 
@@ -316,7 +346,7 @@ Deactivated accounts are not reactivated: the command exits with an error for th
 
 ## Known limitations
 
-- **Import covers only.** Cover images are stored but not displayed in the UI until v0.4.2. Imported recipes have no auto-mapped grid until v0.3.1, and JavaScript-only or microdata-only pages cannot be imported until v0.3.1/v0.3.2.
+- **Import covers only.** Cover images are stored but not displayed in the UI until v0.4.2. The automatic grid mapping is a proposal measured only on hand-written fixtures, works for English only, and there is no drag-and-drop grid editor until v0.4.1 (correct a mapping by editing row numbers). JavaScript-only pages cannot be imported until v0.3.2, and microdata-only pages are not read (the microdata extractor was not built in v0.3.1).
 - **Raw HTML and import drafts are never pruned.** See [Import a recipe](#import-a-recipe).
 - **Rate limiting is in memory.** Counters reset when the app restarts and are not shared between processes.
 - **Single process only.** Because of the in-memory rate limiter and the single SQLite file, run exactly one app instance.

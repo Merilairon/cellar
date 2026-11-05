@@ -15,8 +15,8 @@
 | --- | --- | --- | --- |
 | 1 | Clicks **Import** and pastes a URL | Validates URL, shows progress ("Fetching…") | Import dialog |
 | 2 | Waits | Fetches page, finds JSON-LD, parses ingredients/steps, auto-maps grid | Progress indicator |
-| 3 | Sees **review screen** | Editable draft: title, servings, ingredients, grid preview with confidence badge | Review grid |
-| 4 | Fixes a span (drags a step's end handle), renames a step label | Live preview updates | Grid editor |
+| 3 | Sees **review screen** | Editable draft: title, servings, ingredients, grid preview with confidence badge. *Built in v0.3.1 (03b).* | Review grid |
+| 4 | Fixes a span (drags a step's end handle), renames a step label | Live preview updates. *Dragging a handle is a v0.4.1 (04b) feature. In v0.3.1 you fix a span by typing the first and last ingredient row in the step; the preview updates as you type.* | Grid editor |
 | 5 | Adds tags, picks visibility | | Form |
 | 6 | Clicks **Save** | Recipe saved, opens grid view | Recipe page |
 
@@ -27,7 +27,7 @@
 - *Invalid/private-network URL:* reject with clear message (SSRF guard).
 - *Duplicate (same source URL exists):* warn and link to existing recipe.
 - *Ingredient line unparseable ("salt, to taste"):* keep as raw text with no quantity.
-- *Low mapping confidence:* save in list view, banner suggests "Convert to grid".
+- *Low mapping confidence:* save in list view, banner suggests "Convert to grid". *In v0.3.1 the review screen opens in list view with a "Could not map reliably" badge and a secondary "Try the grid anyway" action; the recipe page's existing **Convert to grid** is the later route. A banner that suggests it is 04b.*
 - *Timeout:* offer retry and paste fallback.
 
 ## Journey 2 — Cook from the grid view (Marie, phone)
