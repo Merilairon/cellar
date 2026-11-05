@@ -3,6 +3,15 @@ import { isValidProxyEntry } from '@/lib/security/proxy-trust';
 
 const isProd = process.env.NODE_ENV === 'production';
 
+const PLACEHOLDER_SECRETS = new Set(['changeme', 'replace-with-at-least-32-random-characters']);
+
+function isPlaceholderSecret(v: string): boolean {
+  const l = v.toLowerCase();
+  return (
+    PLACEHOLDER_SECRETS.has(l) || /^replace-with|^change-?me|^your-/.test(l) || /^(.)\1*$/.test(v)
+  );
+}
+
 const posInt = (def: number) => z.coerce.number().int().positive().default(def);
 
 function rateLimitShape() {
@@ -17,7 +26,13 @@ function rateLimitShape() {
 
 const schema = z.object({
   DATABASE_PATH: z.string().min(1).default('/data/app.db'),
-  SESSION_SECRET: z.string().min(32),
+  SESSION_SECRET: z
+    .string()
+    .min(32)
+    .refine(
+      (v) => !isProd || !isPlaceholderSecret(v),
+      'SESSION_SECRET is a known placeholder; set a random value (e.g. openssl rand -base64 48)',
+    ),
   BASE_URL: (isProd ? z.url() : z.url().default('http://localhost:3000')).refine(
     (v) => new URL(v).pathname === '/' && !v.endsWith('/'),
     'BASE_URL must have no path and no trailing slash',
