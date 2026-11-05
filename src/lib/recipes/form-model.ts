@@ -57,6 +57,10 @@ export type FormState = {
   sections: FormSection[];
 };
 
+// Keys of rows that exist at first render are derived from their index (`s0`, `s0-t1`), the
+// same on the server and in the browser. `nextKey` is for rows created in event handlers
+// only (add step, add section); it must never run while rendering, because a module counter
+// differs between the server process and the client and causes a hydration mismatch.
 let counter = 0;
 export const nextKey = (): string => `k${++counter}`;
 
@@ -73,8 +77,8 @@ export const emptyStep = (kind: StepKind = 'column'): FormStep => ({
   minutesMax: '',
 });
 
-export const emptySection = (): FormSection => ({
-  key: nextKey(),
+export const emptySection = (key: string = nextKey()): FormSection => ({
+  key,
   title: '',
   ingredientsText: '',
   steps: [],
@@ -91,7 +95,7 @@ export const emptyForm = (): FormState => ({
   sourceName: '',
   sourceUrl: '',
   visibility: 'private',
-  sections: [emptySection()],
+  sections: [emptySection('s0')],
 });
 
 type RecipeLike = {
