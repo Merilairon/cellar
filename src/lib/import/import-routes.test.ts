@@ -256,3 +256,54 @@ describe('POST /api/import/:id/save', () => {
     expect(db.select().from(recipe).all()).toHaveLength(0);
   });
 });
+
+describe('request body caps (413)', () => {
+  it('rejects an oversize Content-Length on /api/import before parsing', async () => {
+    const req = post(null, { ...same, 'content-length': String(2 * 1024 * 1024) }, '{}');
+    const res = await POST(req);
+    expect(res.status).toBe(413);
+    expect(state.fetch).not.toHaveBeenCalled();
+  });
+
+  it('rejects an oversize streamed body with no Content-Length', async () => {
+    const big = JSON.stringify({ text: 'x'.repeat(1024 * 1024 + 10) });
+    const res = await POST(post(null, same, big));
+    expect(res.status).toBe(413);
+  });
+
+  it('applies a tighter cap to save', async () => {
+    const big = JSON.stringify({ title: 'x'.repeat(300 * 1024) });
+    const res = await SAVE(
+      new Request('http://localhost:3100/api/import/x/save', {
+        method: 'POST',
+        headers: same,
+        body: big,
+      }),
+      ctx('x'),
+    );
+    expect(res.status).toBe(413);
+  });
+});
+
+describe('busy limiter', () => {
+  it('returns 503 with Retry-After and leaves no job in fetching', async () => {
+    const { createConcurrencyLimiter } = await import('./limiter');
+    const tiny = createConcurrencyLimiter(1, { maxQueue: 0, retryAfterSec: 9 });
+    let release!: () => void;
+    const hold = tiny(() => new Promise<void>((r) => (release = r)));
+    (globalThis as { __importFetchLimiter?: unknown }).__importFetchLimiter = tiny;
+    const res = await POST(post({ url: 'https://example.com/p' }));
+    expect(res.status).toBe(503);
+    expect(res.headers.get('retry-after')).toBe('9');
+    release();
+    await hold;
+    (globalThis as { __importFetchLimiter?: unknown }).__importFetchLimiter = undefined;
+    expect(
+      db
+        .select()
+        .from(importJob)
+        .all()
+        .map((j) => j.status),
+    ).toEqual(['failed']);
+  });
+});
