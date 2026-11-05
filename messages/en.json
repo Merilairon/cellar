@@ -112,7 +112,14 @@
   },
   "recipes": {
     "title": "Recipes",
-    "empty": "No recipes yet."
+    "emptyTitle": "Your recipe book is empty",
+    "empty": "Add your first recipe by hand, or import one from a web page.",
+    "create": "New recipe",
+    "import": "Import",
+    "noTags": "No tags yet",
+    "updated": "Updated {date}",
+    "sharedBy": "Shared by {name}",
+    "sharedBadge": "Shared with all users"
   },
   "import": {
     "title": "Import",
@@ -134,5 +141,128 @@
   },
   "errors": {
     "rateLimited": "Too many attempts. Try again later."
+  },
+  "recipe": {
+    "section": "Section {n}",
+    "sharedNotice": "Shared by {name}. This recipe is read-only. Save a copy to edit your own version.",
+    "meta": {
+      "servings": "Serves {amount}",
+      "servingsLabeled": "Serves {amount} {label}",
+      "prep": "Prep {minutes} min",
+      "cook": "Cook {minutes} min",
+      "source": "Source:"
+    },
+    "step": {
+      "timeRange": "{min} to {max} min",
+      "timeSingle": "{min} min",
+      "noDetail": "No further detail for this step.",
+      "close": "Close"
+    },
+    "grid": {
+      "region": "{title}: ingredient grid, scrollable",
+      "caption": "{title}: ingredients and the steps that use them",
+      "ingredientsHeader": "Ingredient",
+      "stepHeader": "Step {n}: {label}",
+      "stepRow": "Uses {name}.",
+      "stepRows": "Uses {from} to {to}.",
+      "scrollHint": "{count, plural, one {# step} other {# steps}}, scroll sideways"
+    },
+    "list": {
+      "ingredients": "Ingredients",
+      "steps": "Steps"
+    },
+    "view": {
+      "label": "View",
+      "grid": "Grid",
+      "list": "List",
+      "gridUnavailableOwner": "Grid view needs a row range for every step. Use Convert to grid to add them.",
+      "gridUnavailable": "This recipe has no grid layout yet, so it is shown as a list."
+    },
+    "convert": {
+      "open": "Convert to grid",
+      "title": "Convert to grid",
+      "help": "For each step, enter the first and last ingredient row it works on (row numbers are in the list below).",
+      "firstRow": "First row",
+      "lastRow": "Last row",
+      "save": "Save as grid",
+      "fix": "Fix the highlighted row numbers and try again."
+    },
+    "actions": {
+      "edit": "Edit",
+      "delete": "Delete",
+      "confirmDelete": "Delete this recipe?",
+      "deleteYes": "Yes, delete",
+      "cancel": "Cancel",
+      "saveCopy": "Save a copy"
+    },
+    "visibility": {
+      "private": "Private (only me)",
+      "users": "Shared with all users (read-only)",
+      "shareLabel": "Share with all users (read-only)",
+      "nowShared": "Shared with all users.",
+      "nowPrivate": "Now private."
+    },
+    "form": {
+      "newTitle": "New recipe",
+      "editTitle": "Edit recipe",
+      "title": "Title",
+      "description": "Description",
+      "servings": "Servings",
+      "servingsLabel": "Servings label (for example, cookies)",
+      "prepMinutes": "Prep time (minutes)",
+      "cookMinutes": "Cook time (minutes)",
+      "sourceName": "Source name",
+      "sourceUrl": "Source URL",
+      "visibility": "Visibility",
+      "sections": "Sections",
+      "sectionHeading": "Section {n}",
+      "sectionTitle": "Section {n} title (optional)",
+      "addSection": "Add section",
+      "removeSection": "Remove section",
+      "ingredients": "Ingredients",
+      "ingredientsHint": "One ingredient per line, for example 1 cup (200 g) sugar. Row numbers below are used by the steps.",
+      "preview": "How each line is read",
+      "row": "Row {n}",
+      "unparsed": "not recognised, kept as written",
+      "steps": "Steps",
+      "stepsHint": "Banner steps span the full width. Column steps cover a range of ingredient rows; leave the rows empty to save the recipe as a list.",
+      "stepLegend": "Step {n}",
+      "addStep": "Add step",
+      "removeStep": "Remove step",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "step": {
+        "kind": "Kind",
+        "bannerTop": "Banner at the top",
+        "column": "Column step",
+        "bannerBottom": "Banner at the bottom",
+        "label": "Label",
+        "detail": "Detail",
+        "rowStart": "First ingredient row",
+        "rowEnd": "Last ingredient row",
+        "tempF": "Temperature (°F)",
+        "tempC": "Temperature (°C)",
+        "minutesMin": "Time, from (minutes)",
+        "minutesMax": "Time, to (minutes)"
+      },
+      "save": "Save recipe",
+      "errorSummary": "{count, plural, one {# field needs attention} other {# fields need attention}}"
+    },
+    "errors": {
+      "generic": "This value is not valid.",
+      "too_small": "This value is missing or too small.",
+      "too_big": "This value is too long or too large.",
+      "invalid_type": "Enter a valid value.",
+      "invalid_url": "Enter a web address starting with http:// or https://.",
+      "minutes_order": "The second time must not be less than the first.",
+      "span_incomplete": "Enter both the first and last row, or leave both empty.",
+      "span_required_for_grid": "A row range is required for grid view.",
+      "row_order": "The last row must not be before the first row.",
+      "row_out_of_range": "This row does not exist. Use a row number from the ingredient list.",
+      "no_rows": "Add ingredients before giving a step a row range.",
+      "banner_has_span": "Banner steps do not take a row range.",
+      "split_group_cross_section": "A split ingredient must stay in one section.",
+      "saveFailed": "The recipe could not be saved. Check your connection and try again."
+    }
   }
 }

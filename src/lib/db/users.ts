@@ -81,7 +81,7 @@ export type DeleteResult = 'ok' | 'not_found' | 'last_admin' | 'invalid_reassign
  * (reset `created_by` is set to null). Refuses, race-safely in one BEGIN IMMEDIATE
  * transaction, to delete the last active admin or to reassign to a missing,
  * deactivated or same user. The user's recipes are handled in the same transaction,
- * before the user row goes (`recipe.owner_id` is RESTRICT): `reassign` moves them to
+ * before the user row goes (the owner_id FK on `recipe` is RESTRICT): `reassign` moves them to
  * the target, `delete` removes them (children cascade; copies made by others keep
  * existing with `copied_from_id = null`). Any refusal leaves everything untouched.
  */

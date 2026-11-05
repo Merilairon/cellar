@@ -23,3 +23,270 @@
     color-scheme: dark;
   }
 }
+
+/* ---------- Recipe grid (visual reference: docs/prototype/grid-prototype.html) ---------- */
+:root {
+  --rg-surface: #ffffff;
+  --rg-ink: #1f2a1f;
+  --rg-muted: #4d5b4d;
+  --rg-line: #5b9a3c;
+  --rg-banner: #eef5e9;
+  --rg-empty: #f4f7f1;
+  --rg-step: #e3f0da;
+  --rg-accent: #3f7a25;
+  --rg-focus: #1d5fd1;
+}
+:root[data-theme='dark'] {
+  --rg-surface: #1d241d;
+  --rg-ink: #e8efe6;
+  --rg-muted: #a9bba6;
+  --rg-line: #6fb04c;
+  --rg-banner: #243024;
+  --rg-empty: #1a211a;
+  --rg-step: #2c4128;
+  --rg-accent: #7fc65a;
+  --rg-focus: #7aa7ff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --rg-surface: #1d241d;
+    --rg-ink: #e8efe6;
+    --rg-muted: #a9bba6;
+    --rg-line: #6fb04c;
+    --rg-banner: #243024;
+    --rg-empty: #1a211a;
+    --rg-step: #2c4128;
+    --rg-accent: #7fc65a;
+    --rg-focus: #7aa7ff;
+  }
+}
+
+/* The wrapper is the size container: 100cqw is the visible width, not the scrolling width. */
+.rg-wrap {
+  container-type: inline-size;
+  position: relative;
+}
+.rg-scroller {
+  /* Containing block for sr-only (absolute) text inside cells, so it cannot widen the page. */
+  position: relative;
+  overflow-x: auto;
+  border: 2px solid var(--rg-line);
+  border-radius: 6px;
+  background: var(--rg-surface);
+  color: var(--rg-ink);
+  /* Keep a focused step out from under the sticky ingredient column. */
+  scroll-padding-inline-start: 250px;
+}
+.rg-scroller:focus-visible,
+.rg-stepbtn:focus-visible {
+  outline: 3px solid var(--rg-focus);
+  outline-offset: 2px;
+}
+.rg-stepbtn:focus-visible {
+  outline-offset: -4px;
+}
+.rg-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+  min-width: max-content;
+}
+.rg-table th,
+.rg-table td {
+  border-right: 1px solid var(--rg-line);
+  border-bottom: 1px solid var(--rg-line);
+  padding: 8px 10px;
+  vertical-align: middle;
+  text-align: left;
+  font-weight: normal;
+}
+.rg-table tr > :last-child {
+  border-right: 0;
+}
+.rg-table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+/* Visually hidden column-header row; it keeps zero height but stays in the accessibility tree. */
+.rg-table thead th {
+  padding: 0;
+  border: 0;
+  height: 0;
+  line-height: 0;
+  font-size: 0;
+  overflow: hidden;
+}
+.rg-table td.rg-banner {
+  background: var(--rg-banner);
+  text-align: center;
+  font-size: 1.05rem;
+}
+.rg-table th.rg-ing {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--rg-surface);
+  min-width: 170px;
+  max-width: 320px;
+  box-shadow: 1px 0 0 var(--rg-line);
+}
+.rg-table td.rg-empty {
+  background: var(--rg-empty);
+  min-width: 72px;
+}
+.rg-table td.rg-step {
+  background: var(--rg-step);
+  text-align: center;
+  min-width: 72px;
+  cursor: pointer;
+}
+.rg-table td.rg-step:hover {
+  filter: brightness(0.97);
+}
+.rg-table td.rg-step[data-selected='true'] {
+  outline: 3px solid var(--rg-accent);
+  outline-offset: -3px;
+}
+.rg-stepbtn {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+.rg-lbl {
+  display: block;
+  font-weight: 600;
+}
+.rg-par {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--rg-muted);
+}
+.rg-parinline,
+.rg-portion,
+.rg-note {
+  color: var(--rg-muted);
+  font-size: 0.85rem;
+}
+.rg-qty {
+  font-variant-numeric: tabular-nums;
+}
+.rg-detail:empty {
+  display: none;
+}
+.rg-panel {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--rg-line);
+  border-radius: 8px;
+  background: var(--rg-banner);
+  color: var(--rg-ink);
+}
+.rg-fade {
+  pointer-events: none;
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  right: 2px;
+  width: 36px;
+  border-radius: 0 4px 4px 0;
+  background: linear-gradient(to right, transparent, var(--rg-surface));
+}
+.rg-arrow {
+  pointer-events: none;
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--rg-accent);
+  color: var(--rg-surface);
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+  line-height: 1;
+}
+
+@container (min-width: 640px) {
+  .rg-table td.rg-step,
+  .rg-table td.rg-empty {
+    min-width: 96px;
+  }
+  .rg-table th.rg-ing {
+    min-width: 240px;
+  }
+}
+/* When the table scrolls sideways, keep banner text in the visible area instead of the full width. */
+@container (max-width: 800px) {
+  .rg-table td.rg-banner .rg-bn {
+    position: sticky;
+    left: 0;
+    display: block;
+    width: calc(100cqw - 40px);
+    max-width: 100%;
+  }
+}
+@container (max-width: 639px) {
+  .rg-table th,
+  .rg-table td {
+    padding: 6px 8px;
+  }
+  .rg-table th.rg-ing {
+    width: 138px;
+    min-width: 138px;
+    max-width: 138px;
+    font-size: 0.85rem;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.3;
+  }
+  .rg-table td.rg-step,
+  .rg-table td.rg-empty {
+    min-width: 68px;
+  }
+  .rg-table td.rg-banner {
+    font-size: 0.95rem;
+  }
+  .rg-table td.rg-banner .rg-bn {
+    width: calc(100cqw - 36px);
+  }
+  .rg-scroller {
+    scroll-padding-inline-start: 146px;
+  }
+}
+
+/* Bottom sheet (native dialog) */
+dialog.rg-sheet {
+  margin: auto 0 0 0;
+  width: 100%;
+  max-width: 100%;
+  max-height: 80dvh;
+  border: 0;
+  border-radius: 16px 16px 0 0;
+  padding: 0;
+  background: var(--rg-surface);
+  color: var(--rg-ink);
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.3);
+}
+dialog.rg-sheet .rg-sheet-body {
+  padding: 16px;
+}
+dialog.rg-sheet::backdrop {
+  background: rgba(0, 0, 0, 0.45);
+}
+
+@media print {
+  .rg-fade,
+  .rg-arrow {
+    display: none;
+  }
+  .rg-scroller {
+    overflow: visible;
+  }
+}

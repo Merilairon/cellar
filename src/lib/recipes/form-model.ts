@@ -1,0 +1,372 @@
+import { z } from 'zod';
+import { parseIngredientLine, toIngredientFields } from '@/lib/import/ingredient-parser';
+import { validateRecipeGrid } from '@/lib/grid/validate';
+import {
+  recipeInputSchema,
+  zodIssuesToErrors,
+  type FieldError,
+  type IngredientInput,
+  type StepKind,
+  type Visibility,
+} from './schemas';
+
+// Pure form state <-> API payload mapping (no react, no db). Spans are 1-based in the UI and
+// 0-based on the wire.
+
+export type RecipePayload = z.input<typeof recipeInputSchema>;
+
+export type FormStep = {
+  key: string;
+  kind: StepKind;
+  label: string;
+  detail: string;
+  /** 1-based, blank = unset. */
+  rowStart: string;
+  rowEnd: string;
+  tempC: string;
+  tempF: string;
+  minutesMin: string;
+  minutesMax: string;
+};
+
+export type FormSection = {
+  key: string;
+  title: string;
+  /** One ingredient per line. */
+  ingredientsText: string;
+  steps: FormStep[];
+  /** Stored ingredients this section was loaded with (round trip of split/group fields). */
+  originals: IngredientInput[];
+};
+
+export type FormState = {
+  title: string;
+  description: string;
+  servings: string;
+  servingsLabel: string;
+  prepMinutes: string;
+  cookMinutes: string;
+  sourceName: string;
+  sourceUrl: string;
+  visibility: Visibility;
+  sections: FormSection[];
+};
+
+let counter = 0;
+export const nextKey = (): string => `k${++counter}`;
+
+export const emptyStep = (kind: StepKind = 'column'): FormStep => ({
+  key: nextKey(),
+  kind,
+  label: '',
+  detail: '',
+  rowStart: '',
+  rowEnd: '',
+  tempC: '',
+  tempF: '',
+  minutesMin: '',
+  minutesMax: '',
+});
+
+export const emptySection = (): FormSection => ({
+  key: nextKey(),
+  title: '',
+  ingredientsText: '',
+  steps: [],
+  originals: [],
+});
+
+export const emptyForm = (): FormState => ({
+  title: '',
+  description: '',
+  servings: '',
+  servingsLabel: '',
+  prepMinutes: '',
+  cookMinutes: '',
+  sourceName: '',
+  sourceUrl: '',
+  visibility: 'private',
+  sections: [emptySection()],
+});
+
+type RecipeLike = {
+  title: string;
+  description: string | null;
+  servings: number | null;
+  servings_label: string | null;
+  prep_minutes: number | null;
+  cook_minutes: number | null;
+  source_url: string | null;
+  source_name: string | null;
+  visibility: Visibility;
+  sections: Array<{
+    title: string | null;
+    ingredients: Array<
+      { position: number } & Omit<IngredientInput, 'display_primary'> & {
+          display_primary: 'metric' | 'us';
+        }
+    >;
+    steps: Array<{
+      position: number;
+      kind: StepKind;
+      label: string;
+      detail: string;
+      row_start: number | null;
+      row_end: number | null;
+      temp_c: number | null;
+      temp_f: number | null;
+      minutes_min: number | null;
+      minutes_max: number | null;
+    }>;
+  }>;
+};
+
+const str = (n: number | null | undefined): string => (n == null ? '' : String(n));
+
+const byPosition = <T extends { position: number }>(xs: T[]): T[] =>
+  [...xs].sort((a, b) => a.position - b.position);
+
+function originalFromApi(
+  i: RecipeLike['sections'][number]['ingredients'][number],
+): IngredientInput {
+  return {
+    name: i.name,
+    note: i.note ?? null,
+    raw_text: i.raw_text ?? null,
+    metric_qty: i.metric_qty ?? null,
+    metric_unit: i.metric_unit ?? null,
+    us_qty: i.us_qty ?? null,
+    us_unit: i.us_unit ?? null,
+    display_primary: i.display_primary,
+    split_group_id: i.split_group_id ?? null,
+    portion_label: i.portion_label ?? null,
+    group_label: i.group_label ?? null,
+  };
+}
+
+const lineOf = (i: IngredientInput): string =>
+  i.raw_text ??
+  [i.metric_qty, i.metric_unit, i.us_qty, i.us_unit, i.name].filter((x) => x != null).join(' ');
+
+export function formFromRecipe(r: RecipeLike): FormState {
+  return {
+    title: r.title,
+    description: r.description ?? '',
+    servings: str(r.servings),
+    servingsLabel: r.servings_label ?? '',
+    prepMinutes: str(r.prep_minutes),
+    cookMinutes: str(r.cook_minutes),
+    sourceName: r.source_name ?? '',
+    sourceUrl: r.source_url ?? '',
+    visibility: r.visibility,
+    sections: r.sections.map((s) => {
+      const originals = byPosition(s.ingredients).map(originalFromApi);
+      return {
+        key: nextKey(),
+        title: s.title ?? '',
+        ingredientsText: originals.map(lineOf).join('\n'),
+        originals,
+        steps: byPosition(s.steps).map((t) => ({
+          key: nextKey(),
+          kind: t.kind,
+          label: t.label,
+          detail: t.detail,
+          rowStart: t.row_start == null ? '' : String(t.row_start + 1),
+          rowEnd: t.row_end == null ? '' : String(t.row_end + 1),
+          tempC: str(t.temp_c),
+          tempF: str(t.temp_f),
+          minutesMin: str(t.minutes_min),
+          minutesMax: str(t.minutes_max),
+        })),
+      };
+    }),
+  };
+}
+
+/** Non-blank trimmed lines; blank lines are ignored, so row numbers count these. */
+export const ingredientLines = (text: string): string[] =>
+  text
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+/**
+ * Parse each line. A line identical to a stored ingredient keeps all its stored fields
+ * (including split group and portion label); an edited line is re-parsed and keeps only the
+ * split/portion/group fields of the stored ingredient at the same row.
+ */
+export function buildIngredients(text: string, originals: IngredientInput[]): IngredientInput[] {
+  const lines = ingredientLines(text);
+  const used = new Set<number>();
+  const exact: number[] = lines.map(() => -1);
+  // Prefer the same row (identical lines, such as two sugar rows, stay in place), then any
+  // unused stored ingredient with the same text.
+  lines.forEach((line, row) => {
+    if (originals[row] && lineOf(originals[row]).trim() === line) {
+      exact[row] = row;
+      used.add(row);
+    }
+  });
+  lines.forEach((line, row) => {
+    if (exact[row] >= 0) return;
+    const idx = originals.findIndex((o, i) => !used.has(i) && lineOf(o).trim() === line);
+    if (idx >= 0) {
+      exact[row] = idx;
+      used.add(idx);
+    }
+  });
+  return lines.map((line, row) => {
+    if (exact[row] >= 0) return { ...originals[exact[row]] };
+    const f = toIngredientFields(parseIngredientLine(line));
+    const keep = !used.has(row) ? originals[row] : undefined;
+    return {
+      name: f.name,
+      note: f.note,
+      raw_text: f.raw_text,
+      metric_qty: f.metric_qty,
+      metric_unit: f.metric_unit,
+      us_qty: f.us_qty,
+      us_unit: f.us_unit,
+      display_primary: f.display_primary,
+      split_group_id: keep?.split_group_id ?? null,
+      portion_label: keep?.portion_label ?? null,
+      group_label: keep?.group_label ?? null,
+    };
+  });
+}
+
+/** Blank -> null; a non-numeric value becomes -1 so the schema rejects it instead of dropping it. */
+function num(s: string): number | null {
+  const v = s.trim();
+  if (v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : -1;
+}
+
+export function formToPayload(f: FormState): RecipePayload {
+  return {
+    title: f.title,
+    description: f.description,
+    servings: num(f.servings),
+    servings_label: f.servingsLabel,
+    prep_minutes: num(f.prepMinutes),
+    cook_minutes: num(f.cookMinutes),
+    source_name: f.sourceName,
+    source_url: f.sourceUrl,
+    visibility: f.visibility,
+    sections: f.sections.map((s) => ({
+      title: s.title,
+      ingredients: buildIngredients(s.ingredientsText, s.originals),
+      steps: s.steps.map((t) => {
+        const base = {
+          label: t.label,
+          detail: t.detail,
+          temp_c: num(t.tempC),
+          temp_f: num(t.tempF),
+          minutes_min: num(t.minutesMin),
+          minutes_max: num(t.minutesMax),
+        };
+        if (t.kind !== 'column') return { kind: t.kind, ...base };
+        const a = num(t.rowStart);
+        const b = num(t.rowEnd);
+        return {
+          kind: 'column' as const,
+          ...base,
+          row_start: a === null ? null : a - 1,
+          row_end: b === null ? null : b - 1,
+        };
+      }),
+    })),
+  };
+}
+
+/**
+ * Same recipe as the API returned it, as a PUT payload (used by Convert to grid, which only
+ * changes spans). `spans` maps a step id to 0-based [start, end].
+ */
+export function recipePayloadWithSpans(
+  r: RecipeLike & { sections: Array<{ steps: Array<{ id: string }> }> },
+  spans: Map<string, [number, number]>,
+  viewMode: 'grid' | 'list',
+): RecipePayload {
+  return {
+    title: r.title,
+    description: r.description,
+    servings: r.servings,
+    servings_label: r.servings_label,
+    prep_minutes: r.prep_minutes,
+    cook_minutes: r.cook_minutes,
+    source_url: r.source_url,
+    source_name: r.source_name,
+    visibility: r.visibility,
+    view_mode: viewMode,
+    sections: r.sections.map((s) => ({
+      title: s.title,
+      ingredients: byPosition(s.ingredients).map(originalFromApi),
+      steps: byPosition(
+        s.steps as Array<RecipeLike['sections'][number]['steps'][number] & { id: string }>,
+      ).map((t) => {
+        const base = {
+          label: t.label,
+          detail: t.detail,
+          temp_c: t.temp_c,
+          temp_f: t.temp_f,
+          minutes_min: t.minutes_min,
+          minutes_max: t.minutes_max,
+        };
+        if (t.kind !== 'column') return { kind: t.kind, ...base };
+        const span = spans.get(t.id);
+        return {
+          kind: 'column' as const,
+          ...base,
+          row_start: span ? span[0] : t.row_start,
+          row_end: span ? span[1] : t.row_end,
+        };
+      }),
+    })),
+  };
+}
+
+/** Grid error codes the form reports inline. Missing spans are fine: the recipe is saved as list. */
+const SOFT_GRID_CODES = new Set(['span_required_for_grid', 'span_incomplete']);
+
+export type ValidationResult =
+  | { ok: true; payload: RecipePayload; viewMode: 'grid' | 'list' }
+  | { ok: false; errors: FieldError[] };
+
+/** Client-side validation with the shared schema plus span range checks. */
+export function validateForm(f: FormState): ValidationResult {
+  const payload = formToPayload(f);
+  const parsed = recipeInputSchema.safeParse(payload);
+  if (!parsed.success) return { ok: false, errors: zodIssuesToErrors(parsed.error) };
+  const grid = validateRecipeGrid(parsed.data);
+  const hard = grid.errors.filter((e) => !SOFT_GRID_CODES.has(e.code));
+  if (hard.length) return { ok: false, errors: hard };
+  const hasColumn = parsed.data.sections.some((s) => s.steps.some((t) => t.kind === 'column'));
+  return { ok: true, payload, viewMode: hasColumn && grid.errors.length === 0 ? 'grid' : 'list' };
+}
+
+/** First code per path (zod can report several issues on one field). */
+export function errorMap(errors: FieldError[]): Map<string, string> {
+  const m = new Map<string, string>();
+  for (const e of errors) if (!m.has(e.path)) m.set(e.path, e.code);
+  return m;
+}
+
+const MESSAGE_KEYS: Record<string, string> = {
+  too_small: 'recipe.errors.too_small',
+  too_big: 'recipe.errors.too_big',
+  invalid_type: 'recipe.errors.invalid_type',
+  invalid_url: 'recipe.errors.invalid_url',
+  minutes_order: 'recipe.errors.minutes_order',
+  span_incomplete: 'recipe.errors.span_incomplete',
+  span_required_for_grid: 'recipe.errors.span_required_for_grid',
+  row_order: 'recipe.errors.row_order',
+  row_out_of_range: 'recipe.errors.row_out_of_range',
+  no_rows: 'recipe.errors.no_rows',
+  banner_has_span: 'recipe.errors.banner_has_span',
+  positions_not_contiguous: 'recipe.errors.generic',
+  split_group_cross_section: 'recipe.errors.split_group_cross_section',
+};
+export const errorMessageKey = (code: string): string =>
+  MESSAGE_KEYS[code] ?? 'recipe.errors.generic';
