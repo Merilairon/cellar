@@ -83,7 +83,7 @@ created: Mocha Skillet Cookie (owner admin@example.com)
 created: Vanilla Cake with Frosting (owner admin@example.com)
 ```
 
-**Docker:** the runtime image does not contain `tsx` or `scripts/seed.ts`, so `docker compose exec app npm run seed` does not work. The image only maps `admin:reset`. To seed a Docker instance, stop the app and run the seed from a checkout with `DATABASE_PATH` pointing at a copy of the database file, or create the recipes in the UI.
+**Docker:** the runtime image does not contain `tsx` or `scripts/seed.ts`, so `docker compose exec app npm run seed` does not work. The image only maps `admin:reset`. To seed a Docker instance, stop the app and run the seed from a checkout with `DATABASE_PATH` pointing at a copy of the database file, or create the recipes in the UI. If you copy the database back into the volume, delete any stale `app.db-wal` and `app.db-shm` files there first, or the seeded rows are silently lost.
 
 ### Visual end-to-end tests
 
