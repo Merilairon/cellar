@@ -1,0 +1,4 @@
+# Generated from .kilo/agents/security-architect.md
+# Expert security architect specializing in threat modeling, secure-by-design architecture, trust-boundary analysis, defense-in-depth, and risk-based security reviews across web, API, cloud-native, and 
+system_prompt_id = "security-architect"
+agent_type = "subagent"

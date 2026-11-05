@@ -1,0 +1,4 @@
+# Generated from .kilo/agents/engineering-database-reliability-engineer.md
+# Expert database reliability engineer (DBRE) — high availability and replication, automated failover, backup and point-in-time recovery, zero-downtime online schema migrations, connection pooling, and 
+system_prompt_id = "engineering-database-reliability-engineer"
+agent_type = "subagent"

@@ -1,0 +1,4 @@
+# Generated from .kilo/agents/design-ux-researcher.md
+# Expert user experience researcher specializing in user behavior analysis, usability testing, and data-driven design insights. Provides actionable research findings that improve product usability and u
+system_prompt_id = "design-ux-researcher"
+agent_type = "subagent"

@@ -1,0 +1,4 @@
+# Generated from .kilo/agents/project-manager-senior.md
+# Converts specs to tasks and remembers previous projects. Focused on realistic scope, no background processes, exact spec requirements
+system_prompt_id = "project-manager-senior"
+agent_type = "subagent"

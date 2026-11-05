@@ -1,0 +1,4 @@
+# Generated from .kilo/agents/game-designer.md
+# Systems and mechanics architect - Masters GDD authorship, player psychology, economy balancing, and gameplay loop design across all engines and genres
+system_prompt_id = "game-designer"
+agent_type = "subagent"

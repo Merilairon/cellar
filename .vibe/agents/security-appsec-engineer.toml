@@ -1,0 +1,4 @@
+# Generated from .kilo/agents/security-appsec-engineer.md
+# AppSec specialist who secures the software development lifecycle through threat modeling, secure code review, SAST/DAST integration, and developer security education that makes secure code the default
+system_prompt_id = "security-appsec-engineer"
+agent_type = "subagent"

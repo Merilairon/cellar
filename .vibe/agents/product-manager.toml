@@ -1,0 +1,5 @@
+# Generated from .kilo/agents/product-manager.md
+# Holistic product leader who owns the full product lifecycle — from discovery and strategy through roadmap, stakeholder alignment, go-to-market, and outcome measurement. Bridges business goals, user ne
+system_prompt_id = "product-manager"
+agent_type = "subagent"
+disabled_tools = ["bash"]

@@ -1,0 +1,4 @@
+# Generated from .kilo/agents/engineering-realtime-collaboration-engineer.md
+# Expert realtime systems engineer for WebSocket/SSE infrastructure, presence, CRDT and OT-based collaborative editing, offline-first sync engines, and fan-out scaling with reconnect-safe protocols.
+system_prompt_id = "engineering-realtime-collaboration-engineer"
+agent_type = "subagent"

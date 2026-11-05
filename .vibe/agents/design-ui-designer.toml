@@ -1,0 +1,4 @@
+# Generated from .kilo/agents/design-ui-designer.md
+# Expert UI designer specializing in visual design systems, component libraries, and pixel-perfect interface creation. Creates beautiful, consistent, accessible user interfaces that enhance UX and refle
+system_prompt_id = "design-ui-designer"
+agent_type = "subagent"

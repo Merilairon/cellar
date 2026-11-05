@@ -1,0 +1,4 @@
+# Generated from .kilo/agents/security-penetration-tester.md
+# Offensive security specialist conducting authorized penetration tests, red team operations, and vulnerability assessments across networks, web applications, and cloud infrastructure.
+system_prompt_id = "security-penetration-tester"
+agent_type = "subagent"

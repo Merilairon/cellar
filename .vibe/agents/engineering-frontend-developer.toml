@@ -1,0 +1,4 @@
+# Generated from .kilo/agents/engineering-frontend-developer.md
+# Expert frontend developer specializing in modern web technologies, React/Vue/Angular frameworks, UI implementation, and performance optimization
+system_prompt_id = "engineering-frontend-developer"
+agent_type = "subagent"

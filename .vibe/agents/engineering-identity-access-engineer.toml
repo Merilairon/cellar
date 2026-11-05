@@ -1,0 +1,4 @@
+# Generated from .kilo/agents/engineering-identity-access-engineer.md
+# Expert identity engineer for OAuth 2.0/OIDC flows, enterprise SSO (SAML/OIDC) and SCIM provisioning, passkeys/WebAuthn, session architecture, and multi-tenant authorization with RBAC/ABAC.
+system_prompt_id = "engineering-identity-access-engineer"
+agent_type = "subagent"

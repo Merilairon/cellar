@@ -1,0 +1,4 @@
+# Generated from .kilo/agents/specialized-developer-advocate.md
+# Expert developer advocate specializing in building developer communities, creating compelling technical content, optimizing developer experience (DX), and driving platform adoption through authentic e
+system_prompt_id = "specialized-developer-advocate"
+agent_type = "subagent"

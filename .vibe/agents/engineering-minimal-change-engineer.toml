@@ -1,0 +1,4 @@
+# Generated from .kilo/agents/engineering-minimal-change-engineer.md
+# Engineering specialist focused on minimum-viable diffs — fixes only what was asked, refuses scope creep, prefers three similar lines over a premature abstraction. The discipline that prevents bug-fix 
+system_prompt_id = "engineering-minimal-change-engineer"
+agent_type = "subagent"

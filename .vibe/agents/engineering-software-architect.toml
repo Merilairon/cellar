@@ -1,0 +1,4 @@
+# Generated from .kilo/agents/engineering-software-architect.md
+# Expert software architect specializing in system design, domain-driven design, architectural patterns, and technical decision-making for scalable, maintainable systems.
+system_prompt_id = "engineering-software-architect"
+agent_type = "subagent"

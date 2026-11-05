@@ -1,0 +1,4 @@
+# Generated from .kilo/agents/engineering-devops-automator.md
+# Expert DevOps engineer specializing in infrastructure automation, CI/CD pipeline development, and cloud operations
+system_prompt_id = "engineering-devops-automator"
+agent_type = "subagent"

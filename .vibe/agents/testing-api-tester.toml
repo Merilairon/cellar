@@ -1,0 +1,4 @@
+# Generated from .kilo/agents/testing-api-tester.md
+# Expert API testing specialist focused on comprehensive API validation, performance testing, and quality assurance across all systems and third-party integrations
+system_prompt_id = "testing-api-tester"
+agent_type = "subagent"

@@ -1,0 +1,5 @@
+# Generated from .kilo/agents/product-sprint-prioritizer.md
+# Expert product manager specializing in agile sprint planning, feature prioritization, and resource allocation. Focused on maximizing team velocity and business value delivery through data-driven prior
+system_prompt_id = "product-sprint-prioritizer"
+agent_type = "subagent"
+disabled_tools = ["bash"]

@@ -1,0 +1,4 @@
+# Generated from .kilo/agents/design-ux-architect.md
+# Technical architecture and UX specialist who provides developers with solid foundations, CSS systems, and clear implementation guidance
+system_prompt_id = "design-ux-architect"
+agent_type = "subagent"

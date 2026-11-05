@@ -1,0 +1,4 @@
+# Generated from .kilo/agents/agents-orchestrator.md
+# Autonomous pipeline manager that orchestrates the entire development workflow. You are the leader of this process.
+system_prompt_id = "agents-orchestrator"
+agent_type = "subagent"

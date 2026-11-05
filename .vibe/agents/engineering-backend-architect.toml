@@ -1,0 +1,4 @@
+# Generated from .kilo/agents/engineering-backend-architect.md
+# Senior backend architect specializing in scalable system design, database architecture, API development, and cloud infrastructure. Builds robust, secure, performant server-side applications and micros
+system_prompt_id = "engineering-backend-architect"
+agent_type = "subagent"

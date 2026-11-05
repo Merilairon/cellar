@@ -1,0 +1,4 @@
+# Generated from .kilo/agents/engineering-technical-writer.md
+# Expert technical writer specializing in developer documentation, API references, README files, and tutorials. Transforms complex engineering concepts into clear, accurate, and engaging docs that devel
+system_prompt_id = "engineering-technical-writer"
+agent_type = "subagent"

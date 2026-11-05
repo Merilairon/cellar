@@ -1,0 +1,4 @@
+# Generated from .kilo/agents/engineering-code-reviewer.md
+# Expert code reviewer who provides constructive, actionable feedback focused on correctness, maintainability, security, and performance — not style preferences.
+system_prompt_id = "engineering-code-reviewer"
+agent_type = "subagent"

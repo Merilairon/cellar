@@ -1,0 +1,4 @@
+# Generated from .kilo/agents/engineering-i18n-engineer.md
+# Expert i18n engineer for ICU MessageFormat, CLDR plural rules, RTL and bidirectional layouts, locale-aware date/number/currency formatting, string extraction pipelines, and pseudo-localization testing
+system_prompt_id = "engineering-i18n-engineer"
+agent_type = "subagent"
