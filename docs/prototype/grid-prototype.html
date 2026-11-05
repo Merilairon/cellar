@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recipe Book — Grid Prototype (pre-M2 spike)</title>
+<style>
+  :root {
+    --bg: #faf8f3; --surface: #ffffff; --ink: #1f2a1f; --muted: #5d6b5d;
+    --line: #5b9a3c; --line-soft: #c9dcc0; --accent: #3f7a25; --accent-ink: #ffffff;
+    --banner: #eef5e9; --empty: #f4f7f1; --warn: #b3541e; --focus: #1d5fd1;
+    --step: #e3f0da;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #151a15; --surface: #1d241d; --ink: #e8efe6; --muted: #9db09a;
+      --line: #6fb04c; --line-soft: #34503a; --accent: #7fc65a; --accent-ink: #10200a;
+      --banner: #243024; --empty: #1a211a; --warn: #f0a070; --focus: #7aa7ff;
+      --step: #2c4128;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .page { max-width: 1320px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 1.25rem; margin: 0 0 4px; }
+  .note { color: var(--muted); font-size: .875rem; margin: 0 0 12px; }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-bottom: 12px; }
+  .group { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .group button { border: 0; background: var(--surface); color: var(--ink); padding: 8px 12px; min-height: 40px;
+                  cursor: pointer; font: inherit; border-right: 1px solid var(--line-soft); }
+  .group button:last-child { border-right: 0; }
+  .group button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+  .toolbar label { font-size: .8rem; color: var(--muted); display: block; margin-bottom: 2px; }
+  button:focus-visible, td[tabindex]:focus-visible, select:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+  select { min-height: 40px; padding: 0 8px; border: 1px solid var(--line); border-radius: 8px;
+           background: var(--surface); color: var(--ink); font: inherit; }
+
+  /* The frame simulates device widths; layout rules use container queries so they follow the frame. */
+  .frame-wrap { display: flex; justify-content: center; }
+  .frame { container-type: inline-size; width: 100%; background: var(--surface); border: 1px solid var(--line-soft);
+           border-radius: 12px; padding: 16px; transition: max-width .2s; position: relative; }
+  .frame[data-w="375"] { max-width: 375px; } .frame[data-w="768"] { max-width: 768px; }
+  .frame[data-w="1280"] { max-width: 1280px; }
+
+  .title { font-size: 1.4rem; margin: 0; }
+  .meta { color: var(--muted); font-size: .9rem; margin: 2px 0 12px; }
+  .section-title { font-size: 1.05rem; margin: 18px 0 6px; color: var(--accent); }
+
+  .scroller { overflow-x: auto; border: 2px solid var(--line); border-radius: 6px; background: var(--surface); }
+  table.grid { border-collapse: separate; border-spacing: 0; width: 100%; min-width: max-content; }
+  .grid th, .grid td { border-right: 1px solid var(--line); border-bottom: 1px solid var(--line);
+                        padding: 8px 10px; vertical-align: middle; text-align: left; font-weight: normal; }
+  .grid tr > :last-child { border-right: 0; }
+  .grid tr:last-child > * { border-bottom: 0; }
+  .grid td.banner { background: var(--banner); text-align: center; font-size: 1.05rem; }
+  .grid th.ing { position: sticky; left: 0; z-index: 2; background: var(--surface); min-width: 170px;
+                 max-width: 320px; box-shadow: 1px 0 0 var(--line); }
+  .grid td.empty { background: var(--empty); min-width: 72px; }
+  .grid td.step { background: var(--step); text-align: center; min-width: 72px; cursor: pointer; }
+  .grid td.step:hover { filter: brightness(.97); }
+  .grid td.step.sel { outline: 3px solid var(--accent); outline-offset: -3px; }
+  .grid td.step .lbl { font-weight: 600; display: block; }
+  .grid td.step .par { display: block; font-size: .85rem; color: var(--muted); }
+  .grid .portion { color: var(--muted); font-size: .85rem; }
+  .qty { font-variant-numeric: tabular-nums; }
+
+  @container (min-width: 640px) {
+    .grid td.step, .grid td.empty { min-width: 96px; }
+    .grid th.ing { min-width: 240px; }
+  }
+  /* When the table scrolls sideways, keep banner text in the visible area instead of centred on the full width. */
+  @container (max-width: 800px) {
+    .grid td.banner .bn { position: sticky; left: 0; display: block; width: calc(100cqw - 36px); max-width: 100%; }
+  }
+  @container (max-width: 480px) {
+    .grid td.banner .bn { width: calc(100cqw - 28px); }
+    .frame-pad { padding: 0; }
+    .grid th, .grid td { padding: 6px 8px; }
+    .grid th.ing { width: 138px; min-width: 138px; max-width: 138px; font-size: .85rem; white-space: normal; overflow-wrap: anywhere; line-height: 1.3; }
+    .grid td.step, .grid td.empty { min-width: 68px; }
+    .grid td.banner { font-size: .95rem; }
+  }
+
+  .edit-btns { display: none; gap: 4px; justify-content: center; margin-top: 6px; grid-template-columns: repeat(2, 36px); }
+  body.editing .edit-btns { display: grid; }
+  .edit-btns button { min-width: 36px; min-height: 36px; border: 1px solid var(--line); border-radius: 6px;
+                      background: var(--surface); color: var(--ink); cursor: pointer; font-size: .75rem; }
+  .warn { color: var(--warn); font-size: .9rem; margin: 8px 0 0; }
+
+  .detail { margin-top: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px;
+            background: var(--banner); min-height: 48px; }
+  .detail strong { display: block; }
+  .hint { color: var(--muted); }
+  @container (max-width: 480px) {
+    .detail { position: sticky; bottom: 0; box-shadow: 0 -6px 16px rgba(0,0,0,.18); z-index: 5; }
+  }
+
+  .list ul { padding-left: 1.1rem; } .list ol { padding-left: 1.3rem; }
+  .list li { margin: 4px 0; }
+  .spec { margin-top: 24px; font-size: .9rem; color: var(--muted); }
+  .spec code { background: var(--banner); padding: 1px 4px; border-radius: 4px; }
+  @media print {
+    .toolbar, .note, .spec, .detail, .edit-btns { display: none !important; }
+    .frame { border: 0; max-width: none !important; padding: 0; }
+    .scroller { overflow: visible; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Recipe Book — grid prototype</h1>
+  <p class="note">Pre-M2 spike. Static data, no server. Try the width switcher, units, scaling, list view, tapping a step, and <b>Edit spans</b> to move each step's start/end row with the buttons.</p>
+
+  <div class="toolbar" role="toolbar" aria-label="View controls">
+    <div><label for="recipe">Sample recipe</label>
+      <select id="recipe"><option value="mocha">Mocha squares (single section)</option>
+      <option value="cupcakes">Cupcakes (two sections, split row, bottom banner)</option></select></div>
+    <div><label id="l-w">Preview width</label>
+      <div class="group" role="group" aria-labelledby="l-w" id="g-w">
+        <button data-w="fit" aria-pressed="false">Fit</button><button data-w="375" aria-pressed="false">Phone 375</button>
+        <button data-w="768" aria-pressed="false">Tablet 768</button><button data-w="1280" aria-pressed="false">Desktop 1280</button></div></div>
+    <div><label id="l-v">View</label>
+      <div class="group" role="group" aria-labelledby="l-v" id="g-v">
+        <button data-v="grid" aria-pressed="true">Grid</button><button data-v="list" aria-pressed="false">List</button></div></div>
+    <div><label id="l-u">Units</label>
+      <div class="group" role="group" aria-labelledby="l-u" id="g-u">
+        <button data-u="metric" aria-pressed="true">Metric</button><button data-u="us" aria-pressed="false">US</button></div></div>
+    <div><label id="l-s">Scale</label>
+      <div class="group" role="group" aria-labelledby="l-s" id="g-s">
+        <button data-s="0.5" aria-pressed="false">×½</button><button data-s="1" aria-pressed="true">×1</button>
+        <button data-s="2" aria-pressed="false">×2</button></div></div>
+    <div><label id="l-e">Editor idea</label>
+      <div class="group" role="group" aria-labelledby="l-e"><button id="edit" aria-pressed="false">Edit spans</button></div></div>
+  </div>
+
+  <div class="frame-wrap"><div class="frame" id="frame" data-w="768"><div id="out"></div></div></div>
+
+  <div class="spec">
+    <p><b>What this validates:</b> real <code>&lt;table&gt;</code> with <code>rowspan</code>/<code>colspan</code> (screen-reader friendly), sticky ingredient column, spans that start at any row, top and bottom banners, split ingredient rows (<code>sugar, half</code> / <code>sugar, remaining</code>), unit and scale rendering, and a button-based span editor that is keyboard operable. Layout reacts to the <i>frame</i> width (container queries), so the width switcher is a faithful preview of phone, tablet and desktop.</p>
+    <p>Sample recipes are self-written; the reference table was used only as a layout study.</p>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ---------- Sample data (matches data-model.md: sections, rows, steps with row_start/row_end) ---------- */
+const RECIPES = {
+  mocha: {
+    title: "Mocha Fudge Squares", servings: 9, label: "squares", prep: 15, cook: "30–40",
+    sections: [{
+      title: null,
+      top: [{ text: "Butter and flour an 8x8-in pan" }, { text: "Preheat oven to 175°C (350°F)" }],
+      rows: [
+        { name: "unsalted butter", m: [115, "g"], u: [4, "oz"] },
+        { name: "sugar", m: [200, "g"], u: [1, "cup"] },
+        { name: "vanilla extract", m: [5, "mL"], u: [1, "tsp"] },
+        { name: "strong brewed coffee", m: [60, "mL"], u: [4, "tbsp"] },
+        { name: "large eggs", n: 2 },
+        { name: "all-purpose flour", m: [65, "g"], u: [0.5, "cup"] },
+        { name: "cocoa powder", m: [40, "g"], u: [0.5, "cup"] },
+        { name: "baking soda", m: [1, "g"], u: [0.25, "tsp"] },
+        { name: "table salt", m: [1.5, "g"], u: [0.25, "tsp"] },
+      ],
+      steps: [
+        { label: "melt", start: 0, end: 0, detail: "Melt the butter in a saucepan over low heat." },
+        { label: "mix", start: 0, end: 3, detail: "Stir in the sugar, vanilla and coffee until smooth." },
+        { label: "mix", start: 0, end: 4, detail: "Let it cool a minute, then beat in the eggs one at a time." },
+        { label: "fold in", start: 0, end: 8, detail: "Sift the dry ingredients over the batter and fold until just combined." },
+        { label: "bake", start: 0, end: 8, temp: [175, 350], time: "30 to 40 min", detail: "Bake until a skewer comes out with moist crumbs. Cool in the pan before cutting." },
+      ],
+      bottom: [],
+    }],
+  },
+  cupcakes: {
+    title: "Vanilla Cupcakes with Buttercream", servings: 12, label: "cupcakes", prep: 30, cook: "18–20",
+    sections: [
+      {
+        title: "Cupcakes",
+        top: [{ text: "Preheat oven to 180°C (350°F)" }, { text: "Line a 12-hole muffin tin with paper cases" }],
+        rows: [
+          { name: "unsalted butter, softened", m: [115, "g"], u: [4, "oz"] },
+          { name: "sugar", portion: "half", m: [100, "g"], u: [0.5, "cup"] },
+          { name: "large eggs", n: 2 },
+          { name: "sugar", portion: "remaining", m: [100, "g"], u: [0.5, "cup"] },
+          { name: "vanilla extract", m: [5, "mL"], u: [1, "tsp"] },
+          { name: "all-purpose flour", m: [150, "g"], u: [1.25, "cup"] },
+          { name: "baking powder", m: [10, "g"], u: [2, "tsp"] },
+          { name: "milk", m: [120, "mL"], u: [0.5, "cup"] },
+        ],
+        steps: [
+          { label: "cream", start: 0, end: 1, detail: "Beat the butter with the first half of the sugar until pale and fluffy." },
+          { label: "beat in", start: 0, end: 2, detail: "Add the eggs one at a time, beating well after each." },
+          { label: "mix", start: 0, end: 4, detail: "Add the remaining sugar and the vanilla and mix until smooth." },
+          { label: "fold in", start: 0, end: 7, detail: "Alternate the flour and baking powder with the milk; fold gently." },
+          { label: "bake", start: 0, end: 7, temp: [180, 350], time: "18 to 20 min", detail: "Divide among the cases (⅔ full) and bake until golden." },
+        ],
+        bottom: [{ text: "Cool completely before frosting" }],
+      },
+      {
+        title: "Buttercream",
+        top: [],
+        rows: [
+          { name: "unsalted butter, soft", m: [115, "g"], u: [4, "oz"] },
+          { name: "icing sugar", m: [250, "g"], u: [2, "cup"] },
+          { name: "milk", m: [30, "mL"], u: [2, "tbsp"] },
+          { name: "vanilla extract", m: [5, "mL"], u: [1, "tsp"] },
+        ],
+        steps: [
+          { label: "beat", start: 0, end: 1, detail: "Beat butter with the icing sugar, a third at a time." },
+          { label: "mix", start: 0, end: 3, detail: "Add milk and vanilla; beat 3 minutes until light." },
+        ],
+        bottom: [{ text: "Pipe onto the cooled cupcakes and serve" }],
+      },
+    ],
+  },
+};
+
+/* ---------- State ---------- */
+const S = { recipeId: "mocha", view: "grid", units: "metric", scale: 1, width: "768", editing: false,
+            sel: null, data: JSON.parse(JSON.stringify(RECIPES)) };
+const $ = (s) => document.querySelector(s);
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+/* ---------- Quantity formatting ---------- */
+const FR = [[0, ""], [1/8, "⅛"], [1/4, "¼"], [1/3, "⅓"], [1/2, "½"], [2/3, "⅔"], [3/4, "¾"], [1, null]];
+function frac(x) {
+  const w = Math.floor(x + 1e-9), f = x - w;
+  let best = FR[0], d = 9;
+  for (const c of FR) { const dd = Math.abs(c[0] - f); if (dd < d) { d = dd; best = c; } }
+  if (best[1] === null) return String(w + 1);
+  return (w ? String(w) : "") + best[1] || "0";
+}
+function fmtMetric(q, u) {
+  const r = q >= 100 ? Math.round(q / 5) * 5 : q >= 10 ? Math.round(q) : Math.round(q * 10) / 10;
+  return r + " " + u;
+}
+function fmtUS(q, u) { return frac(q) + " " + u; }
+function fmtQty(row, which) {
+  if (row.n != null) return null;
+  const v = which === "metric" ? row.m : row.u;
+  if (!v) return null;
+  const q = v[0] * S.scale;
+  return which === "metric" ? fmtMetric(q, v[1]) : fmtUS(q, v[1]);
+}
+function ingredientHTML(row) {
+  const alt = S.units === "metric" ? "us" : "metric";
+  let main, extra = "";
+  if (row.n != null) {
+    const n = row.n * S.scale;
+    main = (Number.isInteger(n) ? n : "≈" + (Math.round(n * 2) / 2)) + "";
+  } else {
+    main = fmtQty(row, S.units);
+    extra = fmtQty(row, alt);
+  }
+  const portion = row.portion ? `<span class="portion">, ${esc(row.portion)}</span>` : "";
+  return `<span class="qty">${esc(main)}${extra ? " (" + esc(extra) + ")" : ""}</span> ${esc(row.name)}${portion}`;
+}
+function tempText(t) { return S.units === "metric" ? `${t[0]}°C (${t[1]}°F)` : `${t[1]}°F (${t[0]}°C)`; }
+
+/* ---------- Grid rendering: real <table> ---------- */
+function coveredRows(sec) {
+  const cov = new Array(sec.rows.length).fill(false);
+  sec.steps.forEach((s) => { for (let r = s.start; r <= s.end; r++) cov[r] = true; });
+  return cov;
+}
+function sectionGridHTML(sec, si) {
+  const cols = sec.steps.length, nRows = sec.rows.length;
+  const total = cols + 1;
+  let h = `<div class="scroller" tabindex="0" role="region" aria-label="${esc(sec.title || "Recipe")} grid, scrolls horizontally"><table class="grid">`;
+  h += `<caption class="sr" style="position:absolute;left:-9999px">${esc(sec.title || "Recipe grid")}</caption>`;
+  sec.top.forEach((b) => { h += `<tr><td class="banner" colspan="${total}"><span class="bn">${esc(b.text)}</span></td></tr>`; });
+  for (let r = 0; r < nRows; r++) {
+    h += `<tr><th scope="row" class="ing">${ingredientHTML(sec.rows[r])}</th>`;
+    sec.steps.forEach((s, ci) => {
+      if (r === s.start) {
+        const span = s.end - s.start + 1;
+        const sel = S.sel && S.sel.si === si && S.sel.ci === ci ? " sel" : "";
+        const par = [s.temp ? tempText(s.temp) : "", s.time || ""].filter(Boolean).map((x) => `<span class="par">${esc(x)}</span>`).join("");
+        const eb = `<div class="edit-btns" role="group" aria-label="Edit span for ${esc(s.label)}">
+          <button data-act="start-up" data-si="${si}" data-ci="${ci}" aria-label="Move start of ${esc(s.label)} up">↑s</button>
+          <button data-act="start-down" data-si="${si}" data-ci="${ci}" aria-label="Move start of ${esc(s.label)} down">↓s</button>
+          <button data-act="end-up" data-si="${si}" data-ci="${ci}" aria-label="Move end of ${esc(s.label)} up">↑e</button>
+          <button data-act="end-down" data-si="${si}" data-ci="${ci}" aria-label="Move end of ${esc(s.label)} down">↓e</button></div>`;
+        h += `<td class="step${sel}" rowspan="${span}" tabindex="0" role="button" aria-label="${esc(s.label)}, rows ${s.start + 1} to ${s.end + 1}. Show details" data-si="${si}" data-ci="${ci}"><span class="lbl">${esc(s.label)}</span>${par}${eb}</td>`;
+      } else if (r > s.start && r <= s.end) {
+        /* covered by rowspan: emit nothing */
+      } else {
+        h += `<td class="empty" aria-hidden="true"></td>`;
+      }
+    });
+    h += `</tr>`;
+  }
+  sec.bottom.forEach((b) => { h += `<tr><td class="banner" colspan="${total}"><span class="bn">${esc(b.text)}</span></td></tr>`; });
+  h += `</table></div>`;
+  const cov = coveredRows(sec);
+  const miss = cov.map((c, i) => (c ? null : i)).filter((x) => x !== null);
+  if (S.editing && miss.length) {
+    h += `<p class="warn" role="status">Not used by any step: ${miss.map((i) => esc(sec.rows[i].name + (sec.rows[i].portion ? " (" + sec.rows[i].portion + ")" : ""))).join(", ")}</p>`;
+  }
+  return h;
+}
+function listHTML(sec) {
+  let h = `<div class="list"><ul>${sec.rows.map((r) => `<li>${ingredientHTML(r)}</li>`).join("")}</ul><ol>`;
+  sec.top.forEach((b) => (h += `<li>${esc(b.text)}</li>`));
+  sec.steps.forEach((s) => {
+    const meta = [s.temp ? tempText(s.temp) : "", s.time || ""].filter(Boolean).join(", ");
+    h += `<li><b>${esc(s.label)}</b>${meta ? " (" + esc(meta) + ")" : ""}. ${esc(s.detail)}</li>`;
+  });
+  sec.bottom.forEach((b) => (h += `<li>${esc(b.text)}</li>`));
+  return h + `</ol></div>`;
+}
+
+function render() {
+  const rec = S.data[S.recipeId];
+  const servings = Math.round(rec.servings * S.scale * 2) / 2;
+  let h = `<div class="frame-pad"><h2 class="title">${esc(rec.title)}</h2>
+    <p class="meta">Makes ${servings} ${esc(rec.label)} · Prep ${rec.prep} min · Cook ${esc(rec.cook)} min</p>`;
+  rec.sections.forEach((sec, si) => {
+    if (sec.title) h += `<h3 class="section-title">${esc(sec.title)}</h3>`;
+    h += S.view === "grid" ? sectionGridHTML(sec, si) : listHTML(sec);
+  });
+  if (S.view === "grid") {
+    const s = S.sel ? rec.sections[S.sel.si].steps[S.sel.ci] : null;
+    h += `<div class="detail" id="detail" aria-live="polite">${s
+      ? `<strong>${esc(s.label)}</strong>${esc(s.detail)}`
+      : `<span class="hint">Tap or press Enter on a step to read its full instruction.</span>`}</div>`;
+  }
+  h += `</div>`;
+  $("#out").innerHTML = h;
+  $("#frame").dataset.w = S.width === "fit" ? "1280" : S.width;
+  document.body.classList.toggle("editing", S.editing && S.view === "grid");
+}
+
+/* ---------- Events ---------- */
+function setPressed(groupSel, attr, val) {
+  document.querySelectorAll(groupSel + " button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset[attr] === String(val))));
+}
+$("#recipe").addEventListener("change", (e) => { S.recipeId = e.target.value; S.sel = null; render(); });
+$("#g-w").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; S.width = b.dataset.w; setPressed("#g-w", "w", S.width); render(); });
+$("#g-v").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; S.view = b.dataset.v; setPressed("#g-v", "v", S.view); render(); });
+$("#g-u").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; S.units = b.dataset.u; setPressed("#g-u", "u", S.units); render(); });
+$("#g-s").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; S.scale = Number(b.dataset.s); setPressed("#g-s", "s", S.scale); render(); });
+$("#edit").addEventListener("click", (e) => { S.editing = !S.editing; e.currentTarget.setAttribute("aria-pressed", String(S.editing)); render(); });
+
+$("#out").addEventListener("click", (e) => {
+  const act = e.target.closest("button[data-act]");
+  if (act) {
+    const si = +act.dataset.si, ci = +act.dataset.ci, sec = S.data[S.recipeId].sections[si], st = sec.steps[ci];
+    const last = sec.rows.length - 1;
+    switch (act.dataset.act) {
+      case "start-up": st.start = Math.max(0, st.start - 1); break;
+      case "start-down": st.start = Math.min(st.end, st.start + 1); break;
+      case "end-up": st.end = Math.max(st.start, st.end - 1); break;
+      case "end-down": st.end = Math.min(last, st.end + 1); break;
+    }
+    render();
+    const again = document.querySelector(`button[data-act="${act.dataset.act}"][data-si="${si}"][data-ci="${ci}"]`);
+    if (again) again.focus();
+    return;
+  }
+  const cell = e.target.closest("td.step");
+  if (cell) { S.sel = { si: +cell.dataset.si, ci: +cell.dataset.ci }; render();
+    const c = document.querySelector(`td.step[data-si="${S.sel.si}"][data-ci="${S.sel.ci}"]`); if (c) c.focus(); }
+});
+$("#out").addEventListener("keydown", (e) => {
+  const cell = e.target.closest && e.target.closest("td.step");
+  if (cell && e.target === cell && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); cell.click(); }
+});
+
+/* Optional URL params for linking/testing: ?r=cupcakes&w=375&v=list&u=us&s=2&e=1 */
+(function initFromURL() {
+  const q = new URLSearchParams(location.search);
+  if (q.get("r") && RECIPES[q.get("r")]) { S.recipeId = q.get("r"); $("#recipe").value = S.recipeId; }
+  if (["fit", "375", "768", "1280"].includes(q.get("w"))) S.width = q.get("w");
+  if (["grid", "list"].includes(q.get("v"))) S.view = q.get("v");
+  if (["metric", "us"].includes(q.get("u"))) S.units = q.get("u");
+  if (["0.5", "1", "2"].includes(q.get("s"))) S.scale = Number(q.get("s"));
+  if (q.get("e") === "1") { S.editing = true; $("#edit").setAttribute("aria-pressed", "true"); }
+  setPressed("#g-w", "w", S.width); setPressed("#g-v", "v", S.view);
+  setPressed("#g-u", "u", S.units); setPressed("#g-s", "s", S.scale);
+})();
+render();
+</script>
+</body>
+</html>

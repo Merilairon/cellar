@@ -5,6 +5,7 @@
 **Technical Context:**
 - Tables `recipe`, `section`, `ingredient`, `step`: see [data-model.md](../docs/data-model.md) §1–2. **Prerequisite spikes:** wireframes for grid (desktop and 375 px) and confirmation of the brownie spans against the original image.
 - Grid rules: [PRD.md](../docs/PRD.md) §4. Rendering with CSS Grid; semantics must be accessible (`role="table"`, `rowheader`, `cell` with `aria-rowspan`, or a real `<table>` with `rowspan` — choose a real `<table>` if feasible, since spans are contiguous per column).
+- Prototype: [grid-prototype.html](../docs/prototype/grid-prototype.html) is the pre-M2 spike and the visual reference for the grid (real `<table>` with rowspans, container-query layout). Re-implement it as `RecipeGrid`; do not copy its code verbatim.
 - Reference example: Espresso Brownies is a layout study only (third-party source; see PRD §9). Seed data and the visual-regression fixture use a self-written sample recipe with the same structure (two top banners, 9 rows, columns 1/4/5/9/9 rows).
 
 **Requirements:**
@@ -18,7 +19,7 @@
 8. `/recipes` index: card list with title, tags placeholder, last updated; empty state with calls to action.
 9. `/recipes/new` and `/recipes/:id/edit`: form for fields, ingredient textarea (one per line, live parsed preview), steps editor (label, detail, kind banner/column, span inputs). Validation errors inline.
 10. Seed script that inserts the self-written sample recipe plus a two-section sample (cake + frosting, with a split ingredient and a bottom banner). Add a `NOTICE` entry only if third-party assets are bundled (fonts, icons, images); the sample recipe is self-written.
-11. Responsive (decision, to be validated by the prototype): below 640 px the grid keeps a sticky ingredient column and fixed-width step columns (~72 px) in a horizontally scrollable container; tapping a step opens a bottom sheet with its full text; the grid/list choice is remembered per device and defaults to grid. A recipe with more than 8 column steps in one section defaults to list on phones.
+11. Responsive (validated by the prototype, which shows ~3 step columns at 375 px): below 640 px the ingredient column is ~138 px wide and wraps names, step columns are ~68 px, and banner text stays pinned in the visible area (sticky) instead of centering on the full scrolling width. Add a **scroll cue** when columns are hidden off-screen (edge fade plus a small arrow, hidden once scrolled to the end) and accessible text such as "5 steps, scroll sideways". The ingredient column stays sticky inside a horizontally scrollable container; tapping a step opens a bottom sheet with its full text; the grid/list choice is remembered per device and defaults to grid. A recipe with more than 8 column steps in one section defaults to list on phones.
 12. `POST /api/recipes/:id/copy` (**Save a copy**) and `PUT /api/recipes/:id/visibility`; shared recipes are read-only for non-owners.
 13. Complete the user-deletion flow from M1 (reassign or delete recipes).
 
