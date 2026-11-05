@@ -2,6 +2,10 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests/e2e',
+  // Visual baselines are Linux x86_64 Chromium only; see tests/e2e/recipes-visual.spec.ts.
+  snapshotPathTemplate:
+    '{testDir}/__screenshots__/{testFilePath}/{arg}-{projectName}-{platform}{ext}',
+  expect: { toHaveScreenshot: { animations: 'disabled' } },
   fullyParallel: false,
   workers: 1,
   forbidOnly: !!process.env.CI,

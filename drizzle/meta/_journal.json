@@ -8,6 +8,20 @@
       "when": 1793876763201,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1793885047514,
+      "tag": "0001_recipes",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1793886088049,
+      "tag": "0002_qty_max",
+      "breakpoints": true
     }
   ]
 }

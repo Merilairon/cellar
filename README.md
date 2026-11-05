@@ -2,7 +2,31 @@
 
 A self-hosted recipe book for you and the people you invite. Next.js 16, SQLite, one container.
 
-This is v0.1: accounts, invites, password recovery, security hardening and Docker packaging. It runs as a single process with a single SQLite file.
+This is v0.2. It builds on v0.1 (accounts, invites, password recovery, security hardening, Docker packaging) and adds manual recipes with a grid view and a list view. It runs as a single process with a single SQLite file.
+
+## Features
+
+- **Create, edit and delete recipes by hand.** Ingredients are typed as free-text lines and parsed into quantity, unit, name and note (fractions, ranges, dual units; lines that cannot be parsed are kept as written).
+- **Grid view.** Recipes with sections, a split ingredient, and top and bottom banner steps render as a table in which each step column spans the ingredient rows it applies to. Spans are validated: a recipe with invalid spans cannot be saved as a grid (the API returns 422 with field errors).
+- **List view.** Every recipe can be shown as a plain list. A recipe whose spans are missing or invalid is a list recipe; **Convert to grid** on the recipe page lets you add spans and switch it.
+- **View preference.** Your choice of grid or list is remembered per user in the browser. With no saved choice, a recipe defaults to grid, except on a phone when a section has more than 8 step columns (then list).
+- **Phone, tablet and desktop layouts.** Tested at 375, 768 and 1280 px. On a phone the ingredient column stays fixed, a scroll cue shows that the grid scrolls sideways, and tapping a step opens it in a bottom sheet.
+- **Sharing and copies.** The owner (or an admin) can share a recipe read-only with all signed-in users. Another user can save an independent private copy.
+- **User deletion.** When an admin deletes a user, they choose to delete that user's recipes or reassign them to another active user.
+- **Sample recipes.** `npm run seed` adds two self-written samples (see [Sample data](#sample-data)).
+
+Not in v0.2: URL import, search and tags, unit conversion and scaling, photos, notes and ratings, public links, and the drag-and-drop grid editor. The `/import` page is a placeholder.
+
+## Routes
+
+| Route               | What it shows                                                                                                                                                  |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/recipes`          | Your recipes and recipes shared with you. Shows an empty state with calls to action when there are none.                                                       |
+| `/recipes/new`      | Form to create a recipe.                                                                                                                                       |
+| `/recipes/:id`      | A recipe in grid or list view, with a toggle. The owner and admins see edit, delete and share controls; other users see a read-only view with **Save a copy**. |
+| `/recipes/:id/edit` | Form to edit a recipe you own (admins can edit any recipe). Saving replaces the recipe's sections, ingredients and steps.                                      |
+
+The JSON API lives under `/api/recipes` (`/api/recipes`, `/api/recipes/:id`, `/api/recipes/:id/copy`, `/api/recipes/:id/visibility`). See [docs/data-model.md](docs/data-model.md).
 
 ## Run locally
 
@@ -29,13 +53,66 @@ Open <http://localhost:3000>. You are redirected to `/login`; see [First run](#f
 
 The database is created at `DATABASE_PATH` (`./data/app.db` in `.env.example`) and migrations run on app start.
 
-| Command                              | What it does                                                                                                                                                          |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm run dev`                        | Dev server                                                                                                                                                            |
-| `npm run build`                      | Production build (standalone output). To run it, see [Run the production build locally](#run-the-production-build-locally)                                           |
-| `npm test`                           | Unit tests (Vitest)                                                                                                                                                   |
-| `npm run test:e2e`                   | End-to-end tests (Playwright). Builds the app and serves it on port 3100 with a throwaway `data/e2e.db`. If browsers are missing, run `npx playwright install` first. |
-| `npm run lint` / `npm run typecheck` | ESLint / TypeScript                                                                                                                                                   |
+> **Dev database note (v0.2).** If your local dev database already applied the earlier, unreleased `0001` migration from a v0.2 work-in-progress branch, it no longer matches the released migrations and must be reset: stop the dev server and delete the file at `DATABASE_PATH` (`./data/app.db`, plus any `app.db-wal` and `app.db-shm` next to it), then start again to recreate it (and create the admin again at `/setup`). Databases created by v0.1 (including Docker volumes) need nothing: migrations `0001` and later apply automatically on start.
+
+| Command                              | What it does                                                                                                                                                                                                                                                                          |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run dev`                        | Dev server                                                                                                                                                                                                                                                                            |
+| `npm run build`                      | Production build (standalone output). To run it, see [Run the production build locally](#run-the-production-build-locally)                                                                                                                                                            |
+| `npm test`                           | Unit tests (Vitest)                                                                                                                                                                                                                                                                   |
+| `npm run test:e2e`                   | End-to-end tests (Playwright), including the visual and accessibility specs. Builds the app and serves it on port 3100 with a throwaway `data/e2e.db`. If browsers are missing, run `npx playwright install chromium` first. See [Visual end-to-end tests](#visual-end-to-end-tests). |
+| `npm run seed`                       | Insert the two sample recipes. Dev and demo only; see [Sample data](#sample-data).                                                                                                                                                                                                    |
+| `npm run lint` / `npm run typecheck` | ESLint / TypeScript                                                                                                                                                                                                                                                                   |
+
+### Sample data
+
+`npm run seed` is a demo tool: it inserts sample recipes into the real database that `DATABASE_PATH` points at (the same one the app uses), owned by an actual account. Do not run it against a database holding data you want kept clean. It inserts two self-written sample recipes for demos and development: _Mocha Skillet Cookie_ (one section) and _Vanilla Cake with Frosting_ (two sections, a split ingredient and a bottom banner). Both open in grid view.
+
+The seed needs an existing user to own the recipes. Create the first admin at `/setup` first (see [First run](#first-run)). Without `--user` it uses the oldest active admin; with `--user` it uses that active account. If no matching user exists, it prints an error and exits with code 1. It is safe to run twice: a sample whose title the owner already has is skipped.
+
+The script reads its settings from the environment and does not load `.env` itself, so export them first (it needs `SESSION_SECRET` and uses `DATABASE_PATH`):
+
+```bash
+set -a; . ./.env; set +a
+npm run seed
+npm run seed -- --user member@example.com
+```
+
+Example output:
+
+```
+created: Mocha Skillet Cookie (owner admin@example.com)
+created: Vanilla Cake with Frosting (owner admin@example.com)
+```
+
+**Docker:** the image ships the seed as an esbuild bundle (`dist/seed.mjs`) and maps it like `admin:reset`, so this works against a running instance, after the first admin exists:
+
+```bash
+docker compose exec app npm run seed
+docker compose exec app npm run seed -- --user member@example.com
+```
+
+It opens the same SQLite file as the app (WAL mode), so the app does not need to be stopped and no database file needs to be copied around.
+
+### Visual end-to-end tests
+
+`tests/e2e/recipes-visual.spec.ts` compares screenshots of both sample recipes at 375, 768 and 1280 px (plus dark theme and the phone bottom sheet) with the PNG baselines in `tests/e2e/__screenshots__/`. `tests/e2e/recipes-a11y.spec.ts` runs axe-core and keyboard checks on the grid.
+
+```bash
+npx playwright install chromium   # once
+npm run test:e2e                  # everything
+npx playwright test recipes-visual
+```
+
+**The baselines are Linux x86_64 Chromium only** (file names end in `-chromium-linux`). Font rendering differs on macOS, Windows and arm64, so the visual specs fail there for reasons unrelated to your change. Run them on Linux x86_64, or in CI.
+
+To regenerate the baselines after an intentional UI change, run this on Linux x86_64:
+
+```bash
+npx playwright test recipes-visual --update-snapshots
+```
+
+Review every changed PNG by eye before you commit it.
 
 ### Run the production build locally
 
@@ -119,17 +196,17 @@ The volume name is `<compose project>_app-data`; check with `docker volume ls`.
 
 Validated at startup in `src/lib/env.ts`. See `.env.example` for a template.
 
-| Variable                         | Required      | Default                                       | Description                                                                                                                                                                                                     |
-| -------------------------------- | ------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_PATH`                  | no            | `/data/app.db`                                | Path of the SQLite file. The directory is created if missing. Compose sets it to `/data/app.db`; `.env.example` uses `./data/app.db` for local runs.                                                            |
-| `SESSION_SECRET`                 | yes           | none                                          | At least 32 characters. In production, known placeholders (`changeme`, `replace-with...`, `your-...`, a single repeated character) are rejected.                                                                |
+| Variable                         | Required      | Default                                       | Description                                                                                                                                                                                                                                                                                                         |
+| -------------------------------- | ------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_PATH`                  | no            | `/data/app.db`                                | Path of the SQLite file. The directory is created if missing. Compose sets it to `/data/app.db`; `.env.example` uses `./data/app.db` for local runs.                                                                                                                                                                |
+| `SESSION_SECRET`                 | yes           | none                                          | At least 32 characters. In production, known placeholders (`changeme`, `replace-with...`, `your-...`, a single repeated character) are rejected.                                                                                                                                                                    |
 | `BASE_URL`                       | in production | `http://localhost:3000` (non-production only) | Public origin, for example `https://recipes.example.com`. **Must use the same port you open in the browser (`APP_PORT`); on a mismatch every POST gets 403.** No path, no trailing slash. Used for invite and reset links and the origin allowlist. With `https://`, the CSP also gets `upgrade-insecure-requests`. |
-| `TRUSTED_PROXIES`                | no            | empty (trust none)                            | Comma-separated IPs or CIDRs whose `X-Forwarded-*` headers are trusted. With the Caddy profile use `172.28.0.10`.                                                                                               |
-| `RATE_LIMIT_LOGIN_MAX`           | no            | `20`                                          | Failed login attempts per client IP per window (successful logins and malformed requests are not counted). Skipped when the client IP is unknown.                                                               |
-| `RATE_LIMIT_LOGIN_EMAIL_MAX`     | no            | `10`                                          | Failed login attempts per account email per window (reset on a successful login). Always enforced.                                                                                                              |
-| `RATE_LIMIT_LOGIN_WINDOW_SEC`    | no            | `900`                                         | Login window in seconds.                                                                                                                                                                                        |
-| `RATE_LIMIT_REGISTER_MAX`        | no            | `10`                                          | Invite registration, reset and setup POSTs per client IP per window. Skipped when the client IP is unknown.                                                                                                     |
-| `RATE_LIMIT_REGISTER_WINDOW_SEC` | no            | `3600`                                        | Registration window in seconds.                                                                                                                                                                                 |
+| `TRUSTED_PROXIES`                | no            | empty (trust none)                            | Comma-separated IPs or CIDRs whose `X-Forwarded-*` headers are trusted. With the Caddy profile use `172.28.0.10`.                                                                                                                                                                                                   |
+| `RATE_LIMIT_LOGIN_MAX`           | no            | `20`                                          | Failed login attempts per client IP per window (successful logins and malformed requests are not counted). Skipped when the client IP is unknown.                                                                                                                                                                   |
+| `RATE_LIMIT_LOGIN_EMAIL_MAX`     | no            | `10`                                          | Failed login attempts per account email per window (reset on a successful login). Always enforced.                                                                                                                                                                                                                  |
+| `RATE_LIMIT_LOGIN_WINDOW_SEC`    | no            | `900`                                         | Login window in seconds.                                                                                                                                                                                                                                                                                            |
+| `RATE_LIMIT_REGISTER_MAX`        | no            | `10`                                          | Invite registration, reset and setup POSTs per client IP per window. Skipped when the client IP is unknown.                                                                                                                                                                                                         |
+| `RATE_LIMIT_REGISTER_WINDOW_SEC` | no            | `3600`                                        | Registration window in seconds.                                                                                                                                                                                                                                                                                     |
 
 **Rate limiting and unknown clients.** Per-IP limits only work when the app can tell clients apart, which needs `TRUSTED_PROXIES` to match your reverse proxy. Without it (the default for direct mode or `npm run dev`) every visitor looks like the same "unknown" client; rather than let a few bad requests lock everybody out, the per-IP limits are then skipped and only the per-email login limit applies. Register and reset links carry unguessable tokens, so they stay safe without a per-IP limit. Counters are in memory and reset on restart.
 

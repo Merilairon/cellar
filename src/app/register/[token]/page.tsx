@@ -61,7 +61,7 @@ export default async function RegisterPage({
             className="border p-2"
           />
         </label>
-        <button type="submit" className="bg-emerald-600 p-2 text-white">
+        <button type="submit" className="bg-emerald-700 p-2 text-white">
           {t('register.submit')}
         </button>
       </form>

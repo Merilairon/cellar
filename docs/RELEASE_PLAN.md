@@ -18,6 +18,7 @@ Milestones are sequential; each one is a runnable, deployable version. Specs liv
 
 | Item | Status |
 | --- | --- |
+| Release status | v0.1 released. **v0.2: implemented, pending gate** (testing-reality-checker verdict, then tag `v0.2`; see [tasks/v0.2-tasklist.md](tasks/v0.2-tasklist.md)) |
 | Owner | Jan Baetens (product, review); AI coding tools (implementation) |
 | Pace | Weekend sprints, no fixed deadline. Plan: **one slice (or one small milestone) per 1–2 weekends**; M1 and M2 get two weekends each. Rough total to v1.0: 12–16 weekends. Re-split any slice that cannot finish in two weekends |
 | Pre-M2 spike | Wireframe/prototype the grid (desktop + 375 px phone) and the grid editor. Brownie spans already verified against the reference image |

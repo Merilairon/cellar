@@ -15,7 +15,7 @@ RUN npm ci
 FROM deps AS build
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY . .
-RUN npm run build && npm run build:admin-reset
+RUN npm run build && npm run build:admin-reset && npm run build:seed
 
 # ---- runtime: no toolchain, non-root
 FROM ${NODE_IMAGE} AS runtime
@@ -30,9 +30,10 @@ COPY --from=build --chown=node:node /app/.next/standalone ./
 COPY --from=build --chown=node:node /app/.next/static ./.next/static
 COPY --from=build --chown=node:node /app/drizzle ./drizzle
 COPY --from=build --chown=node:node /app/dist/admin-reset.mjs ./dist/admin-reset.mjs
-# Standalone has no tsx or build tooling: map the CLI to the esbuild bundle so
-# `npm run admin:reset -- <email>` works inside the container.
-RUN printf '{"name":"cellar","private":true,"scripts":{"admin:reset":"node dist/admin-reset.mjs"}}\n' > package.json \
+COPY --from=build --chown=node:node /app/dist/seed.mjs ./dist/seed.mjs
+# Standalone has no tsx or build tooling: map the CLIs to their esbuild bundles so
+# `npm run admin:reset -- <email>` and `npm run seed` work inside the container.
+RUN printf '{"name":"cellar","private":true,"scripts":{"admin:reset":"node dist/admin-reset.mjs","seed":"node dist/seed.mjs"}}\n' > package.json \
  && chown node:node package.json
 USER node
 VOLUME /data

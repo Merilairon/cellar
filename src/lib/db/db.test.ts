@@ -1,4 +1,4 @@
-import { mkdtempSync, existsSync, rmSync } from 'node:fs';
+import { cpSync, mkdtempSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -6,6 +6,8 @@ import { eq } from 'drizzle-orm';
 import { openDb, type Db } from './connection';
 import { assertFts5Available, runMigrations } from './migrate';
 import { session, user } from './schema';
+import { getRecipeFull } from './recipes';
+import { toApiRecipe } from '@/lib/recipes/service';
 
 const dirs: string[] = [];
 const open: Db[] = [];
@@ -27,13 +29,67 @@ const names = (db: Db) =>
     .map((r) => r.name)
     .sort();
 
+describe('migration 0002 (qty_max) on existing data', () => {
+  it('keeps rows created under 0001, with null upper bounds, readable through the API mapper', () => {
+    const src = join(process.cwd(), 'drizzle');
+    const old = join(tmp(), 'drizzle');
+    cpSync(src, old, { recursive: true });
+    const journalPath = join(old, 'meta', '_journal.json');
+    const journal = JSON.parse(readFileSync(journalPath, 'utf8')) as { entries: unknown[] };
+    journal.entries = journal.entries.slice(0, 2); // 0000 + 0001 only
+    writeFileSync(journalPath, JSON.stringify(journal));
+
+    const db = track(openDb(join(tmp(), 'app.db')));
+    runMigrations(db, old);
+    db.$client
+      .prepare(
+        "INSERT INTO user (id,email,display_name,password_hash,role,created_at) VALUES ('u1','u@x.test','U','h','member','2026-01-01')",
+      )
+      .run();
+    db.$client
+      .prepare(
+        "INSERT INTO recipe (id,owner_id,title,created_at,updated_at) VALUES ('r1','u1','Old','2026-01-01','2026-01-01')",
+      )
+      .run();
+    db.$client.prepare("INSERT INTO section (id,recipe_id,position) VALUES ('s1','r1',0)").run();
+    db.$client
+      .prepare(
+        "INSERT INTO ingredient (id,recipe_id,section_id,position,name,raw_text,us_qty,us_unit,display_primary) VALUES ('i1','r1','s1',0,'honey','2-3 tbsp honey',2,'tbsp','us')",
+      )
+      .run();
+
+    runMigrations(db); // applies 0002
+    const full = getRecipeFull(db, 'r1')!;
+    expect(full.sections[0]!.ingredients[0]).toMatchObject({
+      usQty: 2,
+      usQtyMax: null,
+      metricQtyMax: null,
+    });
+    const api = toApiRecipe(full, true);
+    expect(api.sections[0]!.ingredients[0]).toMatchObject({
+      us_qty: 2,
+      us_qty_max: null,
+      metric_qty_max: null,
+    });
+  });
+});
+
 describe('migrations', () => {
-  it('creates the DB file (and parent dir) and applies the four tables', () => {
+  it('creates the DB file (and parent dir) and applies the v0.1 and recipe tables', () => {
     const path = join(tmp(), 'nested', 'app.db');
     const db = track(openDb(path));
     runMigrations(db);
     expect(existsSync(path)).toBe(true);
-    expect(names(db)).toEqual(['invite', 'password_reset', 'session', 'user']);
+    expect(names(db)).toEqual([
+      'ingredient',
+      'invite',
+      'password_reset',
+      'recipe',
+      'section',
+      'session',
+      'step',
+      'user',
+    ]);
     expect(db.$client.pragma('journal_mode', { simple: true })).toBe('wal');
     expect(db.$client.pragma('foreign_keys', { simple: true })).toBe(1);
   });
@@ -46,7 +102,7 @@ describe('migrations', () => {
     const n = db2.$client.prepare('SELECT count(*) AS n FROM __drizzle_migrations').get() as {
       n: number;
     };
-    expect(n.n).toBe(1);
+    expect(n.n).toBe(3);
   });
 
   it('enforces uniqueness, defaults, ULID ids and FK cascade', () => {

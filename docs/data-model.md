@@ -88,7 +88,9 @@ One row per **grid row** (not per distinct ingredient), ordered by first use wit
 | note | text | nullable, e.g. "melted" |
 | raw_text | text | original line as imported |
 | metric_qty / metric_unit | real / text | e.g. 115, `g` |
+| metric_qty_max | real | nullable upper bound of a range (`100-150 g`); added in migration `0002_qty_max` |
 | us_qty / us_unit | real / text | e.g. 4, `oz` |
+| us_qty_max | real | nullable upper bound of a range (`2-3 tbsp`); migration `0002_qty_max` |
 | display_primary | text | `metric` \| `us` — which unit was original |
 | group_label | text | nullable ("For the sauce") |
 
@@ -112,6 +114,15 @@ Either measure may be null; the missing one is derived by the conversion engine 
 - `banner_top` steps are full-width rows above the ingredients ("Preheat oven…"); `banner_bottom` steps are full-width rows below them for work after the last column step ("Cool 20 min, frost, serve").
 - `column` steps require `row_start ≤ row_end` (rows are within the step's section).
 - A step with no ingredients in the middle of a recipe ("rest 10 min") is a `column` step spanning all rows combined so far.
+
+**Implementation notes (v0.2, migration `0001_recipes`)**
+- Foreign keys: `section`, `ingredient`, `step` -> `recipe` and `ingredient`/`step` -> `section` are `ON DELETE CASCADE`. `recipe.owner_id` -> `user` is `RESTRICT` (a user delete must reassign or delete recipes explicitly, see `deleteUserGuarded`). `recipe.copied_from_id` -> `recipe` is `ON DELETE SET NULL`.
+- Indexes: `recipe(owner_id)`, `recipe(copied_from_id)`, `recipe(visibility, updated_at)`, `ingredient(recipe_id)`, `step(recipe_id)`; unique `section(recipe_id, position)`, `ingredient(section_id, position)`, `step(section_id, position)`; unique `recipe(share_token)`.
+- CHECK constraints: `recipe.visibility`, `recipe.view_mode`, `ingredient.display_primary`, `step.kind` enums; and on `step`: banners must have NULL `row_start`/`row_end`, a column has both null (list-mode recipe) or both set with `0 <= row_start <= row_end`. Range against the ingredient count is validated in `src/lib/grid/validate.ts`.
+- `recipe.view_mode` defaults to `list`; the API computes `grid` when every column step has a valid span (and there is at least one). `step.detail` defaults to `''`. `split_group_id` is a plain ULID column (no table, no FK); the API rewrites client-supplied group values to fresh ULIDs.
+- `share_token` exists but is unused until M5.
+- Ingredient ranges ("2-3") store the lower bound in `*_qty` and the upper bound in `*_qty_max` (migration `0002_qty_max`; only the primary side (the first-written unit system) keeps a range, the other side of a dual-unit line is always a single quantity; null for single quantities; the API rejects a max without a qty or not above it). The original line stays in `raw_text`. Display renders `2-3 tbsp`. Unit conversion, when it arrives, must convert both bounds. Units outside metric/US (can, clove, pinch) are stored in `metric_qty` with the unit text in `metric_unit`; plain counts have a null unit.
+- Until the grid editor (M4), `PUT /api/recipes/:id` replaces all sections/ingredients/steps atomically (child ids change). Omitting `visibility` keeps the stored value. Omitting `view_mode` keeps a stored `list`; a stored `grid` stays `grid` only while the spans are still valid (otherwise the recomputed default, `list`). Mutating recipe endpoints require `Content-Type: application/json` (415 otherwise). Authorization is re-checked inside the write transaction.
 
 ### tag / recipe_tag
 `tag(id, name unique)`, `recipe_tag(recipe_id, tag_id)`.

@@ -15,7 +15,9 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "admin:reset": "tsx scripts/admin-reset.ts",
-    "build:admin-reset": "esbuild scripts/admin-reset.ts --bundle --platform=node --format=esm --target=node22 --external:better-sqlite3 --external:argon2 --tsconfig=tsconfig.json --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" --outfile=dist/admin-reset.mjs"
+    "seed": "tsx scripts/seed.ts",
+    "build:admin-reset": "esbuild scripts/admin-reset.ts --bundle --platform=node --format=esm --target=node22 --external:better-sqlite3 --external:argon2 --tsconfig=tsconfig.json --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" --outfile=dist/admin-reset.mjs",
+    "build:seed": "esbuild scripts/seed.ts --bundle --platform=node --format=esm --target=node22 --external:better-sqlite3 --external:argon2 --tsconfig=tsconfig.json --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" --outfile=dist/seed.mjs"
   },
   "dependencies": {
     "argon2": "0.45.2",
@@ -29,6 +31,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.11.0",
     "@playwright/test": "^1.64.1",
     "@tailwindcss/postcss": "^4.3.4",
     "@types/better-sqlite3": "9.6.0",

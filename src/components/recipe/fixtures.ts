@@ -1,0 +1,59 @@
+import type { RecipeInput } from '@/lib/recipes/schemas';
+import type { ApiRecipe } from './types';
+
+/** API-shaped recipe (ids, positions) from a shared sample input. Test/dev helper only. */
+export function apiFromInput(r: RecipeInput, id = 'r1'): ApiRecipe {
+  return {
+    id,
+    owner_id: 'u1',
+    title: r.title,
+    description: r.description ?? null,
+    servings: r.servings ?? null,
+    servings_label: r.servings_label ?? null,
+    prep_minutes: r.prep_minutes ?? null,
+    cook_minutes: r.cook_minutes ?? null,
+    source_url: r.source_url ?? null,
+    source_name: r.source_name ?? null,
+    visibility: r.visibility ?? 'private',
+    view_mode: r.view_mode ?? 'grid',
+    copied_from_id: null,
+    created_at: '2026-01-01T00:00:00.000Z',
+    updated_at: '2026-01-01T00:00:00.000Z',
+    can_edit: true,
+    sections: r.sections.map((s, si) => ({
+      id: `s${si}`,
+      position: si,
+      title: s.title ?? null,
+      ingredients: s.ingredients.map((i, p) => ({
+        id: `s${si}i${p}`,
+        position: p,
+        name: i.name,
+        note: i.note ?? null,
+        raw_text: i.raw_text ?? i.name,
+        metric_qty: i.metric_qty ?? null,
+        metric_qty_max: i.metric_qty_max ?? null,
+        metric_unit: i.metric_unit ?? null,
+        us_qty: i.us_qty ?? null,
+        us_qty_max: i.us_qty_max ?? null,
+        us_unit: i.us_unit ?? null,
+        display_primary: i.display_primary,
+        split_group_id: i.split_group_id ?? null,
+        portion_label: i.portion_label ?? null,
+        group_label: i.group_label ?? null,
+      })),
+      steps: s.steps.map((t, p) => ({
+        id: `s${si}t${p}`,
+        position: p,
+        kind: t.kind,
+        label: t.label,
+        detail: t.detail,
+        row_start: t.row_start ?? null,
+        row_end: t.row_end ?? null,
+        temp_c: t.temp_c ?? null,
+        temp_f: t.temp_f ?? null,
+        minutes_min: t.minutes_min ?? null,
+        minutes_max: t.minutes_max ?? null,
+      })),
+    })),
+  };
+}
