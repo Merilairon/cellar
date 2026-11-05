@@ -181,7 +181,67 @@
       "discard": "Discard",
       "saveFailed": "The recipe could not be saved. Check your connection and try again.",
       "alreadySaved": "This import was already saved.",
-      "coverFailed": "The recipe was saved, but the cover image could not be downloaded."
+      "coverFailed": "The recipe was saved, but the cover image could not be downloaded.",
+      "mapping": {
+        "heading": "Automatic grid",
+        "level": {
+          "high": {
+            "label": "Good match",
+            "description": "We placed every ingredient in the steps that use it. Please give the preview a quick look."
+          },
+          "medium": {
+            "label": "Check the mapping",
+            "description": "We could place most ingredients, but some steps are unclear. Preview the grid before you choose it."
+          },
+          "low": {
+            "label": "Could not map reliably",
+            "description": "We could not tell which ingredients go with which steps. The recipe will be saved as a list unless you try the grid yourself."
+          }
+        },
+        "mode": {
+          "grid": "Will be saved as: Grid",
+          "list": "Will be saved as: List"
+        },
+        "state": {
+          "applied": "Proposal applied.",
+          "edited": "Proposal applied, with your changes.",
+          "restored": "Proposal restored.",
+          "list": "Showing the list as imported.",
+          "invalid": "The grid cannot be shown yet.",
+          "saveInvalid": "The grid is not valid; fix the steps or use the list view."
+        },
+        "action": {
+          "preview": "Preview as grid",
+          "tryAnyway": "Try the grid anyway",
+          "useList": "Use list view instead",
+          "reset": "Reset to proposal"
+        },
+        "confirm": {
+          "text": "This replaces your changes to ingredients and steps. Title, description and other details are kept.",
+          "replace": "Replace",
+          "keep": "Keep editing"
+        },
+        "details": {
+          "summary": "Why this score",
+          "score": "Match score: {score} out of 1",
+          "proposalOnly": "The score is for the proposal, not for your edits.",
+          "more": "{count, plural, one {and # more} other {and # more}}",
+          "reasonNone": "No single problem stood out; there was not enough in the steps to place the ingredients."
+        },
+        "fixHint": "To correct the grid, change the ingredient row numbers in a step below. The preview updates as you type. Avoid reordering ingredient lines; change the numbers instead.",
+        "preview": {
+          "heading": "Grid preview",
+          "skip": "Skip the preview and go to the recipe fields",
+          "summary": "{steps, plural, one {# step} other {# steps}} over {rows, plural, one {# ingredient row} other {# ingredient rows}} in {sections, plural, one {# part} other {# parts}}.",
+          "noColumns": "No step in this part is linked to ingredients yet.",
+          "invalidIntro": "The grid cannot be shown yet. Fix these before saving as a grid, or use the list view:",
+          "invalidItem": "Step {n}: {message}"
+        },
+        "explain": {
+          "summary": "How does this work?",
+          "body": "Cellar reads the steps and guesses which ingredients each one uses. The grid then shows each step next to those ingredients. This is a guess made by fixed rules on this server; nothing is sent to an AI service. Recipes the guess cannot handle are best kept as a list. A drag-and-drop grid editor is planned; until then, change the row numbers in each step."
+        }
+      }
     },
     "warning": {
       "yield_unparsed": "The number of servings could not be read.",
@@ -193,6 +253,21 @@
       "times_missing": "No prep or cook time was found.",
       "image_dropped": "The image on the page could not be used.",
       "draft_invalid": "Some parts of the recipe could not be read.",
+      "ingredient_unmentioned": "{name} is not mentioned in any step, so it was added to the last step.",
+      "ambiguous_name": "\"{token}\" could mean more than one ingredient, so it was not placed.",
+      "split_unresolved": "We could not work out how much of {name} goes into each step, so it stays one row.",
+      "group_reference": "A step says \"all the ingredients\" or similar; we used every ingredient so far.",
+      "step_without_ingredients": "At least one step does not mention an ingredient.",
+      "sections_from_ingredients_only": "Parts of the recipe were guessed from the ingredient headings only.",
+      "section_merged": "A part of the recipe had no ingredients and was merged into the previous one.",
+      "ingredient_shared_across_sections": "An ingredient is used in more than one part of the recipe.",
+      "too_many_sections": "The recipe seems to have too many parts to map automatically.",
+      "input_truncated": "The recipe was too long; only the first part was mapped.",
+      "time_ambiguous": "A step mentions more than one time; the first one was used.",
+      "mapping_invalid": "The suggested grid did not pass our checks, so it is not offered.",
+      "mapping_budget": "The recipe was too complex to map automatically.",
+      "mapping_too_large": "The suggested grid was too large to keep, so it is not offered.",
+      "warnings_more": "{count, plural, one {and # more note} other {and # more notes}}",
       "generic": "The page had something we could not read."
     }
   },
