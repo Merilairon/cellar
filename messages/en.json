@@ -10,5 +10,18 @@
       "displayName": "Enter a display name (1 to 80 characters).",
       "password": "Password must be 12 to 128 characters."
     }
+  },
+  "login": {
+    "title": "Sign in",
+    "email": "Email",
+    "password": "Password",
+    "submit": "Sign in",
+    "errors": {
+      "invalid": "Invalid email or password.",
+      "csrf": "Request rejected. Reload the page and try again."
+    }
+  },
+  "common": {
+    "logout": "Sign out"
   }
 }
