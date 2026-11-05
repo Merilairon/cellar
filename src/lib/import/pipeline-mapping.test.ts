@@ -275,5 +275,24 @@ describe('readMapping (old and tampered drafts, G21)', () => {
     ],
     ['non-string warning', { ...good(), warnings: [1] }],
     ['no signals', { ...good(), signals: null }],
+    ['signals as array', { ...good(), signals: [1] }],
+    ['non-finite signal', { ...good(), signals: { cov: Infinity } }],
+    ['string signal', { ...good(), signals: { cov: 'x' } }],
+    ['too many warnings', { ...good(), warnings: Array.from({ length: 101 }, () => 'a') }],
+    ['overlong warning', { ...good(), warnings: ['x'.repeat(301)] }],
   ])('rejects %s', (_n, v) => expect(readMapping(v)).toBeNull());
+
+  it('derives level from confidence so the badge cannot disagree with the number', () => {
+    expect(readMapping({ ...good(), confidence: 0.5, level: 'high' })?.level).toBe('medium');
+    expect(readMapping({ ...good(), confidence: 0.2, level: 'high' })?.level).toBe('low');
+    expect(readMapping({ ...good(), confidence: 0.7, level: 'low' })?.level).toBe('high');
+  });
+  it('keeps at most the bounded warnings and finite signals', () => {
+    const m = readMapping({
+      ...good(),
+      warnings: Array.from({ length: 100 }, () => 'x'.repeat(300)),
+      signals: { cov: 1, unamb: 0.5 },
+    });
+    expect(m?.warnings).toHaveLength(100);
+  });
 });

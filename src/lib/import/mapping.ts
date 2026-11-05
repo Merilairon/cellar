@@ -1,4 +1,5 @@
 import { sectionInputSchema } from '@/lib/recipes/schemas';
+import { levelOf } from './map-confidence';
 import { mapGrid as defaultMapGrid } from './map-grid';
 import type { MapInput, MapResult, MappingProposal } from './map-types';
 import type { Draft } from './normalize';
@@ -61,8 +62,15 @@ export function attachMapping(
 
 const sectionsSchema = sectionInputSchema.array().min(1).max(20);
 const LEVELS: ReadonlySet<unknown> = new Set(['high', 'medium', 'low']);
+/** Bounds for stored warnings and signals (defence in depth; the mapper writes far fewer). */
+const MAX_WARNINGS = 100;
+const MAX_WARNING_CHARS = 300;
+const MAX_SIGNALS = 20;
 
-/** Structural check of a proposal read back from `draft_json` (old or tampered rows give null). */
+/**
+ * Structural check of a proposal read back from `draft_json` (old or tampered rows give null).
+ * `level` is always derived from `confidence`, so the badge and the number cannot disagree.
+ */
 export function readMapping(v: unknown): MappingProposal | null {
   if (typeof v !== 'object' || v === null || Array.isArray(v)) return null;
   const m = v as Record<string, unknown>;
@@ -74,9 +82,16 @@ export function readMapping(v: unknown): MappingProposal | null {
   if (!Array.isArray(m['sections']) || m['sections'].length === 0) return null;
   // The review screen builds its form from these sections, so they must be real sections.
   if (!sectionsSchema.safeParse(m['sections']).success) return null;
-  if (!Array.isArray(m['warnings']) || !m['warnings'].every((w) => typeof w === 'string')) {
+  if (
+    !Array.isArray(m['warnings']) ||
+    m['warnings'].length > MAX_WARNINGS ||
+    !m['warnings'].every((w) => typeof w === 'string' && w.length <= MAX_WARNING_CHARS)
+  ) {
     return null;
   }
-  if (typeof m['signals'] !== 'object' || m['signals'] === null) return null;
-  return v as MappingProposal;
+  const sig = m['signals'];
+  if (typeof sig !== 'object' || sig === null || Array.isArray(sig)) return null;
+  const sigValues = Object.values(sig);
+  if (sigValues.length > MAX_SIGNALS || !sigValues.every((x) => Number.isFinite(x))) return null;
+  return { ...(v as MappingProposal), level: levelOf(m['confidence']) };
 }
