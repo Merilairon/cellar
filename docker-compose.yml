@@ -10,7 +10,7 @@ services:
     environment:
       DATABASE_PATH: /data/app.db
       SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in .env (openssl rand -base64 48)}
-      BASE_URL: ${BASE_URL:-http://localhost:3000}
+      BASE_URL: ${BASE_URL:-http://localhost:${APP_PORT:-3000}}
       # Comma-separated IPs/CIDRs whose X-Forwarded-* headers are trusted. Empty = none.
       # With the caddy profile set it to 172.28.0.10 (Caddy's fixed address below).
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
