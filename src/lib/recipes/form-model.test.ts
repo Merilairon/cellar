@@ -224,3 +224,12 @@ describe('formFromDraft', () => {
     if (v.ok) expect(v.viewMode).toBe('list');
   });
 });
+
+describe('formFromRecipe keys', () => {
+  it('are deterministic so server and client renders agree', () => {
+    const recipe = apiShaped(SAMPLE_VANILLA_CAKE);
+    const keys = (f: ReturnType<typeof formFromRecipe>) =>
+      f.sections.flatMap((s) => [s.key, ...s.steps.map((t) => t.key)]);
+    expect(keys(formFromRecipe(recipe))).toEqual(keys(formFromRecipe(recipe)));
+  });
+});

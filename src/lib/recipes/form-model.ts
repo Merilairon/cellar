@@ -174,15 +174,15 @@ export function formFromRecipe(r: RecipeLike): FormState {
     sourceName: r.source_name ?? '',
     sourceUrl: r.source_url ?? '',
     visibility: r.visibility,
-    sections: r.sections.map((s) => {
+    sections: r.sections.map((s, si) => {
       const originals = byPosition(s.ingredients).map(originalFromApi);
       return {
-        key: nextKey(),
+        key: `s${si}`,
         title: s.title ?? '',
         ingredientsText: originals.map(lineOf).join('\n'),
         originals,
-        steps: byPosition(s.steps).map((t) => ({
-          key: nextKey(),
+        steps: byPosition(s.steps).map((t, ti) => ({
+          key: `s${si}-t${ti}`,
           kind: t.kind,
           label: t.label,
           detail: t.detail,
