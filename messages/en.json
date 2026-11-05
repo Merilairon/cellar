@@ -19,9 +19,68 @@
     "errors": {
       "invalid": "Invalid email or password.",
       "csrf": "Request rejected. Reload the page and try again."
-    }
+    },
+    "passwordChanged": "Password updated. Sign in with your new password.",
+    "registered": "Account created. Sign in."
   },
   "common": {
-    "logout": "Sign out"
+    "logout": "Sign out",
+    "invalidLink": "This link is invalid or has expired.",
+    "home": "Recipe Book"
+  },
+  "admin": {
+    "users": {
+      "title": "Users",
+      "inviteHeading": "Invite someone",
+      "inviteEmail": "Email (optional, pins the invite to this address)",
+      "inviteSubmit": "Create invite link",
+      "linkOnce": "Copy this link now. It is shown only once and expires:",
+      "listHeading": "Accounts",
+      "colEmail": "Email",
+      "colName": "Name",
+      "colRole": "Role",
+      "colStatus": "Status",
+      "colActions": "Actions",
+      "roleAdmin": "Admin",
+      "roleMember": "Member",
+      "statusActive": "Active",
+      "statusDeactivated": "Deactivated",
+      "reset": "Create reset link",
+      "resetLinkOnce": "One-time password reset link (shown once):",
+      "deactivate": "Deactivate",
+      "deactivated": "User deactivated.",
+      "errors": {
+        "invalidInput": "Check the input and try again.",
+        "csrf": "Request rejected. Reload the page and try again.",
+        "forbidden": "You are not allowed to do this.",
+        "lastAdmin": "The last active admin cannot be deactivated.",
+        "notFound": "User not found.",
+        "alreadyDeactivated": "User is already deactivated.",
+        "resetUnavailable": "Cannot create a reset link for this user."
+      }
+    }
+  },
+  "register": {
+    "title": "Create your account",
+    "email": "Email",
+    "displayName": "Display name",
+    "password": "Password (at least 12 characters)",
+    "submit": "Create account",
+    "errors": {
+      "email": "Enter a valid email address.",
+      "displayName": "Enter a display name (1 to 80 characters).",
+      "password": "Password must be 12 to 128 characters.",
+      "emailTaken": "That email address is already registered.",
+      "csrf": "Request rejected. Reload the page and try again."
+    }
+  },
+  "reset": {
+    "title": "Choose a new password",
+    "password": "New password (at least 12 characters)",
+    "submit": "Set password",
+    "errors": {
+      "password": "Password must be 12 to 128 characters.",
+      "csrf": "Request rejected. Reload the page and try again."
+    }
   }
 }
