@@ -209,6 +209,8 @@ row \ col   (banner rows span full width)
 
 ## 3. Import Pipeline
 
+> Status: v0.3.0 implements the static path only (fetch, JSON-LD, normalize, paste fallback, review, save in list view). Headless rendering and the auto-mapper below are planned for v0.3.2 and v0.3.1.
+
 ```
 URL ─► SSRF check ─► fetch (static) ─► JSON-LD Recipe found? ─┐
                          │ no / blocked                       │ yes
@@ -243,7 +245,7 @@ URL ─► SSRF check ─► fetch (static) ─► JSON-LD Recipe found? ─┐
 6. Compute a confidence score; low confidence leaves `view_mode = list`.
 
 **Safety**
-The instance is internet-exposed (PRD §6), so this is a hard requirement. Block private/loopback/link-local IPs after DNS resolution, limit redirects (≤ 5), response size (≤ 5 MB), timeout (10 s static / 30 s headless), allow only http(s). **Headless sidecar:** its own container on an isolated Docker network with no route to the host, LAN, or app database; intercept every browser request and apply the same IP checks (resolve once, then pin the IP to defeat DNS rebinding); disable downloads, `file://` and extensions; fresh context per job; memory/CPU limits; hard 30 s kill.
+The instance is internet-exposed (PRD §6), so this is a hard requirement. Block private/loopback/link-local IPs after DNS resolution, limit redirects (≤ 5), response size (≤ 5 MB), timeout (10 s static / 30 s headless), allow only http(s) on ports 80 and 443 (implemented in v0.3.0 for the static path). **Headless sidecar:** its own container on an isolated Docker network with no route to the host, LAN, or app database; intercept every browser request and apply the same IP checks (resolve once, then pin the IP to defeat DNS rebinding); disable downloads, `file://` and extensions; fresh context per job; memory/CPU limits; hard 30 s kill.
 
 ## 4. Unit Conversion & Scaling
 
@@ -265,8 +267,10 @@ The instance is internet-exposed (PRD §6), so this is a hard requirement. Block
 | POST/DELETE | /api/recipes/:id/share-link | Create / rotate / revoke the public link token |
 | POST | /api/recipes/:id/copy | **Save a copy** of a visible recipe into the caller's book |
 | GET | /r/:share_token | Public read-only page |
-| POST | /api/import | Start import `{url}` or `{text}` → returns draft |
-| POST | /api/import/:id/save | Persist reviewed draft |
+| POST | /api/import | Start import `{url}` or `{text}` (exactly one; text max 500 KB) → `{ id, status, method, draft, warnings, error_code, duplicate }`. A failed fetch or no recipe returns 200 with `status: 'failed'` and `error_code`; 4xx is for bad input (400, 401, 403, 415, 422) and 429 with `Retry-After` |
+| GET | /api/import/:id | Owner only: restore a review after reload |
+| POST | /api/import/:id/save | Persist the edited draft (same schema as recipe create, plus `import_cover`); 201 `{ id }`, 404 if not the caller's job, 409 if already saved |
+| GET | /api/photos/:id | Authenticated cover image, gated by the recipe's read permission |
 | POST | /api/recipes/:id/photos | Upload photo |
 | PUT | /api/recipes/:id/rating | Set own rating |
 | POST/GET | /api/recipes/:id/notes | Notes |

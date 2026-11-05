@@ -2,7 +2,7 @@
 
 A self-hosted recipe book for you and the people you invite. Next.js 16, SQLite, one container.
 
-This is v0.2. It builds on v0.1 (accounts, invites, password recovery, security hardening, Docker packaging) and adds manual recipes with a grid view and a list view. It runs as a single process with a single SQLite file.
+This is v0.3.0. It builds on v0.2 (manual recipes with a grid view and a list view) and adds importing a recipe from a web address or pasted text. Earlier versions added accounts, invites, password recovery, security hardening and Docker packaging. It runs as a single process with a single SQLite file.
 
 ## Features
 
@@ -13,9 +13,10 @@ This is v0.2. It builds on v0.1 (accounts, invites, password recovery, security 
 - **Phone, tablet and desktop layouts.** Tested at 375, 768 and 1280 px. On a phone the ingredient column stays fixed, a scroll cue shows that the grid scrolls sideways, and tapping a step opens it in a bottom sheet.
 - **Sharing and copies.** The owner (or an admin) can share a recipe read-only with all signed-in users. Another user can save an independent private copy.
 - **User deletion.** When an admin deletes a user, they choose to delete that user's recipes or reassign them to another active user.
+- **Recipe import (v0.3.0).** Import a recipe from a web address or from pasted text, review and edit it, then save it. See [Import a recipe](#import-a-recipe).
 - **Sample recipes.** `npm run seed` adds two self-written samples (see [Sample data](#sample-data)).
 
-Not in v0.2: URL import, search and tags, unit conversion and scaling, photos, notes and ratings, public links, and the drag-and-drop grid editor. The `/import` page is a placeholder.
+Not yet available: automatic grid mapping of imported steps (planned v0.3.1), pages that need JavaScript to show the recipe (planned v0.3.2), search and tags, unit conversion and scaling, a photo gallery, notes and ratings, public links, and the drag-and-drop grid editor.
 
 ## Routes
 
@@ -24,9 +25,74 @@ Not in v0.2: URL import, search and tags, unit conversion and scaling, photos, n
 | `/recipes`          | Your recipes and recipes shared with you. Shows an empty state with calls to action when there are none.                                                       |
 | `/recipes/new`      | Form to create a recipe.                                                                                                                                       |
 | `/recipes/:id`      | A recipe in grid or list view, with a toggle. The owner and admins see edit, delete and share controls; other users see a read-only view with **Save a copy**. |
+| `/import` | Import a recipe from a web address or pasted text (see [Import a recipe](#import-a-recipe)). |
+| `/import/:id` | Review screen for an import: edit the draft, then save or discard. |
 | `/recipes/:id/edit` | Form to edit a recipe you own (admins can edit any recipe). Saving replaces the recipe's sections, ingredients and steps.                                      |
 
 The JSON API lives under `/api/recipes` (`/api/recipes`, `/api/recipes/:id`, `/api/recipes/:id/copy`, `/api/recipes/:id/visibility`). See [docs/data-model.md](docs/data-model.md).
+
+## Import a recipe
+
+Open **Import** (`/import`). There are two ways in.
+
+**From a web address.** Enter the address of a recipe page and choose **Import recipe**. Cellar fetches the page and reads the Schema.org `Recipe` data (JSON-LD) that most recipe sites publish. Only pages that contain that data in their static HTML can be read.
+
+**Paste the recipe.** Use the **Paste the recipe** tab when a site blocks the fetch or has no readable data. You can paste either:
+
+- the page's HTML source (or just its JSON-LD block), which goes through the same reader as a fetched page, or
+- plain recipe text. The first non-empty line is the title; a line reading `Ingredients` starts the ingredients (one per line), and a line reading `Instructions`, `Directions`, `Method` or `Steps` starts the steps. Without those headings the import fails with `no_recipe`.
+
+Pasted text is limited to 500,000 characters. A paste import makes no network request.
+
+Either way you land on a review screen. Everything is editable, tags found on the page are shown but not saved yet, and a banner appears when you already have a recipe from the same address (you can still choose **Import anyway**). Imported recipes are saved in list view; nothing is written to your recipes until you press **Save imported recipe**. A failed import never creates a recipe. If **Include the cover image** is checked, the image is downloaded when you save, re-encoded to WebP at up to 1600 px with metadata removed, and stored under the uploads directory. The cover is not displayed in the app yet (planned with the media work in v0.4.2).
+
+### Error codes
+
+When an import fails, the API still answers 200 with `status: "failed"` and one of these codes, and the page offers the paste fallback.
+
+| Code | Meaning |
+| --- | --- |
+| `invalid_url` | Not an http or https address, contains a username or password, or uses a port other than 80 or 443. |
+| `private_address` | The host resolves to a private, loopback, link-local or otherwise internal address, at the first request or at any redirect. |
+| `blocked` | The site answered 403 or 429, or showed a bot wall. |
+| `timeout` | The whole fetch, including redirects, took longer than 10 seconds. |
+| `too_large` | The response exceeded 5 MB. |
+| `fetch_failed` | DNS failure, connection error, a non-HTML content type, or a server error. |
+| `no_recipe` | The page was fetched but no usable recipe (title, at least one ingredient and one step) was found. |
+
+Requests that are malformed are rejected with HTTP 400 (invalid JSON), 401, 403 (origin check), 415 (not JSON) or 422 (validation). Exceeding the rate limit returns 429 with a `Retry-After` header.
+
+### Limits
+
+| Limit | Value |
+| --- | --- |
+| Response size | 5 MB, counted on streamed bytes |
+| Total time per fetch | 10 seconds, including redirects |
+| Ports | 80 and 443 only |
+| Redirects | 5, each one re-validated |
+| Pasted text | 500,000 characters |
+| Rate limit | `RATE_LIMIT_IMPORT_MAX` imports (default 20) per user per `RATE_LIMIT_IMPORT_WINDOW_SEC` (default 3600 s); failures count |
+
+### How the fetch is restricted (SSRF guard)
+
+Because the instance may be internet-exposed, the fetcher in `src/lib/import/safe-fetch.ts` is the only code that talks to the network for imports. It resolves the host once, rejects every resolved address in private, loopback, link-local (including cloud metadata), CGNAT, multicast and reserved ranges (IPv4 and IPv6, including mapped forms), and connects to the validated address so DNS cannot change between check and connect. Redirects are followed manually. The tests use an injected resolver and transport.
+
+What this has not been tested against: a real network. TLS certificate and SNI handling with the pinned address is covered by the code design but unverified against live sites (see [docs/tasks/v0.3.0-carryover.md](docs/tasks/v0.3.0-carryover.md)).
+
+### Stored data
+
+- The imported draft is kept in the `import_job` table (`draft_json`) and is not pruned automatically.
+- Raw HTML is **not** stored unless `KEEP_RAW_HTML=true`. When enabled, files are written to `import-raw/` next to the uploads directory and are never deleted automatically.
+- Covers are stored in the uploads directory (`UPLOADS_DIR`; `/data/uploads` in Docker, inside the `app-data` volume, so the [backup](#backup) covers them).
+- `source_url` is stored in a normalized form (host lowercased, fragment and tracking parameters removed, `http` and `https` treated as equal) and is currently always saved with `https`.
+
+### Import fixture report
+
+`npm run test:import` runs the import pipeline offline (a fake fetcher, no network) over the 44 hand-written fixtures in `tests/fixtures/import/` and prints a table and a success rate. It currently reports 34 of 34 valid drafts (100 percent, target 85 percent), 5 of 5 deliberate rejections, and 5 out-of-slice pages.
+
+What the 100 percent means: every fixture that a static JSON-LD reader should handle produces a draft that passes the recipe schema, and the pages that must be rejected are rejected. What it does not mean: that 100 percent of real recipe sites import. The fixtures are small hand-written pages written for this reader, so they cannot predict real-world markup. The 5 out-of-slice pages (3 JavaScript-only, 2 microdata-only) are excluded from the rate by definition and currently produce `no_recipe`. Expect a lower rate on real sites; the report is a regression guard, not a coverage measurement.
+
+Imports do not use any AI or LLM service.
 
 ## Run locally
 
@@ -182,7 +248,7 @@ Add `--push` and a registry tag to publish.
 
 ### Backup
 
-Back up the `/data` volume (the SQLite database lives in it). With the app stopped (`docker compose stop app`), for example:
+Back up the `/data` volume. The SQLite database and, since v0.3.0, the uploads directory (`/data/uploads`, imported covers) live in it. With the app stopped (`docker compose stop app`), for example:
 
 ```bash
 docker run --rm -v cellar_app-data:/data -v "$PWD":/backup alpine tar czf /backup/cellar-data.tgz -C /data .
@@ -250,6 +316,8 @@ Deactivated accounts are not reactivated: the command exits with an error for th
 
 ## Known limitations
 
+- **Import covers only.** Cover images are stored but not displayed in the UI until v0.4.2. Imported recipes have no auto-mapped grid until v0.3.1, and JavaScript-only or microdata-only pages cannot be imported until v0.3.1/v0.3.2.
+- **Raw HTML and import drafts are never pruned.** See [Import a recipe](#import-a-recipe).
 - **Rate limiting is in memory.** Counters reset when the app restarts and are not shared between processes.
 - **Single process only.** Because of the in-memory rate limiter and the single SQLite file, run exactly one app instance.
 - **`TRUSTED_PROXIES` can be spoofed if the app port is reachable.** Any client that can connect directly from a trusted address can forge `X-Forwarded-For` and evade per-IP limits. Behind Caddy, do not publish the app port (do not add `docker-compose.direct.yml` as shown above).
