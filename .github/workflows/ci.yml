@@ -46,5 +46,5 @@ jobs:
         run: |
           for p in linux/amd64 linux/arm64; do
             docker buildx build --platform "$p" --load -t "rb:${p#*/}" .
-            docker run --rm --platform "$p" "rb:${p#*/}" node -e "require('argon2'); require('better-sqlite3'); console.log('$p native ok')"
+            docker run --rm --platform "$p" "rb:${p#*/}" node -e "require('argon2'); require('better-sqlite3'); require('sharp'); console.log('$p native ok')"
           done
