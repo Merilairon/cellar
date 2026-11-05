@@ -89,9 +89,11 @@ created: Vanilla Cake with Frosting (owner admin@example.com)
 **Docker:** the image ships the seed as an esbuild bundle (`dist/seed.mjs`) and maps it like `admin:reset`, so this works against a running instance, after the first admin exists:
 
 ```bash
-docker compose exec app npm run seed
-docker compose exec app npm run seed -- --user member@example.com
+docker compose exec app npm run seed -- --yes
+docker compose exec app npm run seed -- --user member@example.com --yes
 ```
+
+**Production guard:** when `NODE_ENV=production` (always the case in the Docker image) the seed refuses to run, naming the database it would write to, unless you pass `--yes` or set `SEED_CONFIRM=1`.
 
 It opens the same SQLite file as the app (WAL mode), so the app does not need to be stopped and no database file needs to be copied around.
 
