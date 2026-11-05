@@ -15,7 +15,7 @@ export default async function LoginPage({
   if (countUsers(getDb()) === 0) redirect('/setup');
   if (await getCurrentUser()) redirect('/');
   const { error, registered, passwordChanged } = await searchParams;
-  const msg = error === 'csrf' ? t('login.errors.csrf') : error ? t('login.errors.invalid') : null;
+  const msg = error ? t('login.errors.invalid') : null;
   const info = passwordChanged
     ? t('login.passwordChanged')
     : registered

@@ -17,8 +17,7 @@
     "password": "Password",
     "submit": "Sign in",
     "errors": {
-      "invalid": "Invalid email or password.",
-      "csrf": "Request rejected. Reload the page and try again."
+      "invalid": "Invalid email or password."
     },
     "passwordChanged": "Password updated. Sign in with your new password.",
     "registered": "Account created. Sign in."
@@ -81,8 +80,7 @@
       "email": "Enter a valid email address.",
       "displayName": "Enter a display name (1 to 80 characters).",
       "password": "Password must be 12 to 128 characters.",
-      "emailTaken": "That email address is already registered.",
-      "csrf": "Request rejected. Reload the page and try again."
+      "emailTaken": "That email address is already registered."
     }
   },
   "reset": {
@@ -90,8 +88,7 @@
     "password": "New password (at least 12 characters)",
     "submit": "Set password",
     "errors": {
-      "password": "Password must be 12 to 128 characters.",
-      "csrf": "Request rejected. Reload the page and try again."
+      "password": "Password must be 12 to 128 characters."
     }
   },
   "nav": {

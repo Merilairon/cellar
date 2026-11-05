@@ -33,3 +33,9 @@ test('page renders and hydrates under the CSP with no violations', async ({ page
   await page.waitForLoadState('networkidle');
   expect(problems).toEqual([]);
 });
+
+test('unknown invite link returns 404 with the translated invalid-link page', async ({ page }) => {
+  const res = await page.goto('/register/invalid');
+  expect(res?.status()).toBe(404);
+  await expect(page.getByText('This link is invalid or has expired.')).toBeVisible();
+});

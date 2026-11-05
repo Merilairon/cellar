@@ -16,12 +16,7 @@ export default async function ResetPage({
   const { token } = await params;
   const { error } = await searchParams;
   if (!isResetTokenUsable(getDb(), token)) notFound();
-  const msg =
-    error === 'csrf'
-      ? t('reset.errors.csrf')
-      : error === 'password'
-        ? t('reset.errors.password')
-        : null;
+  const msg = error === 'password' ? t('reset.errors.password') : null;
   return (
     <main className="mx-auto max-w-sm p-8">
       <h1 className="mb-4 text-2xl font-bold">{t('reset.title')}</h1>

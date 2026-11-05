@@ -11,7 +11,6 @@ const ERRORS: Record<string, string> = {
   displayName: 'register.errors.displayName',
   password: 'register.errors.password',
   email_taken: 'register.errors.emailTaken',
-  csrf: 'register.errors.csrf',
 };
 
 export default async function RegisterPage({
