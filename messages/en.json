@@ -1,1 +1,14 @@
-{}
+{
+  "setup": {
+    "title": "Welcome - create the admin account",
+    "email": "Email",
+    "displayName": "Display name",
+    "password": "Password (at least 12 characters)",
+    "submit": "Create admin account",
+    "errors": {
+      "email": "Enter a valid email address.",
+      "displayName": "Enter a display name (1 to 80 characters).",
+      "password": "Password must be 12 to 128 characters."
+    }
+  }
+}
