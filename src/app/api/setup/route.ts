@@ -5,6 +5,7 @@ import { isCsrfSafe } from '@/lib/auth/csrf';
 import { getDb } from '@/lib/db';
 import { countUsers, createFirstAdmin } from '@/lib/db/users';
 import { getEnv } from '@/lib/env';
+import { authLimiters, getClientIp, limitOrResponse } from '@/lib/security/auth-limits';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +18,8 @@ export async function POST(request: Request) {
   if (!isCsrfSafe(request.method, request.headers, getEnv().BASE_URL)) {
     return new Response(null, { status: 403 });
   }
+  const blocked = await limitOrResponse(authLimiters().setup, getClientIp(request.headers));
+  if (blocked) return blocked;
   const form = await request.formData().catch(() => null);
   const parsed = setupSchema.safeParse(Object.fromEntries(form ?? []));
   if (!parsed.success) {

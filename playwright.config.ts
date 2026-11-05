@@ -19,6 +19,10 @@ export default defineConfig({
       SESSION_SECRET: 'e2e-secret-e2e-secret-e2e-secret-e2e',
       BASE_URL: 'http://localhost:3100',
       DATABASE_PATH: './data/e2e.db',
+      // Next injects the socket peer as X-Forwarded-For when absent; trusting loopback lets the
+      // rate-limit e2e pick distinct client IPs via the header.
+      TRUSTED_PROXIES: '127.0.0.1,::1',
+      RATE_LIMIT_LOGIN_EMAIL_MAX: '5',
     },
   },
 });

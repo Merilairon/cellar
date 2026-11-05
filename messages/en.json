@@ -124,5 +124,8 @@
       "csrf": "Request rejected. Reload the page and try again.",
       "unauthenticated": "Your session has expired. Sign in again."
     }
+  },
+  "errors": {
+    "rateLimited": "Too many attempts. Try again later."
   }
 }
