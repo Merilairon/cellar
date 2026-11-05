@@ -11,7 +11,9 @@ test('security headers on pages, redirects and API responses', async ({ request 
     expect(h['content-security-policy']).toMatch(
       /script-src 'self' 'nonce-[^']+' 'strict-dynamic'/,
     );
-    expect(h['strict-transport-security']).toBeUndefined(); // e2e BASE_URL is http
+    expect(h['strict-transport-security']).toBeUndefined(); // never sent by the app
+    expect(h['permissions-policy']).toBeUndefined();
+    expect(h['cross-origin-opener-policy']).toBeUndefined();
   }
   const api = await request.get('/api/auth/logout', { maxRedirects: 0 });
   expect(api.headers()['content-security-policy']).toBeTruthy();

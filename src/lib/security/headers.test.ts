@@ -13,13 +13,15 @@ describe('security headers', () => {
   it('dev adds unsafe-eval only to scripts', () => {
     expect(buildCsp({ nonce: 'a', https: false, dev: true })).toMatch(/script-src[^;]*unsafe-eval/);
   });
-  it('https adds HSTS and upgrade-insecure-requests', () => {
+  it('https adds upgrade-insecure-requests but never HSTS or unspecified extra headers', () => {
     const h = securityHeaders({ nonce: 'a', https: true });
-    expect(h['Strict-Transport-Security']).toContain('max-age=');
     expect(h['Content-Security-Policy']).toContain('upgrade-insecure-requests');
-    expect(
-      securityHeaders({ nonce: 'a', https: false })['Strict-Transport-Security'],
-    ).toBeUndefined();
+    expect(Object.keys(h).sort()).toEqual([
+      'Content-Security-Policy',
+      'Referrer-Policy',
+      'X-Content-Type-Options',
+      'X-Frame-Options',
+    ]);
   });
   it('sets nosniff and referrer policy', () => {
     const h = securityHeaders({ nonce: 'a', https: false });

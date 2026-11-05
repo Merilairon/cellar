@@ -36,12 +36,12 @@ export function securityHeaders(opts: HeaderOptions): Record<string, string> {
   const h: Record<string, string> = {
     'Content-Security-Policy': buildCsp(opts),
     'X-Content-Type-Options': 'nosniff',
+    // Legacy mirror of CSP frame-ancestors 'none' for browsers without CSP2; harmless.
     'X-Frame-Options': 'DENY',
     'Referrer-Policy': 'same-origin',
-    'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
-    'Cross-Origin-Opener-Policy': 'same-origin',
   };
-  if (opts.https) h['Strict-Transport-Security'] = 'max-age=15552000; includeSubDomains';
+  // No HSTS on purpose: a wrong max-age pins browsers to HTTPS for a host the owner may serve
+  // over HTTP (LAN, localhost). Add it at the reverse proxy if wanted (see README).
   return h;
 }
 

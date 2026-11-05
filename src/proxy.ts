@@ -12,7 +12,7 @@ import { generateNonce, securityHeaders } from '@/lib/security/headers';
  *    cookie passes here and is stopped by full validation in server code (getCurrentUser /
  *    requireAdmin: session row, expiry, deactivated user, admin role).
  * 2. Security headers (CSP with per-request nonce, nosniff, frame-ancestors, Referrer-Policy,
- *    HSTS when BASE_URL is https) on every response, including redirects and 401s.
+ *    X-Frame-Options legacy mirror; no HSTS) on every response, including redirects and 401s.
  */
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;

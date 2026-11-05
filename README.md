@@ -29,13 +29,13 @@ Open <http://localhost:3000>. You are redirected to `/login`; see [First run](#f
 
 The database is created at `DATABASE_PATH` (`./data/app.db` in `.env.example`) and migrations run on app start.
 
-| Command | What it does |
-| --- | --- |
-| `npm run dev` | Dev server |
-| `npm run build` then `npm start` | Production build and server |
-| `npm test` | Unit tests (Vitest) |
-| `npm run test:e2e` | End-to-end tests (Playwright). Builds the app and serves it on port 3100 with a throwaway `data/e2e.db`. If browsers are missing, run `npx playwright install` first. |
-| `npm run lint` / `npm run typecheck` | ESLint / TypeScript |
+| Command                              | What it does                                                                                                                                                          |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run dev`                        | Dev server                                                                                                                                                            |
+| `npm run build` then `npm start`     | Production build and server                                                                                                                                           |
+| `npm test`                           | Unit tests (Vitest)                                                                                                                                                   |
+| `npm run test:e2e`                   | End-to-end tests (Playwright). Builds the app and serves it on port 3100 with a throwaway `data/e2e.db`. If browsers are missing, run `npx playwright install` first. |
+| `npm run lint` / `npm run typecheck` | ESLint / TypeScript                                                                                                                                                   |
 
 ## Run with Docker
 
@@ -69,6 +69,8 @@ docker compose -f docker-compose.yml --profile caddy up -d --build
 
 Naming `-f docker-compose.yml` explicitly skips the override file, so the app port is **not** published; only Caddy listens (80, 443). If you leave out `-f docker-compose.yml`, the app port is published as well and `TRUSTED_PROXIES` can be spoofed (see [Known limitations](#known-limitations)).
 
+The app does not send `Strict-Transport-Security`. If you want HSTS, let Caddy add it, for example `header Strict-Transport-Security "max-age=15552000"` inside the site block of `Caddyfile`. Only do this once you are sure the host will stay on HTTPS.
+
 See [docs/deployment.md](docs/deployment.md) for details.
 
 ### Multi-arch image
@@ -95,17 +97,17 @@ The volume name is `<compose project>_app-data`; check with `docker volume ls`.
 
 Validated at startup in `src/lib/env.ts`. See `.env.example` for a template.
 
-| Variable | Required | Default | Description |
-| --- | --- | --- | --- |
-| `DATABASE_PATH` | no | `/data/app.db` | Path of the SQLite file. The directory is created if missing. Compose sets it to `/data/app.db`; `.env.example` uses `./data/app.db` for local runs. |
-| `SESSION_SECRET` | yes | none | At least 32 characters. In production, known placeholders (`changeme`, `replace-with...`, `your-...`, a single repeated character) are rejected. |
-| `BASE_URL` | in production | `http://localhost:3000` (non-production only) | Public origin, for example `https://recipes.example.com`. No path, no trailing slash. Used for invite and reset links and the origin allowlist. HSTS is sent when it starts with `https://`. |
-| `TRUSTED_PROXIES` | no | empty (trust none) | Comma-separated IPs or CIDRs whose `X-Forwarded-*` headers are trusted. With the Caddy profile use `172.28.0.10`. |
-| `RATE_LIMIT_LOGIN_MAX` | no | `20` | Failed login attempts per client IP per window (successful logins and malformed requests are not counted). Skipped when the client IP is unknown. |
-| `RATE_LIMIT_LOGIN_EMAIL_MAX` | no | `10` | Failed login attempts per account email per window (reset on a successful login). Always enforced. |
-| `RATE_LIMIT_LOGIN_WINDOW_SEC` | no | `900` | Login window in seconds. |
-| `RATE_LIMIT_REGISTER_MAX` | no | `10` | Invite registration, reset and setup POSTs per client IP per window. Skipped when the client IP is unknown. |
-| `RATE_LIMIT_REGISTER_WINDOW_SEC` | no | `3600` | Registration window in seconds. |
+| Variable                         | Required      | Default                                       | Description                                                                                                                                                                                                     |
+| -------------------------------- | ------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_PATH`                  | no            | `/data/app.db`                                | Path of the SQLite file. The directory is created if missing. Compose sets it to `/data/app.db`; `.env.example` uses `./data/app.db` for local runs.                                                            |
+| `SESSION_SECRET`                 | yes           | none                                          | At least 32 characters. In production, known placeholders (`changeme`, `replace-with...`, `your-...`, a single repeated character) are rejected.                                                                |
+| `BASE_URL`                       | in production | `http://localhost:3000` (non-production only) | Public origin, for example `https://recipes.example.com`. No path, no trailing slash. Used for invite and reset links and the origin allowlist. With `https://`, the CSP also gets `upgrade-insecure-requests`. |
+| `TRUSTED_PROXIES`                | no            | empty (trust none)                            | Comma-separated IPs or CIDRs whose `X-Forwarded-*` headers are trusted. With the Caddy profile use `172.28.0.10`.                                                                                               |
+| `RATE_LIMIT_LOGIN_MAX`           | no            | `20`                                          | Failed login attempts per client IP per window (successful logins and malformed requests are not counted). Skipped when the client IP is unknown.                                                               |
+| `RATE_LIMIT_LOGIN_EMAIL_MAX`     | no            | `10`                                          | Failed login attempts per account email per window (reset on a successful login). Always enforced.                                                                                                              |
+| `RATE_LIMIT_LOGIN_WINDOW_SEC`    | no            | `900`                                         | Login window in seconds.                                                                                                                                                                                        |
+| `RATE_LIMIT_REGISTER_MAX`        | no            | `10`                                          | Invite registration, reset and setup POSTs per client IP per window. Skipped when the client IP is unknown.                                                                                                     |
+| `RATE_LIMIT_REGISTER_WINDOW_SEC` | no            | `3600`                                        | Registration window in seconds.                                                                                                                                                                                 |
 
 **Rate limiting and unknown clients.** Per-IP limits only work when the app can tell clients apart, which needs `TRUSTED_PROXIES` to match your reverse proxy. Without it (the default for plain `docker compose up` or `npm run dev`) every visitor looks like the same "unknown" client; rather than let a few bad requests lock everybody out, the per-IP limits are then skipped and only the per-email login limit applies. Register and reset links carry unguessable tokens, so they stay safe without a per-IP limit. Counters are in memory and reset on restart.
 
