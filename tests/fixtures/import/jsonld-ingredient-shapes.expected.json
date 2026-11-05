@@ -1,0 +1,7 @@
+{
+  "expect": "draft",
+  "kind": "fractions, unicode, ranges, ingredient with note",
+  "title": "Simple Pancakes",
+  "min_ingredients": 5,
+  "min_steps": 3
+}

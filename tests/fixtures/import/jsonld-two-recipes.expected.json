@@ -1,0 +1,7 @@
+{
+  "expect": "draft",
+  "kind": "two Recipe nodes, fuller one wins",
+  "title": "Full Pancakes",
+  "min_ingredients": 4,
+  "min_steps": 3
+}

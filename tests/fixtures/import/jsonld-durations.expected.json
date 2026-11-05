@@ -1,0 +1,7 @@
+{
+  "expect": "draft",
+  "kind": "ISO durations PT1H30M and P0DT45M",
+  "title": "Simple Pancakes",
+  "min_ingredients": 4,
+  "min_steps": 3
+}

@@ -1,0 +1,5 @@
+{
+  "expect": "out_of_slice",
+  "kind": "JS-rendered: recipe only in a window.__STATE__ blob",
+  "carry": "3c headless"
+}

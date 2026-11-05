@@ -1,0 +1,8 @@
+{
+  "expect": "draft",
+  "kind": "hostile: tags/script in JSON-LD strings",
+  "title": "Safe Pancakes",
+  "min_ingredients": 4,
+  "min_steps": 3,
+  "forbid": ["<script", "<img", "<iframe", "<style", "onerror", "alert(1)", "steal()"]
+}

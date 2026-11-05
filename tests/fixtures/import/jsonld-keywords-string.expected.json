@@ -1,0 +1,7 @@
+{
+  "expect": "draft",
+  "kind": "keywords comma string",
+  "title": "Simple Pancakes",
+  "min_ingredients": 4,
+  "min_steps": 3
+}
