@@ -50,7 +50,8 @@ export async function registerViaInvite(browser: Browser, who: Account) {
   await p.getByLabel('Display name').fill(who.name);
   await p.getByLabel(/^Password/).fill(who.password);
   await p.getByRole('button', { name: 'Create account' }).click();
-  await expect(p).toHaveURL(/\/login/);
+  // A retried beforeAll registers the same user again; email_taken then means "already exists".
+  await expect(p).toHaveURL(/\/login|error=email_taken/);
   await ctx.close();
 }
 

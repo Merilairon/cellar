@@ -16,6 +16,8 @@ Milestones are sequential; each one is a runnable, deployable version. Specs liv
 
 ## Planning Status (PM)
 
+Open topics carried past v0.2: [tasks/v0.2-carryover.md](tasks/v0.2-carryover.md).
+
 | Item | Status |
 | --- | --- |
 | Release status | v0.1 released. **v0.2: implemented, pending gate** (testing-reality-checker verdict, then tag `v0.2`; see [tasks/v0.2-tasklist.md](tasks/v0.2-tasklist.md)) |
