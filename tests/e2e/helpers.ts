@@ -63,3 +63,25 @@ export async function createRecipe(ctx: BrowserContext, input: RecipeInput | obj
 }
 
 export const SAMPLES = { cookie: SAMPLE_SKILLET_COOKIES, cake: SAMPLE_VANILLA_CAKE };
+
+const HYDRATION =
+  /hydrat|did not match|didn't match|server rendered HTML|Minified React error #(418|423|425|299)/i;
+
+/**
+ * Collects console errors/warnings and uncaught page errors from now on. `hydrationMessages()`
+ * returns those that look like a React hydration mismatch; `all()` returns everything, so a
+ * test can also assert there was no other page error. Attach it BEFORE the navigation under
+ * test, and navigate with a full page load (goto/reload) so the server HTML is hydrated.
+ */
+export function captureConsole(page: Page) {
+  const messages: string[] = [];
+  page.on('console', (m) => {
+    if (m.type() === 'error' || m.type() === 'warning') messages.push(`${m.type()}: ${m.text()}`);
+  });
+  page.on('pageerror', (e) => messages.push(`pageerror: ${e.message}`));
+  return {
+    all: () => [...messages],
+    hydrationMessages: () => messages.filter((m) => HYDRATION.test(m)),
+    clear: () => void (messages.length = 0),
+  };
+}
