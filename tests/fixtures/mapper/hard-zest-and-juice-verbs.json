@@ -1,0 +1,47 @@
+{
+  "class": "hard",
+  "note": "\"Zest and juice\" are verbs; the lemons are the ingredient.",
+  "ingredients": [
+    "2 lemons",
+    "1/2 cup sugar",
+    "1 cup water"
+  ],
+  "steps": [
+    "Zest and juice the lemons.",
+    "Simmer the sugar and the water until dissolved.",
+    "Stir in the juice and chill."
+  ],
+  "expected": {
+    "view": "grid",
+    "sections": [
+      {
+        "title": null,
+        "rows": [
+          "lemon",
+          "sugar",
+          "water"
+        ],
+        "steps": [
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 0
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          }
+        ]
+      }
+    ]
+  },
+  "confidence": {
+    "min": 0.7
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "class": "hard",
+  "note": "Flat list, pasta and sauce cooked in parallel (\"Meanwhile\"): a person draws one grid in order of first use.",
+  "ingredients": [
+    "200 g spaghetti",
+    "2 tbsp olive oil",
+    "3 cloves garlic",
+    "400 g canned tomatoes",
+    "1 tsp salt",
+    "a handful of basil leaves"
+  ],
+  "steps": [
+    "Bring a large pot of water to a boil and cook the spaghetti until al dente.",
+    "Meanwhile, heat the olive oil in a pan and soften the garlic.",
+    "Add the tomatoes and the salt and simmer for 15 minutes.",
+    "Toss the pasta with the sauce and the basil."
+  ],
+  "expected": {
+    "view": "grid",
+    "sections": [
+      {
+        "title": null,
+        "rows": [
+          "spaghetti",
+          "olive oil",
+          "garlic",
+          "canned tomato",
+          "salt",
+          "basil leaf"
+        ],
+        "steps": [
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 0
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 4
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 5
+          }
+        ]
+      }
+    ]
+  },
+  "confidence": {
+    "min": 0.7
+  },
+  "known_miss": "Head-noun fallback is the last token, so \"the basil\" does not match \"basil leaves\": basil stays unmentioned and the score is 0.69 (list instead of grid)."
+}

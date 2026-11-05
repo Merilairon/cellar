@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, or } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, or } from 'drizzle-orm';
 import { ulid } from 'ulid';
 import type { Db } from './connection';
 import { ingredient, nowIso, recipe, section, step, user } from './schema';
@@ -122,7 +122,9 @@ export function findRecipeBySourceUrl(
     .from(recipe)
     .where(
       and(
-        eq(recipe.sourceUrl, normalizedUrl),
+        // The stored URL keeps the scheme the user entered (Q3); `normalizedUrl` is the
+        // https comparison key, so both schemes are candidates.
+        inArray(recipe.sourceUrl, [normalizedUrl, normalizedUrl.replace(/^https:/, 'http:')]),
         or(eq(recipe.ownerId, userId), eq(recipe.visibility, 'users')),
       ),
     )

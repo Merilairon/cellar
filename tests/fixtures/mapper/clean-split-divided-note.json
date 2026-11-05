@@ -1,0 +1,63 @@
+{
+  "class": "clean",
+  "note": "Divided in the ingredient note and 2 tbsp in each of two steps.",
+  "ingredients": [
+    "4 tbsp sugar, divided",
+    "1/2 cup butter",
+    "2 eggs"
+  ],
+  "steps": [
+    "Cream the butter with 2 tbsp of the sugar.",
+    "Beat in the eggs.",
+    "Fold in 2 tbsp of the sugar.",
+    "Bake."
+  ],
+  "expected": {
+    "view": "grid",
+    "sections": [
+      {
+        "title": null,
+        "rows": [
+          "butter",
+          "sugar",
+          "egg",
+          "sugar"
+        ],
+        "steps": [
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 1
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 3
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 3
+          }
+        ],
+        "split": [
+          {
+            "name": "sugar",
+            "portions": [
+              "2 tbsp",
+              "2 tbsp"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "confidence": {
+    "min": 0.7
+  }
+}

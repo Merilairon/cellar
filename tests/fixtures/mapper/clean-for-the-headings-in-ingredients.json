@@ -1,0 +1,66 @@
+{
+  "class": "clean",
+  "note": "Ingredient group headings but flat steps: one section (G16), reduced confidence.",
+  "ingredients": [
+    "For the cake:",
+    "2 cups flour",
+    "2 eggs",
+    "For the frosting:",
+    "1 cup powdered sugar",
+    "2 tbsp butter"
+  ],
+  "steps": [
+    "Beat the eggs.",
+    "Add the flour.",
+    "Bake.",
+    "Beat the butter.",
+    "Add the powdered sugar."
+  ],
+  "expected": {
+    "view": "list",
+    "sections": [
+      {
+        "title": null,
+        "rows": [
+          "egg",
+          "flour",
+          "butter",
+          "powdered sugar"
+        ],
+        "steps": [
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 0
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 1
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 1
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 3
+          }
+        ]
+      }
+    ],
+    "warnings_include": [
+      "sections_from_ingredients_only"
+    ]
+  },
+  "confidence": {
+    "max": 0.69
+  }
+}

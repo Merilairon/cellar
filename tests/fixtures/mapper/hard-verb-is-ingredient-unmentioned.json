@@ -1,0 +1,24 @@
+{
+  "class": "hard",
+  "note": "\"Cream\" is only the verb; the cream ingredient is never used in a step, so it must not be placed by that mention.",
+  "ingredients": [
+    "1 cup cream",
+    "1/2 cup butter",
+    "1/2 cup sugar",
+    "1 egg"
+  ],
+  "steps": [
+    "Cream the butter and sugar until fluffy.",
+    "Beat in the egg.",
+    "Bake for 20 minutes."
+  ],
+  "expected": {
+    "view": "list",
+    "warnings_include": [
+      "ingredient_unmentioned:cream"
+    ]
+  },
+  "confidence": {
+    "max": 0.69
+  }
+}

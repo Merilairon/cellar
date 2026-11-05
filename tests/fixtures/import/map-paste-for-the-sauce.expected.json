@@ -1,0 +1,9 @@
+{
+  "expect": "draft",
+  "kind": "mapper: pasted text with For the sauce heading",
+  "input": "paste",
+  "title": "Noodles With Sauce",
+  "min_ingredients": 4,
+  "min_steps": 5,
+  "map": { "section_titles": [null, "Sauce"] }
+}

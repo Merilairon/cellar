@@ -293,3 +293,85 @@ describe('robustness (F1, F3)', () => {
     expect(draftOf({ keywords: kw }).tags).toHaveLength(10);
   });
 });
+
+describe('cover base URL (carryover m1)', () => {
+  it('resolves a relative cover against baseUrl, not the stored source URL', () => {
+    const r = normalizeRecipe(
+      { ...base, image: '/img/a.jpg' },
+      { sourceUrl: 'http://old.example/entered', baseUrl: 'https://new.example/final/page' },
+    );
+    expect(r.draft!.cover_image_url).toBe('https://new.example/img/a.jpg');
+    expect(r.draft!.source_url).toBe('http://old.example/entered');
+  });
+  it('falls back to the source URL when no baseUrl is given or it is unusable', () => {
+    for (const baseUrl of [undefined, null, 'javascript:alert(1)']) {
+      const r = normalizeRecipe(
+        { ...base, image: '/img/a.jpg' },
+        { sourceUrl: 'https://old.example/entered', baseUrl },
+      );
+      expect(r.draft!.cover_image_url).toBe('https://old.example/img/a.jpg');
+    }
+  });
+  it('an absolute cover is unaffected by baseUrl, and http is still upgraded', () => {
+    const r = normalizeRecipe(
+      { ...base, image: 'http://cdn.example/a.jpg' },
+      { sourceUrl: 'https://old.example/e', baseUrl: 'https://new.example/' },
+    );
+    expect(r.draft!.cover_image_url).toBe('https://cdn.example/a.jpg');
+  });
+});
+
+describe('mapper input and mapping slot', () => {
+  it('the draft starts with mapping null and mapInput carries steps without section prefixes', () => {
+    const r = normalizeRecipe({
+      ...base,
+      recipeInstructions: [
+        {
+          '@type': 'HowToSection',
+          name: 'Frosting',
+          itemListElement: [{ '@type': 'HowToStep', text: 'Whisk the eggs.' }],
+        },
+      ],
+    });
+    expect(r.draft!.mapping).toBeNull();
+    // Flat 3a draft keeps the prefix; the mapper input keeps text and section apart.
+    expect(r.draft!.sections[0]!.steps[0]!.detail).toBe('Frosting: Whisk the eggs.');
+    expect(r.mapInput!.steps).toEqual([{ text: 'Whisk the eggs.', section: 'Frosting' }]);
+  });
+  it('ingredient heading lines become group labels in mapInput only', () => {
+    const r = normalizeRecipe({
+      ...base,
+      recipeIngredient: ['1 cup flour', 'For the frosting:', '2 tbsp butter'],
+    });
+    expect(r.draft!.sections[0]!.ingredients).toHaveLength(3);
+    expect(r.mapInput!.ingredients.map((i) => [i.name, i.group_label])).toEqual([
+      ['flour', null],
+      ['butter', 'Frosting'],
+    ]);
+  });
+  it('there is no mapInput without a draft', () => {
+    expect(normalizeRecipe({ '@type': 'Recipe', name: 'x' }).mapInput).toBeNull();
+  });
+  it('the 3a draft is identical to what it was before mapping existed', () => {
+    const d = draftOf();
+    const { mapping, ...rest } = d;
+    expect(mapping).toBeNull();
+    expect(Object.keys(rest).sort()).toEqual(
+      [
+        'title',
+        'description',
+        'servings',
+        'servings_label',
+        'prep_minutes',
+        'cook_minutes',
+        'source_url',
+        'source_name',
+        'visibility',
+        'view_mode',
+        'sections',
+        'tags',
+        'cover_image_url',
+      ].sort(),
+    );
+  });
+});

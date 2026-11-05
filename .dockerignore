@@ -8,7 +8,8 @@ docs
 milestones
 playwright-report
 test-results
-tests
+tests/*
+!tests/helpers
 .env
 .env.*
 !.env.example

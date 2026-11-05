@@ -1,0 +1,24 @@
+{
+  "class": "hard",
+  "note": "Two sugars, the step says only \"the sugar\": must not guess.",
+  "ingredients": [
+    "1 cup brown sugar",
+    "1 cup powdered sugar",
+    "2 eggs",
+    "1 cup butter"
+  ],
+  "steps": [
+    "Cream the butter with the sugar.",
+    "Beat in the eggs.",
+    "Bake."
+  ],
+  "expected": {
+    "view": "list",
+    "warnings_include": [
+      "ambiguous_name:sugar"
+    ]
+  },
+  "confidence": {
+    "max": 0.69
+  }
+}

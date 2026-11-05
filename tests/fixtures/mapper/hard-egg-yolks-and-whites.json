@@ -1,0 +1,53 @@
+{
+  "class": "hard",
+  "note": "Steps talk about the yolks and the whites of a listed \"eggs\".",
+  "ingredients": [
+    "3 eggs, separated",
+    "1/2 cup sugar",
+    "1 cup flour"
+  ],
+  "steps": [
+    "Beat the egg yolks with the sugar.",
+    "Whip the egg whites to stiff peaks.",
+    "Fold in the flour.",
+    "Bake."
+  ],
+  "expected": {
+    "view": "grid",
+    "sections": [
+      {
+        "title": null,
+        "rows": [
+          "egg",
+          "sugar",
+          "flour"
+        ],
+        "steps": [
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 1
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 1
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          }
+        ]
+      }
+    ]
+  },
+  "confidence": {
+    "min": 0.7
+  }
+}

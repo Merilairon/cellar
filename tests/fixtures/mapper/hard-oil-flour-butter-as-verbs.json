@@ -1,0 +1,53 @@
+{
+  "class": "hard",
+  "note": "Butter and flour appear as prep verbs and as ingredients later; only the real uses place rows.",
+  "ingredients": [
+    "2 tbsp butter",
+    "1 cup flour",
+    "3 apples",
+    "1/2 cup sugar"
+  ],
+  "steps": [
+    "Butter and flour a 9 inch pie dish.",
+    "Peel and slice the apples.",
+    "Toss the apples with the sugar and flour.",
+    "Dot with the butter and bake for 45 minutes."
+  ],
+  "expected": {
+    "view": "grid",
+    "sections": [
+      {
+        "title": null,
+        "rows": [
+          "apple",
+          "sugar",
+          "flour",
+          "butter"
+        ],
+        "steps": [
+          {
+            "kind": "banner_top"
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 0
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 3
+          }
+        ]
+      }
+    ]
+  },
+  "confidence": {
+    "min": 0.7
+  }
+}

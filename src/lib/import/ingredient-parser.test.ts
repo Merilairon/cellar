@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { parseIngredientLine, toIngredientFields } from './ingredient-parser';
+import {
+  cleanText,
+  MAX_INGREDIENT_LINE_CHARS,
+  parseIngredientLine,
+  toIngredientFields,
+} from './ingredient-parser';
 
 type Exp = {
   qty: number | null;
@@ -208,5 +213,49 @@ describe('toIngredientFields (no conversion)', () => {
       metric_qty: null,
       us_qty: null,
     });
+  });
+});
+
+describe('cleanText (linear trim, security F2)', () => {
+  it('matches the former regex semantics', () => {
+    const former = (x: string) => x.replace(/\s+/g, ' ').replace(/^[\s,;:.-]+|[\s,;:]+$/g, '');
+    const samples = [
+      '',
+      ' ',
+      '  flour ',
+      ', ; : . - flour -',
+      'flour, ',
+      'flour.',
+      'flour -',
+      '...',
+      '--x--',
+      'a  b\t\nc',
+      ';;;a;;;',
+      ' , ',
+    ];
+    for (const x of samples) expect(cleanText(x)).toBe(former(x));
+  });
+  it('handles 200k separators not at the end in linear time', () => {
+    const t0 = performance.now();
+    expect(cleanText('flour' + ';'.repeat(200_000) + 'x')).toBe(
+      'flour' + ';'.repeat(200_000) + 'x',
+    );
+    expect(cleanText(';'.repeat(200_000))).toBe('');
+    expect(cleanText(' ,'.repeat(100_000) + 'a' + ' ,'.repeat(100_000))).toBe('a');
+    // Generous backstop only: the quadratic regex needed minutes for this input.
+    expect(performance.now() - t0).toBeLessThan(10_000);
+  });
+});
+
+describe('parseIngredientLine line cap', () => {
+  it('cuts lines longer than the cap and stays well formed', () => {
+    const p = parseIngredientLine('1 cup flour' + ';'.repeat(80_000) + 'x');
+    expect(p.raw_text!.length).toBeLessThanOrEqual(MAX_INGREDIENT_LINE_CHARS);
+    const emoji = parseIngredientLine('1 cup ' + 'x'.repeat(493) + '\u{1F600}\u{1F600}');
+    expect(emoji.raw_text!.isWellFormed()).toBe(true);
+    expect(emoji.raw_text!.length).toBeLessThanOrEqual(MAX_INGREDIENT_LINE_CHARS);
+  });
+  it('leaves normal lines untouched', () => {
+    expect(parseIngredientLine('1 cup flour').raw_text).toBe('1 cup flour');
   });
 });

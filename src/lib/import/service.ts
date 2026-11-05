@@ -10,6 +10,7 @@ import {
   type ImportJobRow,
 } from '@/lib/db/import-jobs';
 import { limitFetch } from './limiter';
+import { readMapping } from './mapping';
 import { runImport, type ImportDeps, type ImportInput } from './pipeline';
 import { normalizeSourceUrl } from './source-url';
 import type { Draft } from './normalize';
@@ -38,7 +39,10 @@ export function parseStoredDraft(json: string | null): StoredDraft | null {
   if (!json) return null;
   try {
     const v = JSON.parse(json) as StoredDraft;
-    return v && v.v === 1 && v.draft ? v : null;
+    if (!v || v.v !== 1 || !v.draft) return null;
+    // Drafts stored before 3b have no `mapping`: they behave as v0.3.0 (G21). No backfill.
+    v.draft.mapping = readMapping(v.draft.mapping);
+    return v;
   } catch {
     return null;
   }
@@ -81,7 +85,10 @@ export function toJobResponse(db: Db, job: ImportJobRow, actor: Actor): ImportJo
     draft: stored?.draft ?? null,
     warnings: stored?.warnings ?? [],
     error_code: job.errorCode,
-    confidence: null,
+    confidence: stored?.draft.mapping
+      ? Math.round(stored.draft.mapping.confidence * 100) / 100
+      : null,
+    mapping_level: stored?.draft.mapping?.level ?? null,
     duplicate: dup ? { recipe_id: dup.id, title: dup.title } : null,
   };
 }

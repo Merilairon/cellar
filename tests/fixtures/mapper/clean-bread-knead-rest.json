@@ -1,0 +1,55 @@
+{
+  "class": "clean",
+  "note": "A rest step in the middle keeps the previous span.",
+  "ingredients": [
+    "500 g flour",
+    "10 g salt",
+    "7 g yeast",
+    "300 ml water"
+  ],
+  "steps": [
+    "Mix the flour, salt and yeast.",
+    "Add the water and knead for 10 minutes.",
+    "Let the dough rest for 1 hour.",
+    "Shape the loaf and bake at 220°C for 30 minutes."
+  ],
+  "expected": {
+    "view": "grid",
+    "sections": [
+      {
+        "title": null,
+        "rows": [
+          "flour",
+          "salt",
+          "yeast",
+          "water"
+        ],
+        "steps": [
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 3
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 3
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 3
+          }
+        ]
+      }
+    ]
+  },
+  "confidence": {
+    "min": 0.7
+  }
+}

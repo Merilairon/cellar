@@ -158,7 +158,23 @@ function parseMeasure(inner: string): { qty: number; unit: string } | null {
   return { qty: q.qty, unit: u.unit };
 }
 
-const clean = (s: string) => s.replace(/\s+/g, ' ').replace(/^[\s,;:.-]+|[\s,;:]+$/g, '');
+const LEAD_TRIM = /[\s,;:.-]/;
+const TRAIL_TRIM = /[\s,;:]/;
+
+/**
+ * Collapse whitespace, then trim leading `[\s,;:.-]` and trailing `[\s,;:]`. Two index loops:
+ * linear, unlike the former `[\s,;:]+$` alternative which was quadratic on a long run of
+ * separators that is not at the end (security F2).
+ */
+export function cleanText(s: string): string {
+  const t = s.replace(/\s+/g, ' ');
+  let a = 0;
+  let b = t.length;
+  while (a < b && LEAD_TRIM.test(t[a]!)) a++;
+  while (b > a && TRAIL_TRIM.test(t[b - 1]!)) b--;
+  return t.slice(a, b);
+}
+const clean = cleanText;
 const NOTE_SUFFIX =
   /\b(to taste|as needed|for (?:serving|garnish|dusting|greasing|frying)|optional)\s*$/i;
 
@@ -178,12 +194,25 @@ function unparsed(raw: string): ParsedIngredient {
   return { qty: null, unit: null, name: raw.trim(), note: null, raw_text: raw, unparsed: true };
 }
 
+/** Longest line parsed; longer input is cut (matches the `raw_text` limit). */
+export const MAX_INGREDIENT_LINE_CHARS = 500;
+
 export function parseIngredientLine(raw: string): ParsedIngredient {
+  const line = capLine(String(raw));
   try {
-    return parse(raw);
+    return parse(line);
   } catch {
-    return unparsed(raw);
+    return unparsed(line);
   }
+}
+
+/** Cut at the cap without splitting a surrogate pair. */
+function capLine(s: string): string {
+  if (s.length <= MAX_INGREDIENT_LINE_CHARS) return s;
+  const last = s.charCodeAt(MAX_INGREDIENT_LINE_CHARS - 1);
+  const end =
+    last >= 0xd800 && last <= 0xdbff ? MAX_INGREDIENT_LINE_CHARS - 1 : MAX_INGREDIENT_LINE_CHARS;
+  return s.slice(0, end);
 }
 
 function parse(raw: string): ParsedIngredient {

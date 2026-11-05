@@ -1,0 +1,47 @@
+{
+  "class": "clean",
+  "note": "scallion in the list, green onion in the steps.",
+  "ingredients": [
+    "4 scallions",
+    "200 g rice",
+    "2 tbsp soy sauce"
+  ],
+  "steps": [
+    "Cook the rice.",
+    "Slice the green onions.",
+    "Stir the soy sauce through the rice and top with the green onion."
+  ],
+  "expected": {
+    "view": "grid",
+    "sections": [
+      {
+        "title": null,
+        "rows": [
+          "rice",
+          "scallion",
+          "soy sauce"
+        ],
+        "steps": [
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 0
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 1
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          }
+        ]
+      }
+    ]
+  },
+  "confidence": {
+    "min": 0.7
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "class": "hard",
+  "note": "First step is a noun phrase without ingredients: a top banner with a warning.",
+  "ingredients": [
+    "1 cup flour",
+    "2 eggs",
+    "1 cup milk"
+  ],
+  "steps": [
+    "A big bowl.",
+    "Whisk the eggs and milk.",
+    "Add the flour and mix.",
+    "Fry in a pan."
+  ],
+  "expected": {
+    "view": "grid",
+    "sections": [
+      {
+        "title": null,
+        "rows": [
+          "egg",
+          "milk",
+          "flour"
+        ],
+        "steps": [
+          {
+            "kind": "banner_top"
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 1
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          }
+        ]
+      }
+    ],
+    "warnings_include": [
+      "step_without_ingredients"
+    ]
+  },
+  "confidence": {
+    "min": 0.7
+  }
+}

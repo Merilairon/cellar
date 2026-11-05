@@ -1,0 +1,79 @@
+{
+  "class": "reference",
+  "note": "The data-model section 2 brownie shape: spans 0-0, 0-3, 0-4, 0-8, 0-8 and two top banners; ingredient lines written fresh.",
+  "ingredients": [
+    "4 oz (115 g) unsalted butter",
+    "1 cup (200 g) sugar",
+    "1/4 tsp vanilla extract",
+    "1 shot espresso",
+    "2 large eggs",
+    "1/2 cup (65 g) flour",
+    "1/4 cup (25 g) cocoa powder",
+    "1/2 tsp salt",
+    "1 cup chocolate chips"
+  ],
+  "steps": [
+    "Butter and flour an 8x8-in pan.",
+    "Preheat oven to 350°F (170°C).",
+    "Melt the butter over low heat.",
+    "Stir in the sugar, vanilla and espresso.",
+    "Beat in the eggs.",
+    "Fold in the flour, cocoa, salt and chocolate chips.",
+    "Bake until a toothpick comes out mostly clean."
+  ],
+  "expected": {
+    "view": "grid",
+    "sections": [
+      {
+        "title": null,
+        "rows": [
+          "butter",
+          "sugar",
+          "vanilla extract",
+          "espresso",
+          "egg",
+          "flour",
+          "cocoa powder",
+          "salt",
+          "chocolate chip"
+        ],
+        "steps": [
+          {
+            "kind": "banner_top"
+          },
+          {
+            "kind": "banner_top"
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 0
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 3
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 4
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 8
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 8
+          }
+        ]
+      }
+    ]
+  },
+  "confidence": {
+    "min": 0.7
+  }
+}

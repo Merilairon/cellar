@@ -1,0 +1,57 @@
+{
+  "class": "clean",
+  "note": "Cool and serve after the last bake become bottom banners.",
+  "ingredients": [
+    "1 cup flour",
+    "1/2 cup sugar",
+    "2 eggs",
+    "1/2 cup oil"
+  ],
+  "steps": [
+    "Whisk the eggs, sugar and oil.",
+    "Fold in the flour.",
+    "Bake 25 minutes.",
+    "Cool on a rack.",
+    "Serve with whipped cream."
+  ],
+  "expected": {
+    "view": "grid",
+    "sections": [
+      {
+        "title": null,
+        "rows": [
+          "egg",
+          "sugar",
+          "oil",
+          "flour"
+        ],
+        "steps": [
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 3
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 3
+          },
+          {
+            "kind": "banner_bottom"
+          },
+          {
+            "kind": "banner_bottom"
+          }
+        ]
+      }
+    ]
+  },
+  "confidence": {
+    "min": 0.7
+  }
+}

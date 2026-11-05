@@ -1,0 +1,55 @@
+{
+  "class": "hard",
+  "note": "\"Cream\" opens the first step as a verb; the cream ingredient is only used in step 3, so it is the last row.",
+  "ingredients": [
+    "1 cup heavy cream",
+    "1/2 cup butter",
+    "1/2 cup sugar",
+    "2 eggs"
+  ],
+  "steps": [
+    "Cream the butter and sugar until fluffy.",
+    "Beat in the eggs one at a time.",
+    "Whip the cream to soft peaks and fold it in.",
+    "Spoon into glasses."
+  ],
+  "expected": {
+    "view": "grid",
+    "sections": [
+      {
+        "title": null,
+        "rows": [
+          "butter",
+          "sugar",
+          "egg",
+          "heavy cream"
+        ],
+        "steps": [
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 1
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 3
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 3
+          }
+        ]
+      }
+    ]
+  },
+  "confidence": {
+    "min": 0.7
+  }
+}

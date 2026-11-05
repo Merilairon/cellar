@@ -1,6 +1,8 @@
 import { runCorpus, TARGET, type Row } from './import-corpus';
+import { printMapperReport, runMapperCorpus } from './mapper-corpus';
 
-// Usage: npm run test:import. Prints the corpus report; exits 1 below the 85 percent target.
+// Usage: npm run test:import. Prints the corpus report and the auto-mapper accuracy report;
+// exits 1 below the 85 percent target or when a mapper gate fails.
 
 const pad = (s: string, n: number) => (s.length >= n ? s : s + ' '.repeat(n - s.length));
 
@@ -38,11 +40,11 @@ async function main(): Promise<void> {
     console.log(`\nFailures (${report.failures.length}):`);
     for (const r of report.failures) console.log(`  ${r.name}: ${r.reason}`);
   }
-  process.exit(
-    report.rate >= TARGET && report.failures.filter((r) => r.expect !== 'draft').length === 0
-      ? 0
-      : 1,
-  );
+  const mapper = runMapperCorpus();
+  printMapperReport(mapper);
+  const importOk =
+    report.rate >= TARGET && report.failures.filter((r) => r.expect !== 'draft').length === 0;
+  process.exit(importOk && mapper.pass ? 0 : 1);
 }
 
 void main();

@@ -1,0 +1,14 @@
+{
+  "class": "negative",
+  "note": "Every step is blank after cleanup.",
+  "ingredients": [
+    "1 cup flour"
+  ],
+  "steps": [
+    "",
+    "   "
+  ],
+  "expected": {
+    "view": "none"
+  }
+}

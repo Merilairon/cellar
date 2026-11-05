@@ -1,0 +1,56 @@
+{
+  "class": "hard",
+  "note": "Noun-phrase steps: labels fall back, spans still follow mentions; no recognized verb means low confidence.",
+  "ingredients": [
+    "100 g butter",
+    "100 g sugar",
+    "2 eggs",
+    "150 g flour"
+  ],
+  "steps": [
+    "Butter, sugar and eggs in a bowl.",
+    "The oven at 180 degrees.",
+    "Flour folded in.",
+    "In the oven for 25 minutes."
+  ],
+  "expected": {
+    "view": "list",
+    "sections": [
+      {
+        "title": null,
+        "rows": [
+          "butter",
+          "sugar",
+          "egg",
+          "flour"
+        ],
+        "steps": [
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 3
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 3
+          }
+        ]
+      }
+    ]
+  },
+  "confidence": {
+    "max": 0.69
+  },
+  "known_miss": "Noun-phrase steps with no listed verb: labels and one span are guessed; confidence is capped at 0.39 so it stays a list."
+}

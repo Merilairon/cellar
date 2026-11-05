@@ -11,6 +11,7 @@ import {
   formFromRecipe,
   formToPayload,
   ingredientLines,
+  nextKey,
   validateForm,
 } from './form-model';
 
@@ -231,5 +232,40 @@ describe('formFromRecipe keys', () => {
     const keys = (f: ReturnType<typeof formFromRecipe>) =>
       f.sections.flatMap((s) => [s.key, ...s.steps.map((t) => t.key)]);
     expect(keys(formFromRecipe(recipe))).toEqual(keys(formFromRecipe(recipe)));
+  });
+});
+
+describe('render-time builders never touch the module key counter (hydration)', () => {
+  const keysOf = (f: ReturnType<typeof emptyForm>) =>
+    f.sections.flatMap((s) => [s.key, ...s.steps.map((t) => t.key)]);
+
+  it('emptyForm gives the same keys on every call, whatever ran before', () => {
+    const first = keysOf(emptyForm());
+    nextKey();
+    nextKey(); // another request or an add-step click advanced the counter
+    expect(keysOf(emptyForm())).toEqual(first);
+    expect(first).toEqual(['s0']);
+  });
+
+  it('emptyForm, formFromRecipe and formFromDraft do not advance nextKey', () => {
+    const before = Number(nextKey().slice(1));
+    emptyForm();
+    formFromRecipe(apiShaped(SAMPLE_VANILLA_CAKE));
+    formFromDraft({
+      ...SAMPLE_VANILLA_CAKE,
+      tags: [],
+      cover_image_url: null,
+      mapping: null,
+    } as never);
+    expect(Number(nextKey().slice(1))).toBe(before + 1);
+  });
+
+  it('handler-created rows get unique keys that cannot clash with index keys', () => {
+    const a = emptyStep();
+    const b = emptyStep();
+    expect(a.key).not.toBe(b.key);
+    const indexKeys = new Set(keysOf(formFromRecipe(apiShaped(SAMPLE_VANILLA_CAKE))));
+    expect(indexKeys.has(a.key) || indexKeys.has(b.key)).toBe(false);
+    expect(indexKeys.has('s0') && a.key.startsWith('k')).toBe(true);
   });
 });

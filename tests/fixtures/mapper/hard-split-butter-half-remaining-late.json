@@ -1,0 +1,59 @@
+{
+  "class": "hard",
+  "note": "Half the butter at the start, the remaining butter in the last step.",
+  "ingredients": [
+    "4 tbsp butter",
+    "1 onion",
+    "1 cup rice",
+    "3 cups stock"
+  ],
+  "steps": [
+    "Melt half the butter in a pan and saut\u00e9 the onion.",
+    "Stir in the rice and the stock and simmer for 18 minutes.",
+    "Finish with the remaining butter."
+  ],
+  "expected": {
+    "view": "grid",
+    "sections": [
+      {
+        "title": null,
+        "rows": [
+          "butter",
+          "onion",
+          "rice",
+          "stock",
+          "butter"
+        ],
+        "steps": [
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 1
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 3
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 4
+          }
+        ],
+        "split": [
+          {
+            "name": "butter",
+            "portions": [
+              "half",
+              "remaining"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "confidence": {
+    "min": 0.7
+  }
+}

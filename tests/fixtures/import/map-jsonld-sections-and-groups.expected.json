@@ -1,0 +1,8 @@
+{
+  "expect": "draft",
+  "kind": "mapper: HowToSection and ingredient groups",
+  "title": "Two-part Sponge",
+  "min_ingredients": 5,
+  "min_steps": 5,
+  "map": { "section_titles": ["Cake", "Frosting"], "min_confidence": 0.7 }
+}

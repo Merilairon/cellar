@@ -1,0 +1,47 @@
+{
+  "class": "hard",
+  "note": "Boil, fry, then a toss step that only combines.",
+  "ingredients": [
+    "2 tbsp oil",
+    "1 onion",
+    "200 g pasta"
+  ],
+  "steps": [
+    "Boil the pasta.",
+    "Fry the onion in the oil.",
+    "Toss together."
+  ],
+  "expected": {
+    "view": "grid",
+    "sections": [
+      {
+        "title": null,
+        "rows": [
+          "pasta",
+          "onion",
+          "oil"
+        ],
+        "steps": [
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 0
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          }
+        ]
+      }
+    ]
+  },
+  "confidence": {
+    "min": 0.7
+  }
+}

@@ -18,7 +18,8 @@
     "seed": "tsx scripts/seed.ts",
     "build:admin-reset": "esbuild scripts/admin-reset.ts --bundle --platform=node --format=esm --target=node22 --external:better-sqlite3 --external:argon2 --tsconfig=tsconfig.json --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" --outfile=dist/admin-reset.mjs",
     "build:seed": "esbuild scripts/seed.ts --bundle --platform=node --format=esm --target=node22 --external:better-sqlite3 --external:argon2 --tsconfig=tsconfig.json --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" --outfile=dist/seed.mjs",
-    "test:import": "tsx scripts/import-report.ts"
+    "test:import": "tsx scripts/import-report.ts",
+    "test:mapper": "tsx scripts/mapper-report.ts"
   },
   "dependencies": {
     "argon2": "0.45.2",

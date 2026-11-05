@@ -8,5 +8,5 @@ docker run --rm --ipc=host -v "$tmp/repo:/work" -w /work mcr.microsoft.com/playw
   apt-get update && apt-get install -y build-essential python3
   npm i -g n && n "$(cut -d. -f1 .nvmrc)" && hash -r
   npm ci && CI=1 npx playwright test --update-snapshots'
-cp "$tmp"/repo/tests/e2e/__screenshots__/recipes-visual.spec.ts/*.png tests/e2e/__screenshots__/recipes-visual.spec.ts/
+cp -r "$tmp"/repo/tests/e2e/__screenshots__/. tests/e2e/__screenshots__/
 rm -rf "$tmp"

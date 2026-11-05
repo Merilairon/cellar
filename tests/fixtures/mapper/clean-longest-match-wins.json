@@ -1,0 +1,47 @@
+{
+  "class": "clean",
+  "note": "\"brown sugar\" is matched before the bare \"sugar\".",
+  "ingredients": [
+    "1 cup sugar",
+    "1 cup brown sugar",
+    "2 eggs"
+  ],
+  "steps": [
+    "Beat the eggs with the brown sugar.",
+    "Stir in the sugar.",
+    "Bake."
+  ],
+  "expected": {
+    "view": "grid",
+    "sections": [
+      {
+        "title": null,
+        "rows": [
+          "egg",
+          "brown sugar",
+          "sugar"
+        ],
+        "steps": [
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 1
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          }
+        ]
+      }
+    ]
+  },
+  "confidence": {
+    "min": 0.7
+  }
+}

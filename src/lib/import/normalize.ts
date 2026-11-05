@@ -1,6 +1,8 @@
 import { recipeInputSchema, type RecipeInput } from '@/lib/recipes/schemas';
 import { isoDurationToMinutes } from './duration';
 import { parseIngredientLine, toIngredientFields } from './ingredient-parser';
+import { ingredientsFromLines, stepHeadingTitle, titleKey } from './map-sections';
+import type { MapInput, MappingProposal } from './map-types';
 import { sanitizeText, sanitizeUrl } from './sanitize';
 
 // Pure: schema.org Recipe node in, draft out. 3a maps every recipe to list view with one
@@ -11,12 +13,20 @@ export type Draft = RecipeInput & {
   tags: string[];
   /** Absolute https URL of the cover image, or null. Downloaded on save (T8), never hotlinked. */
   cover_image_url: string | null;
+  /**
+   * Grid proposal from the auto-mapper (tasklist G9), kept beside the flat 3a sections so the
+   * list view and the page order stay available. `null` until the pipeline attaches it, and
+   * when the mapper could not run or its output was dropped.
+   */
+  mapping: MappingProposal | null;
 };
 
 export type NormalizeResult = {
   /** null when the node lacks a title, ingredients or steps: that is `no_recipe`, not a partial draft. */
   draft: Draft | null;
   warnings: string[];
+  /** Input for the auto-mapper (heading lines split out, section hints kept); null without a draft. */
+  mapInput: MapInput | null;
 };
 
 type Obj = Record<string, unknown>;
@@ -154,12 +164,37 @@ function collectTags(node: Obj): string[] {
   return tags;
 }
 
+/** Mapper input from the parsed lines and steps; never throws (a failure just means no mapping). */
+function buildMapInput(lines: string[], steps: RawStep[]): MapInput | null {
+  try {
+    // Bare words that match a step section title ("Frosting") become ingredient group headings.
+    const known = new Set<string>();
+    for (const s of steps) {
+      if (s.prefix) known.add(titleKey(s.prefix));
+      const heading = stepHeadingTitle(s.text);
+      if (heading) known.add(titleKey(heading));
+    }
+    return {
+      ingredients: ingredientsFromLines(lines, known),
+      steps: steps.map((s) => ({ text: s.text, section: s.prefix })),
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function normalizeRecipe(
   node: Obj,
-  opts: { sourceUrl?: string | null } = {},
+  /**
+   * `sourceUrl` is the URL to store. `baseUrl` resolves a relative cover URL; it must be the
+   * final URL after redirects (a relative path is relative to where the page really is) and
+   * falls back to `sourceUrl`.
+   */
+  opts: { sourceUrl?: string | null; baseUrl?: string | null } = {},
 ): NormalizeResult {
   const warnings: string[] = [];
   const sourceUrl = sanitizeUrl(opts.sourceUrl ?? null);
+  const baseUrl = sanitizeUrl(opts.baseUrl ?? null) ?? sourceUrl;
 
   const title = textOf(node['name'] ?? node['headline'], 200);
 
@@ -192,7 +227,7 @@ export function normalizeRecipe(
   }));
 
   if (!title || ingredients.length === 0 || steps.length === 0) {
-    return { draft: null, warnings };
+    return { draft: null, warnings, mapInput: null };
   }
 
   const y = parseYield(node['recipeYield'], warnings);
@@ -207,7 +242,7 @@ export function normalizeRecipe(
 
   const publisher = textOf(node['publisher'], 200);
   const author = textOf(node['author'], 200);
-  const cover = coverUrl(node['image'], sourceUrl);
+  const cover = coverUrl(node['image'], baseUrl);
   if (node['image'] !== undefined && !cover) warnings.push('image_dropped');
 
   const candidate = {
@@ -226,10 +261,11 @@ export function normalizeRecipe(
   const parsed = recipeInputSchema.safeParse(candidate);
   if (!parsed.success) {
     warnings.push('draft_invalid');
-    return { draft: null, warnings };
+    return { draft: null, warnings, mapInput: null };
   }
   return {
-    draft: { ...parsed.data, tags: collectTags(node), cover_image_url: cover },
+    draft: { ...parsed.data, tags: collectTags(node), cover_image_url: cover, mapping: null },
     warnings,
+    mapInput: buildMapInput(lines.slice(0, MAX_INGREDIENTS), rawSteps.slice(0, MAX_STEPS)),
   };
 }

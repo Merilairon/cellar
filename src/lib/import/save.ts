@@ -5,7 +5,7 @@ import { prepareRecipe, type Failure } from '@/lib/recipes/service';
 import type { RecipeTree } from '@/lib/db/recipes';
 import { fetchAndStoreCover, type CoverDeps } from './cover';
 import { sanitizeText } from './sanitize';
-import { normalizeSourceUrl } from './source-url';
+import { storedSourceUrl } from './source-url';
 import { parseStoredDraft } from './service';
 import { saveRequestSchema } from './schemas';
 
@@ -86,9 +86,14 @@ export async function saveImport(
   if (!prepared.ok) return prepared;
 
   const tree = sanitizeTree(prepared.tree);
-  // Stored URL is the normalized user-entered one (G12); must be http(s).
-  const suppliedUrl = tree.fields.sourceUrl ?? job.url;
-  const sourceUrl = suppliedUrl ? normalizeSourceUrl(suppliedUrl) : null;
+  // Stored URL is the canonical user-entered one with its scheme kept (G12, Q3); must be
+  // http(s). An explicit empty or null `source_url` clears it; only a missing key falls back to
+  // the draft's URL (then the job URL), so API clients that omit it keep v0.3.0 behaviour.
+  const omitted = recipeBody.source_url === undefined;
+  const suppliedUrl = omitted
+    ? (stored.draft.source_url ?? job.url ?? null)
+    : (tree.fields.sourceUrl ?? null);
+  const sourceUrl = suppliedUrl ? storedSourceUrl(suppliedUrl) : null;
   if (suppliedUrl && !sourceUrl) {
     return { ok: false, status: 422, errors: [{ path: 'source_url', code: 'invalid_url' }] };
   }

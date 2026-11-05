@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
@@ -55,6 +55,8 @@ export type FormTarget = {
   failedText: string;
   cancelLabel: string;
   onCancel: () => void;
+  /** Called when the server rejects the payload with field errors (422). */
+  onInvalid?: () => void;
 };
 
 export function RecipeForm({
@@ -62,11 +64,14 @@ export function RecipeForm({
   initial,
   target,
   header,
+  onChange,
 }: {
   recipeId?: string;
   initial?: FormState;
   target?: FormTarget;
   header?: ReactNode;
+  /** Reports every form state, including the first (used by the import review preview). Keep it referentially stable. */
+  onChange?: (form: FormState) => void;
 }) {
   const t = useTranslations();
   const router = useRouter();
@@ -76,6 +81,9 @@ export function RecipeForm({
   const [failed, setFailed] = useState(false);
   const summary = useRef<HTMLDivElement>(null);
   const errs = errorMap(errors);
+  useEffect(() => {
+    onChange?.(form);
+  }, [form, onChange]);
 
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
@@ -127,6 +135,7 @@ export function RecipeForm({
       router.push(target ? target.redirect(saved) : `/recipes/${saved.id}`);
       router.refresh();
     } else if (res?.status === 422) {
+      target?.onInvalid?.();
       fail(((await res.json()) as { errors: ApiFieldError[] }).errors);
     } else {
       setFailed(true);

@@ -1,0 +1,55 @@
+{
+  "class": "hard",
+  "note": "Exact name \"milk\" beats the head noun of \"coconut milk\"; both resolve.",
+  "ingredients": [
+    "1 cup milk",
+    "1 cup coconut milk",
+    "2 eggs",
+    "1 cup flour"
+  ],
+  "steps": [
+    "Whisk the eggs and the milk.",
+    "Add the flour.",
+    "Stir in the coconut milk.",
+    "Bake."
+  ],
+  "expected": {
+    "view": "grid",
+    "sections": [
+      {
+        "title": null,
+        "rows": [
+          "egg",
+          "milk",
+          "flour",
+          "coconut milk"
+        ],
+        "steps": [
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 1
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 3
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 3
+          }
+        ]
+      }
+    ]
+  },
+  "confidence": {
+    "min": 0.7
+  }
+}
