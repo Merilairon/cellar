@@ -1,11 +1,19 @@
 /**
- * Canonical form of a recipe URL for duplicate detection and for the stored `source_url`
- * (data-model G12): http and https are treated as equal (stored as https), host lowercased
- * (kept `www.`), fragment, default port and tracking parameters removed, remaining query
- * parameters sorted, trailing slash removed. Returns null for anything that is not a plain
- * http(s) URL without credentials.
+ * Two forms of a recipe URL (data-model G12, owner decision Q3):
+ *
+ * - `normalizeSourceUrl` is the comparison key for duplicate detection: http and https are
+ *   equal (the key is always https), host lowercased (kept `www.`), fragment, default port
+ *   and tracking parameters removed, remaining query parameters sorted, trailing slash
+ *   removed.
+ * - `storedSourceUrl` is what is stored and linked: the same canonical form but with the
+ *   scheme the user entered, so an http-only site keeps a working link.
+ *
+ * Both return null for anything that is not a plain http(s) URL without credentials.
  */
-export function normalizeSourceUrl(raw: unknown): string | null {
+
+type Canonical = { scheme: 'http' | 'https'; host: string; port: string; rest: string };
+
+function canonical(raw: unknown): Canonical | null {
   if (typeof raw !== 'string') return null;
   const trimmed = raw.trim();
   if (!trimmed || trimmed.length > 2048) return null;
@@ -24,7 +32,26 @@ export function normalizeSourceUrl(raw: unknown): string | null {
   keep.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
   const search = new URLSearchParams(keep).toString();
   const path = u.pathname.replace(/\/+$/, '');
-  const host =
-    u.port && u.port !== '80' && u.port !== '443' ? `${u.hostname}:${u.port}` : u.hostname;
-  return `https://${host}${path}${search ? `?${search}` : ''}`;
+  return {
+    scheme: u.protocol === 'http:' ? 'http' : 'https',
+    host: u.hostname,
+    // The URL parser already drops the default port of the entered scheme.
+    port: u.port,
+    rest: `${path}${search ? `?${search}` : ''}`,
+  };
+}
+
+/** Comparison key for duplicate detection (always https). */
+export function normalizeSourceUrl(raw: unknown): string | null {
+  const c = canonical(raw);
+  if (!c) return null;
+  const host = c.port && c.port !== '80' && c.port !== '443' ? `${c.host}:${c.port}` : c.host;
+  return `https://${host}${c.rest}`;
+}
+
+/** The URL to store: canonical, with the scheme the user entered. */
+export function storedSourceUrl(raw: unknown): string | null {
+  const c = canonical(raw);
+  if (!c) return null;
+  return `${c.scheme}://${c.host}${c.port ? `:${c.port}` : ''}${c.rest}`;
 }
