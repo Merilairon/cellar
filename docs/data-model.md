@@ -8,19 +8,49 @@ SQLite. IDs are ULIDs (text). Timestamps are ISO-8601 UTC text.
 | Column | Type | Notes |
 | --- | --- | --- |
 | id | text PK | |
-| email | text unique | |
+| email | text unique | stored lowercased |
 | display_name | text | |
-| password_hash | text | argon2id |
+| password_hash | text | argon2id (PHC string) |
 | role | text | `admin` \| `member` |
 | unit_pref | text | `metric` \| `us`, default `metric` |
 | locale | text | default `en` |
 | created_at | text | |
+| deactivated_at | text | nullable; set = account cannot log in, sessions are deleted, row kept. Counts as "not active" for the last-admin guard |
 
 ### session
-`id`, `user_id` FK, `expires_at`, `created_at`.
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | text PK | SHA-256 hex of the random cookie token (not a ULID); a DB leak does not yield usable cookies |
+| user_id | text FK user | `ON DELETE CASCADE` |
+| expires_at | text | |
+| created_at | text | |
+
+Index on `user_id` (bulk invalidation) and `expires_at` (cleanup).
 
 ### invite
-`id`, `token_hash`, `email` (nullable), `created_by` FK, `expires_at`, `used_at`.
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | text PK | |
+| token_hash | text unique | SHA-256 hex; plaintext token is shown once and never stored |
+| email | text | nullable; if set, the registration form uses it |
+| created_by | text FK user | `ON DELETE CASCADE` |
+| expires_at | text | |
+| used_at | text | nullable; set atomically on consumption (single use) |
+
+### password_reset
+Admin-issued or CLI-issued one-time reset links (`/reset/<token>`). Separate from `invite` because an invite creates a user and a reset targets an existing one.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | text PK | |
+| user_id | text FK user | `ON DELETE CASCADE` |
+| token_hash | text unique | SHA-256 hex |
+| created_by | text FK user | nullable (null = issued by CLI `admin:reset`); `ON DELETE SET NULL` |
+| expires_at | text | |
+| used_at | text | nullable; single use |
+| created_at | text | |
+
+Using a reset link sets the new password, marks `used_at`, deletes all of the user's sessions, and voids other unused resets for that user. It never reactivates a deactivated user.
 
 ### recipe
 | Column | Type | Notes |
