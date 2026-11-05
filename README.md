@@ -25,8 +25,8 @@ Not yet available: automatic grid mapping of imported steps (planned v0.3.1), pa
 | `/recipes`          | Your recipes and recipes shared with you. Shows an empty state with calls to action when there are none.                                                       |
 | `/recipes/new`      | Form to create a recipe.                                                                                                                                       |
 | `/recipes/:id`      | A recipe in grid or list view, with a toggle. The owner and admins see edit, delete and share controls; other users see a read-only view with **Save a copy**. |
-| `/import` | Import a recipe from a web address or pasted text (see [Import a recipe](#import-a-recipe)). |
-| `/import/:id` | Review screen for an import: edit the draft, then save or discard. |
+| `/import`           | Import a recipe from a web address or pasted text (see [Import a recipe](#import-a-recipe)).                                                                   |
+| `/import/:id`       | Review screen for an import: edit the draft, then save or discard.                                                                                             |
 | `/recipes/:id/edit` | Form to edit a recipe you own (admins can edit any recipe). Saving replaces the recipe's sections, ingredients and steps.                                      |
 
 The JSON API lives under `/api/recipes` (`/api/recipes`, `/api/recipes/:id`, `/api/recipes/:id/copy`, `/api/recipes/:id/visibility`). See [docs/data-model.md](docs/data-model.md).
@@ -50,28 +50,28 @@ Either way you land on a review screen. Everything is editable, tags found on th
 
 When an import fails, the API still answers 200 with `status: "failed"` and one of these codes, and the page offers the paste fallback.
 
-| Code | Meaning |
-| --- | --- |
-| `invalid_url` | Not an http or https address, contains a username or password, or uses a port other than 80 or 443. |
+| Code              | Meaning                                                                                                                      |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `invalid_url`     | Not an http or https address, contains a username or password, or uses a port other than 80 or 443.                          |
 | `private_address` | The host resolves to a private, loopback, link-local or otherwise internal address, at the first request or at any redirect. |
-| `blocked` | The site answered 403 or 429, or showed a bot wall. |
-| `timeout` | The whole fetch, including redirects, took longer than 10 seconds. |
-| `too_large` | The response exceeded 5 MB. |
-| `fetch_failed` | DNS failure, connection error, a non-HTML content type, or a server error. |
-| `no_recipe` | The page was fetched but no usable recipe (title, at least one ingredient and one step) was found. |
+| `blocked`         | The site answered 403 or 429, or showed a bot wall.                                                                          |
+| `timeout`         | The whole fetch, including redirects, took longer than 10 seconds.                                                           |
+| `too_large`       | The response exceeded 5 MB.                                                                                                  |
+| `fetch_failed`    | DNS failure, connection error, a non-HTML content type, or a server error.                                                   |
+| `no_recipe`       | The page was fetched but no usable recipe (title, at least one ingredient and one step) was found.                           |
 
 Requests that are malformed are rejected with HTTP 400 (invalid JSON), 401, 403 (origin check), 415 (not JSON) or 422 (validation). Exceeding the rate limit returns 429 with a `Retry-After` header.
 
 ### Limits
 
-| Limit | Value |
-| --- | --- |
-| Response size | 5 MB, counted on streamed bytes |
-| Total time per fetch | 10 seconds, including redirects |
-| Ports | 80 and 443 only |
-| Redirects | 5, each one re-validated |
-| Pasted text | 500,000 characters |
-| Rate limit | `RATE_LIMIT_IMPORT_MAX` imports (default 20) per user per `RATE_LIMIT_IMPORT_WINDOW_SEC` (default 3600 s); failures count |
+| Limit                | Value                                                                                                                     |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Response size        | 5 MB, counted on streamed bytes                                                                                           |
+| Total time per fetch | 10 seconds, including redirects                                                                                           |
+| Ports                | 80 and 443 only                                                                                                           |
+| Redirects            | 5, each one re-validated                                                                                                  |
+| Pasted text          | 500,000 characters                                                                                                        |
+| Rate limit           | `RATE_LIMIT_IMPORT_MAX` imports (default 20) per user per `RATE_LIMIT_IMPORT_WINDOW_SEC` (default 3600 s); failures count |
 
 ### How the fetch is restricted (SSRF guard)
 

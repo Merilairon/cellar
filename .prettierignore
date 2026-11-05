@@ -10,3 +10,4 @@ test-results
 docs
 milestones
 dist
+tests/fixtures/
