@@ -5,7 +5,7 @@ import { ulid } from 'ulid';
 import type { Db } from '@/lib/db/connection';
 import { insertCoverPhoto } from '@/lib/db/photos';
 import { ImportError } from './errors';
-import { limitFetch } from './limiter';
+import { limitDecode, limitFetch } from './limiter';
 import {
   safeFetch as defaultSafeFetch,
   type SafeFetchOptions,
@@ -20,7 +20,11 @@ import {
 
 export const MAX_COVER_EDGE = 1600;
 /** Pixel cap checked from the header, before any decode (decompression-bomb guard). */
-export const MAX_COVER_PIXELS = 40_000_000;
+export const MAX_COVER_PIXELS = 16_000_000;
+
+// Small hosts (Raspberry Pi): one libvips thread, no operation cache.
+sharp.concurrency(1);
+sharp.cache(false);
 
 export type CoverDeps = {
   safeFetch?: (url: string, opts?: SafeFetchOptions) => Promise<SafeFetchResult>;
@@ -101,7 +105,7 @@ export async function fetchAndStoreCover(
 ): Promise<string> {
   const fetchImage = deps.safeFetch ?? defaultSafeFetch;
   const res = await limitFetch(() => fetchImage(url, { ...deps.fetchOptions, accept: 'image' }));
-  const { data, width, height } = await reencodeCover(res.body);
+  const { data, width, height } = await limitDecode(() => reencodeCover(res.body));
 
   const fileName = `${ulid()}.webp`;
   await mkdir(deps.uploadsDir, { recursive: true, mode: 0o700 });

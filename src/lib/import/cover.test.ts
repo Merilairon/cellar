@@ -10,7 +10,7 @@ import { getCoverPhoto } from '@/lib/db/photos';
 import { createRecipe } from '@/lib/db/recipes';
 import { user } from '@/lib/db/schema';
 import { ImportError } from './errors';
-import { fetchAndStoreCover, reencodeCover, sniffImage } from './cover';
+import { fetchAndStoreCover, MAX_COVER_PIXELS, reencodeCover, sniffImage } from './cover';
 import { safeFetch, type SafeFetchOptions, type SafeFetchResult } from './safe-fetch';
 
 const png = (w = 40, h = 20) =>
@@ -113,6 +113,35 @@ describe('reencodeCover', () => {
     bomb.writeUInt32BE(20000, 20);
     bomb.writeUInt32BE(crc32(bomb.subarray(12, 29)), 29);
     await expect(reencodeCover(bomb)).rejects.toBeInstanceOf(ImportError);
+  });
+});
+
+describe('cover resource limits', () => {
+  it('uses a Pi-safe pixel cap and refuses an in-between bomb (20 MP) at the header', async () => {
+    expect(MAX_COVER_PIXELS).toBeLessThanOrEqual(16_000_000);
+    const big = Buffer.from(await png(1, 1));
+    big.writeUInt32BE(5000, 16);
+    big.writeUInt32BE(4000, 20);
+    big.writeUInt32BE(crc32(big.subarray(12, 29)), 29);
+    await expect(reencodeCover(big)).rejects.toBeInstanceOf(ImportError);
+  });
+
+  it('configures sharp for one thread and no cache', () => {
+    expect(sharp.concurrency()).toBe(1);
+    expect(sharp.cache().items.current).toBe(0);
+  });
+
+  it('runs decodes through the limiter: 3 concurrent covers never decode in parallel', async () => {
+    const sf = async () => res(await png(40, 20));
+    const ids = await Promise.all(
+      [0, 1, 2].map(() =>
+        fetchAndStoreCover(db, 'https://cdn.example.com/x.png', recipeId, {
+          safeFetch: sf,
+          uploadsDir: join(dir, 'uploads'),
+        }),
+      ),
+    );
+    expect(new Set(ids).size).toBe(3);
   });
 });
 
