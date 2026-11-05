@@ -169,6 +169,40 @@ function classAt(tokens: Token[], i: number): VerbClass | undefined {
   return cls;
 }
 
+const LEAD_SKIP = new Set(['then', 'next', 'first', 'now', 'also', 'finally']);
+const NOT_AN_OBJECT = new Set(['is', 'are', 'was', 'were', 'and', 'or']);
+
+/**
+ * Token indexes that are the imperative verb of a sentence: the first content token (after
+ * "-ly" adverbs and "then"/"next"), a listed verb, followed by more words in the same clause.
+ * "Cream the butter" starts with the verb "cream", not with the ingredient "cream"; a
+ * mention there is the action, so ingredient matching ignores it (review M1). A comma or
+ * end of sentence after the token keeps the noun reading ("Cream, sugar and eggs ...").
+ */
+export function imperativeLeadIndexes(tokens: Token[]): Set<number> {
+  const out = new Set<number>();
+  let last = -1;
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i]!;
+    if (t.sent === last) continue;
+    last = t.sent;
+    let j = i;
+    while (
+      j < tokens.length &&
+      tokens[j]!.sent === t.sent &&
+      (isLy(tokens[j]!.w) || LEAD_SKIP.has(tokens[j]!.w))
+    )
+      j++;
+    const lead = tokens[j];
+    if (!lead || lead.sent !== t.sent || !classAt(tokens, j)) continue;
+    const next = tokens[j + 1];
+    if (!next || next.sent !== lead.sent || next.clause !== lead.clause) continue;
+    if (NOT_AN_OBJECT.has(next.w)) continue;
+    out.add(j);
+  }
+  return out;
+}
+
 /** The leading prep verb when the step is a prep step (G2), else null. */
 function detectPrep(tokens: Token[]): string | null {
   let i = 0;

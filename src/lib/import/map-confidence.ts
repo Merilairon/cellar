@@ -20,7 +20,7 @@ export function levelOf(confidence: number): MappingLevel {
  * confidence = cov^2 * (0.55 + 0.20*unamb + 0.15*verbs + 0.10*splitOk) * secFactor
  *              - min(0.15, 0.05 * groupRefs), then the caps below, rounded to 2 decimals.
  * Caps: <2 column steps 0.50; one distinct span 0.55; >30% unmatched 0.60; no recognized
- * verb at all 0.39 (added at T8 calibration for G18).
+ * verb at all 0.39 (added at T8 calibration for G18); any unresolved split 0.69 (review M2).
  * `gridErrors > 0` (validateRecipeGrid) gives 0: the caller discards the proposal.
  */
 export function computeConfidence(
@@ -35,6 +35,9 @@ export function computeConfidence(
     (0.55 + 0.2 * clamp01(s.unamb) + 0.15 * clamp01(s.verbs) + 0.1 * clamp01(s.splitOk)) *
     Math.min(1, Math.max(0.5, s.secFactor));
   raw -= Math.min(0.15, 0.05 * Math.max(0, s.groupRefs));
+  // An unresolved split leaves one row where a person would draw two (data-model §3 5b):
+  // never "high", whatever else matched.
+  if (s.splitOk < 1) raw = Math.min(raw, 0.69);
   if (s.columnSteps < 2) raw = Math.min(raw, 0.5);
   if (s.columnSteps >= 2 && s.distinctSpans <= 1) raw = Math.min(raw, 0.55);
   if (1 - cov > 0.3) raw = Math.min(raw, 0.6);

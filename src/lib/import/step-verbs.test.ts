@@ -4,10 +4,12 @@ import {
   extractDurations,
   extractTemperature,
   fallbackLabel,
+  imperativeLeadIndexes,
   PHRASAL_VERBS,
   VERBS,
   VERB_CLASS,
 } from './step-verbs';
+import { tokenizeDetailed } from './text-tokens';
 
 describe('verb picking', () => {
   const rows: Array<[string, string | null, string]> = [
@@ -179,5 +181,31 @@ describe('duration (G17)', () => {
     const c = classifyStep('Bake at 350°F (170°C) for 30-40 minutes.');
     expect(c.temp).toEqual({ f: 350, c: 170 });
     expect(c.minutes).toEqual({ min: 30, max: 40 });
+  });
+});
+
+describe('imperativeLeadIndexes (review M1)', () => {
+  const lead = (text: string) => {
+    const tk = tokenizeDetailed(text);
+    return [...imperativeLeadIndexes(tk.tokens)].map((i) => tk.tokens[i]!.w);
+  };
+  it('finds the verb opening each sentence', () => {
+    expect(lead('Cream the butter. Whip the cream.')).toEqual(['cream', 'whip']);
+  });
+  it('skips leading adverbs and "then"', () => {
+    expect(lead('Gently cream the butter.')).toEqual(['cream']);
+    expect(lead('Then whisk the eggs.')).toEqual(['whisk']);
+  });
+  it('does not flag a noun at the start of a sentence', () => {
+    expect(lead('Cream, sugar and eggs go in the bowl.')).toEqual([]);
+    expect(lead('Cream is added at the end.')).toEqual([]);
+    expect(lead('Cream and sugar are beaten together.')).toEqual([]);
+    expect(lead('Cream.')).toEqual([]);
+  });
+  it('ignores verbs that are not at the start of a sentence', () => {
+    expect(lead('Add the sugar, cream, and vanilla.')).toEqual(['add']);
+  });
+  it('is not fooled by "heavy cream" (CREAM_NOUN_PREV guard)', () => {
+    expect(lead('Heavy cream goes in last.')).toEqual([]);
   });
 });

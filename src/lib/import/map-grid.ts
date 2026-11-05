@@ -32,7 +32,7 @@ import {
   type MappingSignals,
 } from './map-types';
 import { Warnings } from './map-warnings';
-import { classifyTokens, type StepClass } from './step-verbs';
+import { classifyTokens, imperativeLeadIndexes, type StepClass } from './step-verbs';
 import { safeSlice, singularize, tokenizeDetailed, type Tokenized } from './text-tokens';
 
 type SectionsOut = RecipeInput['sections'];
@@ -113,7 +113,14 @@ function coerce(
 
 // -- step preparation ---------------------------------------------------------------------
 
-type Prepared = { text: string; tk: Tokenized; words: string[]; cls: StepClass };
+type Prepared = {
+  text: string;
+  tk: Tokenized;
+  words: string[];
+  cls: StepClass;
+  /** Word indexes of the sentence-initial imperative verbs (not ingredient mentions). */
+  lead: ReadonlySet<number>;
+};
 
 function prepare(
   text: string,
@@ -131,6 +138,7 @@ function prepare(
     tk,
     words: tk.tokens.map((t) => singularize(t.w)),
     cls: classifyTokens(text, tk.tokens),
+    lead: imperativeLeadIndexes(tk.tokens),
   };
   memo.set(text, p);
   return p;
@@ -172,7 +180,7 @@ function mapSection(
 
   // Phase A: mentions without state; decides banners.
   const ments: Mention[][] = steps.map((p) =>
-    p.cls.isPrep ? [] : findMentions(p.words, index, budget),
+    p.cls.isPrep ? [] : findMentions(p.words, index, budget, p.lead),
   );
   const seen = new Set<number>();
   const adds: boolean[] = ments.map((ms) => {
@@ -216,8 +224,12 @@ function mapSection(
   let bottom = n;
   for (let i = n - 1; i > anchor && i >= top; i--) {
     const c = steps[i]!.cls;
+    // A trailing step that uses an ingredient (even one seen before: "finish with the
+    // remaining butter") is a column step unless it is a pure serving note.
     const qualifies =
-      !c.isPrep && (c.leadServe || !adds[i]) && (c.leadFinish || (!c.hasCook && !c.hasCombine));
+      !c.isPrep &&
+      (c.leadServe || ments[i]!.length === 0) &&
+      (c.leadFinish || (!c.hasCook && !c.hasCombine));
     if (!qualifies) break;
     bottom = i;
   }
@@ -259,7 +271,8 @@ function mapSection(
       }
       if (id === null) continue;
       mentioned.add(id);
-      matched.add(id);
+      // An ingredient seen only in a bottom banner has no row position: not covered (m1).
+      if (i < bottom) matched.add(id);
       if (i < bottom) events.push({ id, step: i, at: m.at });
     }
   }
@@ -432,7 +445,7 @@ function run(input: unknown, budget: Budget): MapResult {
     for (const text of groups[g]!.steps) {
       const p = prepare(text, budget, warn, memo);
       if (p.cls.isPrep) continue;
-      for (const m of findMentions(p.words, globalIndex, budget))
+      for (const m of findMentions(p.words, globalIndex, budget, p.lead))
         for (const id of m.ids) out.add(id);
     }
     return out;
@@ -487,7 +500,8 @@ function run(input: unknown, budget: Budget): MapResult {
     secFactor: Math.max(0.5, secFactor),
     groupRefs: totals.groupRefs,
     columnSteps: totals.columnSteps,
-    distinctSpans: new Set([...totals.ends].map((e) => e.split(':')[1])).size,
+    // (section, row_end) pairs: two sections that both end at row 1 are two spans.
+    distinctSpans: totals.ends.size,
   };
   const { confidence, level } = computeConfidence(signals, 0);
   return {

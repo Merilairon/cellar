@@ -38,8 +38,16 @@ describe('computeConfidence table', () => {
     expect(computeConfidence(s({ cov: 0.9 })).confidence).toBe(0.81);
     expect(computeConfidence(s({ cov: 0.8 }))).toEqual({ confidence: 0.64, level: 'medium' });
   });
-  it('one unresolved split lowers by splitOk weight', () => {
-    expect(computeConfidence(s({ splitOk: 0 })).confidence).toBe(0.9);
+  it('any unresolved split is never high (review M2): capped at 0.69', () => {
+    expect(computeConfidence(s({ splitOk: 0 }))).toEqual({ confidence: 0.69, level: 'medium' });
+    expect(computeConfidence(s({ splitOk: 0.99 })).level).not.toBe('high');
+    expect(computeConfidence(s({ splitOk: 1 })).level).toBe('high');
+  });
+  it('the split cap does not raise a score that is already lower', () => {
+    expect(computeConfidence(s({ splitOk: 0, cov: 0.5 })).confidence).toBeLessThan(0.69);
+  });
+  it('two sections that each span all their rows are not one distinct span (review m2)', () => {
+    expect(computeConfidence(s({ distinctSpans: 2, columnSteps: 4 })).confidence).toBe(1);
   });
   it('one group reference subtracts 0.05, capped at 0.15', () => {
     expect(computeConfidence(s({ groupRefs: 1 })).confidence).toBe(0.95);

@@ -810,3 +810,153 @@ describe('property tests (seeded, 300 cases)', () => {
     }
   });
 });
+
+describe('calibration fixes from the v0.3.1 review', () => {
+  const lines = (ls: string[]) => ingredientsFromLines(ls, new Set());
+  const steps = (...t: string[]): MapStepInput[] => t.map((text) => ({ text, section: null }));
+  const map = (ings: string[], ss: string[]) => {
+    const r = mapGrid({ ingredients: lines(ings), steps: steps(...ss) });
+    if (!r.mapped) throw new Error('not mapped');
+    return r.proposal;
+  };
+  const rows = (p: MappingProposal) => p.sections[0]!.ingredients.map((i) => i.name);
+
+  describe('M1: ingredient that is also a leading verb', () => {
+    it('does not place the cream row from "Cream the butter"', () => {
+      const p = map(
+        ['1 cup cream', '1 cup butter', '1/2 cup sugar', '2 eggs'],
+        [
+          'Cream the butter and sugar.',
+          'Beat in the eggs.',
+          'Whip the cream.',
+          'Spoon into glasses.',
+        ],
+      );
+      expect(rows(p)).toEqual(['butter', 'sugar', 'eggs', 'cream']);
+      expect(p.sections[0]!.steps.map((s) => s.row_end)).toEqual([1, 2, 3, 3]);
+    });
+    it('a verb-only mention leaves the ingredient unmentioned and the score below 0.70', () => {
+      const p = map(
+        ['1 cup cream', '1/2 cup butter', '1/2 cup sugar', '1 egg'],
+        ['Cream the butter and sugar until fluffy.', 'Beat in the egg.', 'Bake for 20 minutes.'],
+      );
+      expect(p.warnings).toContain('ingredient_unmentioned:cream');
+      expect(p.confidence).toBeLessThan(0.7);
+    });
+    it.each(['whip', 'mash', 'zest', 'season', 'dice', 'chop', 'sift'])(
+      'treats a leading "%s" as the action, not the ingredient',
+      (name) => {
+        const verb = name[0]!.toUpperCase() + name.slice(1);
+        const p = map([`1 cup ${name}`, '1 onion'], [`${verb} the onion.`, 'Stir well.']);
+        expect(p.warnings).toContain(`ingredient_unmentioned:${name}`);
+        expect(rows(p)).toEqual(['onion', name]);
+      },
+    );
+    it('keeps the noun reading after a comma or in a list', () => {
+      const p = map(
+        ['1 cup cream', '1 cup butter'],
+        ['Cream, butter and eggs go in the bowl.', 'Whisk well.'],
+      );
+      expect(rows(p)).toEqual(['cream', 'butter']);
+    });
+    it('keeps the noun reading when the verb is not first', () => {
+      const p = map(
+        ['1 cup cream', '1 cup butter'],
+        ['Melt the butter.', 'Add the cream.', 'Stir.'],
+      );
+      expect(rows(p)).toEqual(['butter', 'cream']);
+    });
+  });
+
+  describe('M2: unresolved split is never high', () => {
+    it('caps at 0.69 and keeps the split_unresolved warning', () => {
+      const p = map(
+        ['1 cup sugar', '1/2 cup butter', '2 eggs', '1 cup flour'],
+        [
+          'Cream the butter with a third of the sugar.',
+          'Beat in the eggs and another third of the sugar.',
+          'Fold in the flour and the remaining sugar.',
+          'Bake.',
+        ],
+      );
+      expect(p.warnings).toContain('split_unresolved:sugar');
+      expect(p.confidence).toBeLessThanOrEqual(0.69);
+      expect(p.level).not.toBe('high');
+      expect(p.signals.splitOk).toBeLessThan(1);
+    });
+    it('a resolved split stays high', () => {
+      const p = map(
+        ['1 cup sugar', '1/2 cup butter', '2 eggs'],
+        [
+          'Cream the butter with half the sugar.',
+          'Beat in the eggs.',
+          'Fold in the remaining sugar.',
+        ],
+      );
+      expect(p.level).toBe('high');
+    });
+  });
+
+  describe('m1: an ingredient seen only in a bottom banner is not covered', () => {
+    const p = map(
+      ['1 cup oats', '1 cup milk', '2 tbsp honey'],
+      ['Simmer the oats in the milk for 5 minutes.', 'Stir well.', 'Serve with extra honey.'],
+    );
+    it('lowers coverage and the score, and keeps the warning', () => {
+      expect(p.warnings).toContain('ingredient_unmentioned:honey');
+      expect(p.signals.cov).toBeCloseTo(0.667, 2);
+      expect(p.level).not.toBe('high');
+    });
+    it('still appends the row so no ingredient is lost', () => {
+      expect(rows(p)).toEqual(['oats', 'milk', 'honey']);
+    });
+  });
+
+  describe('m2: distinct spans are counted per section', () => {
+    const sec = (title: string, t: string[]): MapStepInput[] =>
+      t.map((text) => ({ text, section: title }));
+    it('two sections whose steps each span all their rows are not capped at 0.55', () => {
+      const r = mapGrid({
+        ingredients: lines([
+          'For the base:',
+          '1 cup flour',
+          '1/2 cup sugar',
+          'For the topping:',
+          '1 cup berries',
+          '2 tbsp honey',
+        ]),
+        steps: [
+          ...sec('Base', ['Mix the flour and sugar.', 'Bake for 20 minutes.']),
+          ...sec('Topping', ['Toss the berries with the honey.', 'Spoon over the base.']),
+        ],
+      });
+      if (!r.mapped) throw new Error('not mapped');
+      expect(r.proposal.sections).toHaveLength(2);
+      expect(r.proposal.signals.distinctSpans).toBe(2);
+      expect(r.proposal.confidence).toBeGreaterThanOrEqual(0.7);
+    });
+    it('one section with identical spans is still capped at 0.55', () => {
+      const p = map(
+        ['1 cup flour', '1 cup sugar'],
+        ['Mix the flour and sugar.', 'Bake for 20 minutes.'],
+      );
+      expect(p.signals.distinctSpans).toBe(1);
+      expect(p.confidence).toBeLessThanOrEqual(0.55);
+    });
+  });
+
+  describe('trailing step that reuses a seen ingredient (found by the adversarial corpus)', () => {
+    it('is a column step, so the remaining portion gets its row', () => {
+      const p = map(
+        ['4 tbsp butter', '1 onion', '1 cup rice', '3 cups stock'],
+        [
+          'Melt half the butter in a pan and sauté the onion.',
+          'Stir in the rice and the stock and simmer for 18 minutes.',
+          'Finish with the remaining butter.',
+        ],
+      );
+      expect(p.sections[0]!.steps.map((s) => s.kind)).toEqual(['column', 'column', 'column']);
+      expect(rows(p)).toHaveLength(5);
+    });
+  });
+});

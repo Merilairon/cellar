@@ -56,7 +56,7 @@ export type MappingSignals = {
   secFactor: number;
   groupRefs: number;
   columnSteps: number;
-  /** Number of distinct `row_end` values over all column steps. */
+  /** Number of distinct (section, `row_end`) pairs over all column steps. */
   distinctSpans: number;
 };
 

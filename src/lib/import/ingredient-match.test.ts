@@ -164,3 +164,22 @@ describe('source hygiene', () => {
     }
   });
 });
+
+describe('verb homonyms (review M1)', () => {
+  const run = (names: string[], step: string, verbAt: number[]) =>
+    findMentions(words(step), buildIndex(names), budget(), new Set(verbAt));
+  it('ignores a single-word match at an imperative verb index', () => {
+    expect(run(['cream', 'butter'], 'cream the butter', [0]).map((m) => m.ids)).toEqual([[1]]);
+  });
+  it('still matches the same word elsewhere in the step', () => {
+    expect(run(['cream'], 'whip the cream', [0])).toHaveLength(1);
+  });
+  it('keeps a multi-word name that starts at a verb index', () => {
+    expect(
+      run(['cream cheese', 'cream'], 'cream cheese and butter', [0]).map((m) => m.ids),
+    ).toEqual([[0]]);
+  });
+  it('matches as before without verb indexes', () => {
+    expect(ids(['cream', 'butter'], 'cream the butter')).toEqual([[0], [1]]);
+  });
+});

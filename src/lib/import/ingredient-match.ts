@@ -206,7 +206,13 @@ function bestLevel(v: Variant): 1 | 2 | 3 | 4 {
  * Find ingredient mentions in singularized step words. Greedy, longest match first, then
  * lowest level; matched words are consumed so "brown sugar" never also matches "sugar".
  */
-export function findMentions(words: string[], index: NameIndex, budget: Budget): Mention[] {
+export function findMentions(
+  words: string[],
+  index: NameIndex,
+  budget: Budget,
+  /** Word indexes that are imperative verbs; a single-word match there is not a mention. */
+  verbAt?: ReadonlySet<number>,
+): Mention[] {
   const out: Mention[] = [];
   let i = 0;
   while (i < words.length) {
@@ -234,6 +240,10 @@ export function findMentions(words: string[], index: NameIndex, budget: Budget):
       }
     }
     if (!best) {
+      i++;
+      continue;
+    }
+    if (best.v.seq.length === 1 && verbAt?.has(i)) {
       i++;
       continue;
     }
