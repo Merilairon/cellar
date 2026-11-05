@@ -63,9 +63,16 @@ export async function runImport(input: ImportInput, deps: ImportDeps = {}): Prom
 
   if ('text' in input) {
     const text = input.text.slice(0, MAX_PASTE_CHARS);
-    const { node, notes } = recipeNodeFromPaste(text);
-    if (!node) return failed('paste', 'no_recipe', { warnings: notes });
-    const { draft, warnings } = normalizeRecipe(node, { sourceUrl: null });
+    let parsed: ReturnType<typeof normalizeRecipe>;
+    try {
+      const { node, notes } = recipeNodeFromPaste(text);
+      if (!node) return failed('paste', 'no_recipe', { warnings: notes });
+      parsed = normalizeRecipe(node, { sourceUrl: null });
+    } catch (e) {
+      deps.log?.('parse failed: unexpected', e);
+      return failed('paste', 'no_recipe');
+    }
+    const { draft, warnings } = parsed;
     if (!draft) return failed('paste', 'no_recipe', { warnings, raw_html: text });
     return {
       status: 'needs_review',
@@ -94,10 +101,18 @@ export async function runImport(input: ImportInput, deps: ImportDeps = {}): Prom
   }
 
   const html = decodeBody(page.body, page.headers['content-type']);
-  const { node } = extractRecipeNode(html);
   const base = { source_url: sourceUrl, raw_html: html };
-  if (!node) return failed('static', 'no_recipe', base);
-  const { draft, warnings } = normalizeRecipe(node, { sourceUrl });
+  let node: ReturnType<typeof extractRecipeNode>['node'];
+  let normalized: ReturnType<typeof normalizeRecipe> | null = null;
+  try {
+    node = extractRecipeNode(html).node;
+    if (node) normalized = normalizeRecipe(node, { sourceUrl });
+  } catch (e) {
+    deps.log?.('parse failed: unexpected', e);
+    return failed('static', 'no_recipe', base);
+  }
+  if (!node || !normalized) return failed('static', 'no_recipe', base);
+  const { draft, warnings } = normalized;
   if (!draft) return failed('static', 'no_recipe', { ...base, warnings });
   return { status: 'needs_review', method: 'static', draft, warnings, error_code: null, ...base };
 }

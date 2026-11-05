@@ -270,3 +270,26 @@ describe('robustness', () => {
     }
   });
 });
+
+describe('robustness (F1, F3)', () => {
+  it('deeply nested name does not overflow the stack', () => {
+    let name: unknown = 'x';
+    for (let i = 0; i < 200_000; i++) name = { name };
+    expect(() => normalizeRecipe({ ...base, name }, {})).not.toThrow();
+    expect(normalizeRecipe({ ...base, name }, {}).draft).toBeNull(); // title lost past depth cap
+  });
+
+  it('caps ingredients before sanitizing but still warns', () => {
+    const many = Array.from({ length: 100_000 }, (_, i) => `${i} g salt`);
+    const r = run({ recipeIngredient: many });
+    expect(r.draft?.sections.flatMap((s) => s.ingredients ?? []).length ?? 0).toBeLessThanOrEqual(
+      200,
+    );
+    expect(r.warnings).toContain('ingredients_truncated');
+  });
+
+  it('bounds tag work on huge keyword lists', () => {
+    const kw = Array.from({ length: 100_000 }, (_, i) => `k${i}`).join(',');
+    expect(draftOf({ keywords: kw }).tags).toHaveLength(10);
+  });
+});

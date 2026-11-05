@@ -156,3 +156,28 @@ describe('runImport: paste path', () => {
     expect(r.draft?.title).toBe('Pie');
   });
 });
+
+describe('runImport: never throws (F1)', () => {
+  const N = 200_000;
+  // JSON.stringify would overflow itself, so build the nested payload by hand.
+  const deepPage = () =>
+    '<script type="application/ld+json">{"@type":"Recipe","name":' +
+    '{"name":'.repeat(N) +
+    '"x"' +
+    '}'.repeat(N) +
+    ',"recipeIngredient":["1 egg"],"recipeInstructions":["Mix."]}</script>';
+
+  it('deeply nested page recipe resolves as a failed result', async () => {
+    const r = await runImport(
+      { url: 'https://example.com/a' },
+      { safeFetch: fetchStub(ok(deepPage())) },
+    );
+    expect(r.status).toBe('failed');
+    expect(r.error_code).toBe('no_recipe');
+  });
+
+  it('deeply nested paste resolves as a failed result', async () => {
+    const r = await runImport({ text: deepPage() });
+    expect(r.status).toBe('failed');
+  });
+});

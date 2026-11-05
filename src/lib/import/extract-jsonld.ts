@@ -126,17 +126,17 @@ const MAX_TAG_LEN = 2000;
  * with real HTML quoting rules.
  */
 function* ldJsonScripts(html: string): Generator<string> {
-  const lower = html.toLowerCase();
+  // Case-insensitive regexes on the original string: lowercasing a copy can change its
+  // length (e.g. U+0130) and shift every later offset.
+  const openRe = /<script(?=[\s>/]|$)/gi;
+  const closeRe = /<\/script/gi;
   let pos = 0;
   let count = 0;
   while (count <= MAX_SCRIPTS) {
-    const open = lower.indexOf('<script', pos);
-    if (open === -1) return;
-    const after = lower[open + 7];
-    if (after !== undefined && !/[\s>/]/.test(after)) {
-      pos = open + 7;
-      continue;
-    }
+    openRe.lastIndex = pos;
+    const m = openRe.exec(html);
+    if (!m) return;
+    const open = m.index;
     // End of the open tag: first '>' outside quotes.
     let end = -1;
     let quote = '';
@@ -155,11 +155,12 @@ function* ldJsonScripts(html: string): Generator<string> {
       pos = limit; // over-long or unterminated tag: skip it whole, keeps the scan linear
       continue;
     }
-    const closeAt = lower.indexOf('</script', end + 1);
+    closeRe.lastIndex = end + 1;
+    const closeAt = closeRe.exec(html)?.index ?? -1;
     const bodyEnd = closeAt === -1 ? html.length : closeAt;
     pos = closeAt === -1 ? html.length : closeAt + 8;
     const openTag = html.slice(open, end + 1);
-    if (!lower.slice(open, end + 1).includes('ld+json')) continue;
+    if (!openTag.toLowerCase().includes('ld+json')) continue;
     const type = cheerio.load(`${openTag}</script>`)('script').attr('type');
     if (!isLdJsonType(type)) continue;
     count++;

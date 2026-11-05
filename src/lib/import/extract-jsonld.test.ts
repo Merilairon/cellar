@@ -117,3 +117,15 @@ describe('repairJson', () => {
     expect(JSON.parse(repairJson('{"a":"x\u0001y"}'))).toEqual({ a: 'xy' });
   });
 });
+
+describe('extractRecipeNode: case folding (F2)', () => {
+  it('finds the script after characters whose lowercase form is longer (U+0130)', () => {
+    const html = 'İ'.repeat(5) + ld(R());
+    expect(extractRecipeNode(html).node?.['name']).toBe('Soup');
+  });
+
+  it('handles uppercase SCRIPT tags after dotted capital I', () => {
+    const html = 'İİİ<SCRIPT type="application/ld+json">' + R() + '</SCRIPT>';
+    expect(extractRecipeNode(html).node?.['name']).toBe('Soup');
+  });
+});

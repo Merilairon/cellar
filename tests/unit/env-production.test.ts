@@ -60,8 +60,12 @@ describe('import env', () => {
   });
 
   it('IMPORT_ALLOW_LOCAL_FETCH is rejected in production and allowed elsewhere', async () => {
-    expect(await parse('production', { IMPORT_ALLOW_LOCAL_FETCH: 'true' })).toThrow(/production/);
-    expect(await parse('production', { IMPORT_ALLOW_LOCAL_FETCH: '1' })).toThrow(/production/);
+    expect(await parse('production', { IMPORT_ALLOW_LOCAL_FETCH: 'true' })).toThrow(
+      /development or test/,
+    );
+    expect(await parse('production', { IMPORT_ALLOW_LOCAL_FETCH: '1' })).toThrow(
+      /development or test/,
+    );
     expect(
       (await parse('development', { IMPORT_ALLOW_LOCAL_FETCH: 'true' }))().IMPORT_ALLOW_LOCAL_FETCH,
     ).toBe(true);
@@ -69,4 +73,12 @@ describe('import env', () => {
       (await parse('test', { IMPORT_ALLOW_LOCAL_FETCH: 'true' }))().IMPORT_ALLOW_LOCAL_FETCH,
     ).toBe(true);
   });
+
+  it.each(['staging', 'prod', ''])(
+    'IMPORT_ALLOW_LOCAL_FETCH is rejected when NODE_ENV=%j',
+    async (ne) => {
+      expect(await parse(ne, { IMPORT_ALLOW_LOCAL_FETCH: 'true' })).toThrow(/development or test/);
+      expect((await parse(ne, {}))().IMPORT_ALLOW_LOCAL_FETCH).toBe(false);
+    },
+  );
 });

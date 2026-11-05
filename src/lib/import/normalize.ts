@@ -31,10 +31,13 @@ const MAX_TAG_LEN = 40;
 const MAX_STEP_DEPTH = 4;
 
 /** Text of a string, or of the `name`/`text` of a Thing. */
-function textOf(v: unknown, maxLen: number, multiline = false): string {
+const MAX_TEXT_DEPTH = 3;
+
+function textOf(v: unknown, maxLen: number, multiline = false, depth = 0): string {
+  if (depth > MAX_TEXT_DEPTH) return '';
   if (typeof v === 'string') return sanitizeText(v, { maxLen, multiline });
   if (typeof v === 'number') return String(v);
-  if (isObj(v)) return textOf(v['name'] ?? v['text'], maxLen, multiline);
+  if (isObj(v)) return textOf(v['name'] ?? v['text'], maxLen, multiline, depth + 1);
   return '';
 }
 
@@ -133,14 +136,14 @@ function coverUrl(image: unknown, base: string | null, depth = 0): string | null
 function collectTags(node: Obj): string[] {
   const parts: string[] = [];
   for (const v of [node['keywords'], node['recipeCategory']]) {
-    for (const x of arr(v)) {
+    for (const x of arr(v).slice(0, MAX_TAGS * 4)) {
       if (typeof x === 'string') parts.push(...x.split(/[,;]/));
       else if (isObj(x)) parts.push(textOf(x, 80));
     }
   }
   const seen = new Set<string>();
   const tags: string[] = [];
-  for (const p of parts) {
+  for (const p of parts.slice(0, MAX_TAGS * 4)) {
     const t = sanitizeText(p, { maxLen: MAX_TAG_LEN });
     const key = t.toLowerCase();
     if (!t || seen.has(key)) continue;
@@ -161,9 +164,10 @@ export function normalizeRecipe(
   const title = textOf(node['name'] ?? node['headline'], 200);
 
   // Ingredients
-  const rawIngredients = arr(node['recipeIngredient'] ?? node['ingredients']).flatMap((x) =>
-    typeof x === 'string' ? x.split(/\r?\n/) : [textOf(x, 500)],
-  );
+  // Slice before sanitizing (+1 keeps the truncation warning); bounds CPU on huge arrays.
+  const rawIngredients = arr(node['recipeIngredient'] ?? node['ingredients'])
+    .slice(0, MAX_INGREDIENTS + 1)
+    .flatMap((x) => (typeof x === 'string' ? x.split(/\r?\n/) : [textOf(x, 500)]));
   const lines = rawIngredients.map((l) => sanitizeText(l, { maxLen: 500 })).filter(Boolean);
   if (lines.length > MAX_INGREDIENTS) warnings.push('ingredients_truncated');
   let unparsed = 0;

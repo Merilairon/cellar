@@ -58,7 +58,10 @@ function blockedV4([a, b, c]: number[]): boolean {
     a === 127 ||
     (a === 169 && b === 254) ||
     (a === 172 && b! >= 16 && b! <= 31) ||
-    (a === 192 && b === 0 && c === 0) ||
+    (a === 192 && b === 0 && (c === 0 || c === 2)) || // 192.0.0/24, 192.0.2/24 (TEST-NET-1)
+    (a === 192 && b === 88 && c === 99) || // 6to4 relay anycast (deprecated)
+    (a === 198 && b === 51 && c === 100) || // TEST-NET-2
+    (a === 203 && b === 0 && c === 113) || // TEST-NET-3
     (a === 192 && b === 168) ||
     (a === 198 && (b === 18 || b === 19)) ||
     a! >= 224 // multicast, reserved, broadcast
@@ -72,6 +75,9 @@ function blockedV6(x: number[]): boolean {
   if (zero(0, 12)) return true; // IPv4-compatible ::a.b.c.d (deprecated), never legitimate
   if (zero(0, 10) && x[10] === 0xff && x[11] === 0xff) return v4(12); // ::ffff:a.b.c.d
   if (x[0] === 0 && x[1] === 0x64 && x[2] === 0xff && x[3] === 0x9b && zero(4, 12)) return v4(12); // NAT64
+  if (zero(0, 8) && x[8] === 0xff && x[9] === 0xff && zero(10, 12)) return v4(12); // ::ffff:0:a.b.c.d (SIIT)
+  if (x[0] === 0 && x[1] === 0x64 && x[2] === 0xff && x[3] === 0x9b && x[4] === 0 && x[5] === 1)
+    return true; // 64:ff9b:1::/48 local-use NAT64
   if ((x[0]! & 0xfe) === 0xfc) return true; // fc00::/7
   if (x[0] === 0xfe && (x[1]! & 0xc0) >= 0x80) return true; // fe80::/10 and fec0::/10
   if (x[0] === 0xff) return true; // multicast
