@@ -62,3 +62,58 @@ test('admin invites a member who registers and logs in; member cannot reach admi
   await expect(m).toHaveURL(/\/$/); // member bounced from admin page
   await ctx.close();
 });
+
+test('shell: nav visibility by role, profile unit_pref, theme, logout, 375px nav', async ({
+  page,
+  browser,
+}) => {
+  const signIn = async (p: typeof page, u: typeof ADMIN) => {
+    await p.goto('/login');
+    await p.getByLabel('Email').fill(u.email);
+    await p.getByLabel('Password').fill(u.password);
+    await p.getByRole('button', { name: 'Sign in' }).click();
+    await expect(p).toHaveURL(/\/$/);
+  };
+
+  // Admin at desktop width sees all three links.
+  await signIn(page, ADMIN);
+  const nav = page.getByRole('navigation', { name: 'Main' });
+  for (const n of ['Recipes', 'Import', 'Admin']) {
+    await expect(nav.getByRole('link', { name: n })).toBeVisible();
+  }
+
+  // Profile: unit_pref persists after reload.
+  await page.goto('/profile');
+  await page.getByLabel('Units').selectOption('us');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('status')).toHaveText('Profile saved.');
+  await page.reload();
+  await expect(page.getByLabel('Units')).toHaveValue('us');
+
+  // Theme toggle persists across reload (system -> light).
+  await page.getByRole('button', { name: /^Theme:/ }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+
+  // Member at 375px: no Admin link, collapsed nav is usable, no horizontal scroll.
+  const ctx = await browser.newContext({ viewport: { width: 375, height: 700 } });
+  const m = await ctx.newPage();
+  await signIn(m, MEMBER);
+  await expect(m.getByRole('link', { name: 'Recipes' })).toBeHidden();
+  await m.getByRole('button', { name: 'Menu', exact: true }).click();
+  await expect(m.getByRole('link', { name: 'Recipes' })).toBeVisible();
+  await expect(m.getByRole('link', { name: 'Import' })).toBeVisible();
+  await expect(m.getByRole('link', { name: 'Admin' })).toHaveCount(0);
+  expect(await m.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await m.getByRole('link', { name: 'Recipes' }).click();
+  await expect(m).toHaveURL(/\/recipes$/);
+
+  // Logout via the user menu ends the session.
+  await m.getByRole('button', { name: /^Account menu/ }).click();
+  await m.getByRole('button', { name: 'Sign out' }).click();
+  await expect(m).toHaveURL(/\/login$/);
+  await m.goto('/recipes');
+  await expect(m).toHaveURL(/\/login$/);
+  await ctx.close();
+});

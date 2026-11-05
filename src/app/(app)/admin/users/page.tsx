@@ -13,7 +13,7 @@ export default async function AdminUsersPage() {
   if (!admin.ok) redirect(admin.status === 401 ? '/login' : '/');
   const users = listUsersForAdmin(getDb());
   return (
-    <main className="mx-auto max-w-4xl p-8">
+    <main>
       <h1 className="mb-6 text-2xl font-bold">{t('admin.users.title')}</h1>
       <section className="mb-8">
         <h2 className="mb-2 text-lg font-semibold">{t('admin.users.inviteHeading')}</h2>

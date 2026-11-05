@@ -73,3 +73,13 @@ export function deactivateUserGuarded(
     { behavior: 'immediate' },
   );
 }
+
+export type UnitPref = User['unitPref'];
+
+/** Set the user's unit preference; returns false if the user does not exist. */
+export function setUnitPref(db: Db, id: string, unitPref: UnitPref): boolean {
+  return (
+    db.update(user).set({ unitPref }).where(eq(user.id, id)).returning({ id: user.id }).all()
+      .length > 0
+  );
+}

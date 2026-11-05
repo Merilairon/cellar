@@ -32,3 +32,5 @@ export const resetSchema = z.object({
   token,
   password: z.string().min(PASSWORD_MIN).max(PASSWORD_MAX),
 });
+
+export const profileSchema = z.object({ unitPref: z.enum(['metric', 'us']) });

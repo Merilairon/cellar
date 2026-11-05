@@ -26,7 +26,8 @@
   "common": {
     "logout": "Sign out",
     "invalidLink": "This link is invalid or has expired.",
-    "home": "Recipe Book"
+    "home": "Recipe Book",
+    "loading": "Loading"
   },
   "admin": {
     "users": {
@@ -81,6 +82,47 @@
     "errors": {
       "password": "Password must be 12 to 128 characters.",
       "csrf": "Request rejected. Reload the page and try again."
+    }
+  },
+  "nav": {
+    "main": "Main",
+    "recipes": "Recipes",
+    "import": "Import",
+    "admin": "Admin",
+    "menu": "Menu",
+    "userMenu": "Account menu",
+    "profile": "Profile"
+  },
+  "theme": {
+    "label": "Theme",
+    "system": "System theme",
+    "light": "Light theme",
+    "dark": "Dark theme"
+  },
+  "home": {
+    "welcome": "Welcome, {name}",
+    "intro": "Your recipes will show up here."
+  },
+  "recipes": {
+    "title": "Recipes",
+    "empty": "No recipes yet."
+  },
+  "import": {
+    "title": "Import",
+    "empty": "Recipe import is not available yet."
+  },
+  "profile": {
+    "title": "Profile",
+    "email": "Email",
+    "unitPref": "Units",
+    "metric": "Metric (g, ml, °C)",
+    "us": "US (oz, cup, °F)",
+    "submit": "Save",
+    "saved": "Profile saved.",
+    "errors": {
+      "invalidInput": "Check the input and try again.",
+      "csrf": "Request rejected. Reload the page and try again.",
+      "unauthenticated": "Your session has expired. Sign in again."
     }
   }
 }
