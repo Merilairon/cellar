@@ -99,22 +99,40 @@ export class Supervisor {
     (this.deps.kill ?? killChromium)(pids);
   }
 
-  render = async (req: RenderRequest): Promise<RenderResult> => {
-    const browser = await this.ensureBrowser();
+  /**
+   * The wall-clock budget covers the browser launch as well as the page (a cold start after a
+   * kill must not extend a job past the cap, and a hung launch must not hold the slot). The
+   * job is also torn down when `signal` aborts (the caller went away), so an orphaned render
+   * cannot keep the slot until the deadline.
+   */
+  render = async (req: RenderRequest, signal?: AbortSignal): Promise<RenderResult> => {
     let ctx: BrowserContext | undefined;
     let killed: Promise<void> | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let stop: (() => void) | undefined;
+    let over = false;
     const deadline = new Promise<never>((_, reject) => {
-      timer = setTimeout(() => {
+      stop = () => {
+        if (over) return;
+        over = true;
+        // Abandon an in-flight launch so the next job starts its own instead of joining a hang.
+        this.launching = null;
         // Reply only after the old browser is gone, so the next job cannot race the kill.
         killed = this.hardKill(ctx);
         void killed.finally(() => reject(new RenderError('timeout', 504)));
-      }, this.cfg.renderTimeoutMs);
+      };
+      timer = setTimeout(() => stop?.(), this.cfg.renderTimeoutMs);
     });
     deadline.catch(() => {});
+    const onAbort = () => stop?.();
+    if (signal?.aborted) onAbort();
+    else signal?.addEventListener('abort', onAbort, { once: true });
     try {
       return await Promise.race([
-        renderPage(browser, req, this.cfg, { ...this.deps, onContext: (c) => (ctx = c) }),
+        this.ensureBrowser().then((browser) => {
+          if (over) throw new RenderError('timeout', 504); // launch finished after the deadline
+          return renderPage(browser, req, this.cfg, { ...this.deps, onContext: (c) => (ctx = c) });
+        }),
         deadline,
       ]);
     } catch (e) {
@@ -126,6 +144,7 @@ export class Supervisor {
       throw new RenderError('failed', 502);
     } finally {
       clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
     }
   };
 

@@ -37,7 +37,12 @@ export class RenderError extends Error {
   }
 }
 
-export type Renderer = (req: RenderRequest, cfg: Config) => Promise<RenderResult>;
+/** `signal` aborts when the caller disconnects before the response is complete. */
+export type Renderer = (
+  req: RenderRequest,
+  cfg: Config,
+  signal?: AbortSignal,
+) => Promise<RenderResult>;
 
 // T2 skeleton: rendering is implemented in T3/T4. Until then every render fails closed.
 const notImplemented: Renderer = async () => {
@@ -160,8 +165,13 @@ export function createSidecar(opts: ServerOptions): Server {
         return send(res, 503, { error: 'failed' });
 
       active++;
+      // If the app gave up (its timeout) the render is cancelled and the slot freed at once.
+      const gone = new AbortController();
+      res.on('close', () => {
+        if (!res.writableEnded) gone.abort();
+      });
       try {
-        const out = await render(parsed, config);
+        const out = await render(parsed, config, gone.signal);
         return send(res, 200, out);
       } finally {
         active--;
@@ -196,7 +206,7 @@ async function main() {
   const supervisor = new Supervisor(config);
   const server = createSidecar({
     config,
-    render: (r) => supervisor.render(r),
+    render: (r, _c, signal) => supervisor.render(r, signal),
     ready: () => isReady,
   });
   server.listen(config.port, config.bindAddr, () =>

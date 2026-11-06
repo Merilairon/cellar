@@ -153,3 +153,36 @@ test('F4: BIND_ADDR is honoured and must be an IP literal', async () => {
   assert.equal((s.address() as AddressInfo).address, '127.0.0.1');
   s.close();
 });
+
+test('m3: a client that disconnects aborts the render signal and frees the slot', async () => {
+  const { createSidecar: make } = await import('../src/server.ts');
+  let seen: AbortSignal | undefined;
+  let started!: () => void;
+  const begun = new Promise<void>((r) => (started = r));
+  const s = make({
+    config: loadConfig({ HEADLESS_TOKEN: TOKEN }),
+    render: (_r, _c, signal) => {
+      seen = signal;
+      started();
+      return new Promise((_, reject) =>
+        signal!.addEventListener('abort', () => reject(new RenderError('failed')), { once: true }),
+      );
+    },
+  });
+  await new Promise<void>((r) => s.listen(0, '127.0.0.1', r));
+  const url = `http://127.0.0.1:${(s.address() as AddressInfo).port}/render`;
+  const ac = new AbortController();
+  const p = fetch(url, {
+    method: 'POST',
+    body: '{"url":"https://a.test/"}',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${TOKEN}` },
+    signal: ac.signal,
+  }).catch(() => undefined);
+  await begun;
+  assert.equal(seen?.aborted, false);
+  ac.abort();
+  await p;
+  await new Promise((r) => setTimeout(r, 100));
+  assert.equal(seen?.aborted, true);
+  s.close();
+});
