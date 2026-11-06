@@ -23,6 +23,60 @@ docker compose --profile caddy up -d --build
 
 `docker-compose.yml` alone does not publish the app port; only Caddy exposes 80/443. Do not add `docker-compose.direct.yml` here. DNS must point to the host and ports 80/443 must be reachable for certificate issuance (manual check; not automatable offline). `X-Forwarded-*` headers are honored only from `TRUSTED_PROXIES`.
 
+## Headless import (optional)
+
+Some recipe pages only exist after JavaScript runs, or refuse plain HTTP clients. The optional `browser` sidecar renders such a page in headless Chromium and hands the DOM back to the app, which runs it through the same sanitize/extract pipeline as any import. It is **off by default**: with `HEADLESS_URL` unset there is no sidecar request and import falls back to paste with a clear message.
+
+Enable it in `.env`:
+
+```sh
+HEADLESS_URL=http://browser:3001
+HEADLESS_TOKEN=<openssl rand -hex 32>   # required by the sidecar, sent by the app as a bearer token
+```
+
+```sh
+docker compose --profile headless up -d --build        # add your usual -f / --profile flags
+docker compose --profile headless down                 # stops both; the app volume is untouched
+```
+
+Without `--profile headless`, `docker compose up` starts exactly the same services as v0.3.1 (`app`, plus `caddy` with its profile).
+
+**Cost.** Image about 1.2 GB on disk. Memory measured on amd64 (cgroup `memory.current`, Docker 29.9.3): about 108 MB idle after start, about 178 MB after one render of a small public page, peak 195 MB. Heavy real pages and arm64 are not yet measured. The compose limit is `mem_limit: 1g`, `cpus: 1.0`, `pids_limit: 256`, `shm_size: 256m`, no swap. A 1-2 GB VPS needs swap or a larger plan for the host as a whole. Leave the profile off on Raspberry Pi and Home Assistant installs; arm64 is not verified.
+
+**Test harness note.** The real-Chromium tests run inside the sidecar container next to the test runner; under 1 GB the 6 MB DOM case was flaky, so run them with `--memory 2g --memory-swap 2g` (see `docker/browser/README.md`). The service itself stays at 1 GB.
+
+### Isolation, stated honestly
+
+- The `browser` service has no volumes, no published ports and never sees `app-data` or `SESSION_SECRET`. It runs as uid 10001 with a read-only root, `cap_drop: ALL` plus only `SYS_CHROOT`, `no-new-privileges` and the repository's custom seccomp profile (`docker/browser/seccomp.json`, the Docker default plus `clone`, `clone3`, `unshare`, `setns`). Chromium's own sandbox is always on.
+- Networks: `headless-link` is `internal: true` and holds only `app` and `browser` (the app calls `http://browser:3001`). `headless-egress` is a normal bridge that holds only `browser` and gives it the internet. The app does not join `headless-egress`.
+- **The compose networks do not stop the browser reaching the host or LAN.** An egress bridge routes to the host gateway and LAN, and on `headless-link` the browser container can open `app:3000` at the network level. The control that blocks these is the in-sidecar filtering proxy, which resolves each host once, pins the IP and refuses private, loopback, link-local and metadata addresses (fail closed), backed by the app's own pre-check. The optional snippet below adds a network-layer backstop and is recommended where the LAN is sensitive. It also covers UDP/QUIC, which the proxy does not carry.
+- The sidecar executes untrusted JavaScript from any page a logged-in user imports. A Chromium zero-day is the residual risk; keep the image current.
+- The sidecar needs outbound TCP 80/443 (and DNS) from the host.
+
+### Optional DOCKER-USER firewall snippet
+
+Drops anything leaving the `headless-egress` subnet toward private ranges, loopback and link-local (including the cloud metadata address). Defense in depth only: nothing depends on it. Run as root; adjust the network name if your project name is not `cellar`.
+
+```sh
+SUBNET=$(docker network inspect cellar_headless-egress --format '{{(index .IPAM.Config 0).Subnet}}')
+GW=$(docker network inspect cellar_headless-egress --format '{{(index .IPAM.Config 0).Gateway}}')
+for dst in 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 169.254.0.0/16 100.64.0.0/10 127.0.0.0/8; do
+  iptables -I DOCKER-USER -s "$SUBNET" -d "$dst" -j DROP
+done
+# Traffic to the host itself arrives via INPUT, not DOCKER-USER:
+iptables -I INPUT -s "$SUBNET" -d "$GW" -j DROP
+```
+
+The subnet is assigned when the network is created, so re-run the snippet (or persist it with your firewall tooling) after `down` and `up`. IPv6 needs the equivalent `ip6tables` rules if enabled.
+
+### Unsupported hosts and versions
+
+Hosts with `user.max_user_namespaces=0` (or unprivileged user namespaces disabled) are **unsupported**: the Chromium sandbox needs them, the sidecar exits with an `UNSUPPORTED HOST` line and is not run unsandboxed. This is not worked around. Tested: Docker 29.9.3, Compose 5.7.0, linux/amd64. runc version and arm64 results are recorded in `docs/tasks/v0.3.2-spike.md` and CI.
+
+### Upgrading the image
+
+The base image and `playwright-core` are pinned in `docker/browser/Dockerfile` and `package-lock.json`. To upgrade, change the pinned tag and digest, keep `playwright-core` equal to the app's `@playwright/test`, then `docker compose --profile headless build --no-cache browser`.
+
 ## Troubleshooting
 
 | Symptom | Cause and fix |
