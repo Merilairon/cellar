@@ -124,6 +124,7 @@ export function parseConnectTarget(target: string): { host: string; port: 443 } 
 export function headersSuspicious(raw: readonly string[]): boolean {
   let cl = 0;
   let te = 0;
+  let host = 0;
   for (let i = 0; i < raw.length; i += 2) {
     const name = raw[i]!;
     const val = raw[i + 1]!;
@@ -134,8 +135,9 @@ export function headersSuspicious(raw: readonly string[]): boolean {
       if (!/^\d{1,10}$/.test(val.trim())) return true;
     }
     if (l === 'transfer-encoding') te++;
+    if (l === 'host') host++;
   }
-  return cl > 1 || te > 1 || (cl > 0 && te > 0);
+  return cl > 1 || te > 1 || host > 1 || (cl > 0 && te > 0);
 }
 
 export function createJobProxy(opts: ProxyOptions): Promise<JobProxy> {
