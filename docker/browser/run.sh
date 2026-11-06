@@ -7,4 +7,4 @@ exec docker run --rm --init \
   --security-opt no-new-privileges \
   --security-opt seccomp="$(dirname "$0")/seccomp.json" \
   --read-only --tmpfs /tmp:rw,noexec,size=256m --shm-size 256m \
-  --memory 1g --memory-swap 1g --cpus 1 --pids-limit 256 "$@"
+  --memory 2g --memory-swap 2g --cpus 1 --pids-limit 256 "$@"

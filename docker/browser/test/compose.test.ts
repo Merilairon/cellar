@@ -29,7 +29,8 @@ test('browser service: hardening flags present', () => {
   assert.match(block, /read_only: true/);
   assert.match(block, /init: true/);
   assert.match(block, /user: '10001:10001'/);
-  assert.match(block, /mem_limit: /);
+  assert.match(block, /^\s*mem_limit: 2g$/m);
+  assert.match(block, /^\s*memswap_limit: 2g$/m);
   assert.match(block, /pids_limit: /);
   assert.equal(/unconfined/.test(block), false);
 });

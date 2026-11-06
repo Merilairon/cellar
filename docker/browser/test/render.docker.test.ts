@@ -1,7 +1,7 @@
 // DOCKER / REAL-CHROMIUM TESTS (T3, T4; the T9 cases that need a browser).
 // Skipped unless BROWSER_DOCKER_TESTS=1, because they need Chromium with its sandbox working,
 // i.e. the sidecar image run with the hardened flags (docker/browser/run.sh). Run them with:
-// (the harness shares the container's memory, so give it more than the 1 GB production limit:
+// (the harness shares the container's memory, so give it more than the production limit:
 // 1 GB makes the 6 MB DOM case flaky)
 //   docker/browser/run.sh --memory 2g --memory-swap 2g -v "$PWD/docker/browser/test:/srv/test:ro" -e BROWSER_DOCKER_TESTS=1 \
 //     -e HEADLESS_ALLOW_NO_TOKEN=1 --entrypoint node cellar-browser:t3 --test test/render.docker.test.ts
