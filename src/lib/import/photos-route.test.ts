@@ -59,7 +59,7 @@ describe('GET /api/photos/:id', () => {
     const res = await get(mkPhoto('private'));
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('image/webp');
-    expect(res.headers.get('cache-control')).toMatch(/private/);
+    expect(res.headers.get('cache-control')).toBe('private, no-cache');
     expect(res.headers.get('x-content-type-options')).toBe('nosniff');
     expect(await res.text()).toBe('webpbytes');
   });
