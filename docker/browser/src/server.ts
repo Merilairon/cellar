@@ -4,11 +4,18 @@ import { fileURLToPath } from 'node:url';
 import { loadConfig, type Config } from './config.ts';
 import { launchBrowser } from './browser.ts';
 import { selfCheck } from './sandbox.ts';
+import { Supervisor } from './supervisor.ts';
 
 export const MAX_BODY_BYTES = 2048;
 
 export type RenderRequest = { url: string; waitMs?: number };
-export type RenderResult = { html: string; finalUrl: string; status: number };
+export type RenderResult = {
+  html: string;
+  finalUrl: string;
+  status: number;
+  /** Count of blocked sub-requests (never their targets). */
+  warnings?: number;
+};
 export type ErrorCode = 'blocked' | 'timeout' | 'private_address' | 'too_large' | 'failed';
 
 /** Thrown by a renderer to produce a specific error response (T4 maps its outcomes here). */
@@ -178,12 +185,20 @@ async function main() {
     console.error(`FATAL: ${err instanceof Error ? err.message : String(err)}`);
     process.exit(1);
   }
-  const server = createSidecar({ config, ready: () => isReady });
+  const supervisor = new Supervisor(config);
+  const server = createSidecar({
+    config,
+    render: (r) => supervisor.render(r),
+    ready: () => isReady,
+  });
   server.listen(config.port, config.bindAddr, () =>
     console.log(`browser sidecar listening on ${config.bindAddr}:${config.port}`),
   );
   for (const sig of ['SIGTERM', 'SIGINT'] as const)
-    process.on(sig, () => server.close(() => process.exit(0)));
+    process.on(sig, () => {
+      server.close();
+      void supervisor.shutdown().finally(() => process.exit(0));
+    });
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) void main();

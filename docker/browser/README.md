@@ -1,6 +1,6 @@
 # Browser sidecar (v0.3.2, optional)
 
-A small HTTP service that renders a JS-only recipe page in headless Chromium and returns the DOM. Off by default; the app only uses it when `HEADLESS_URL` is set. T2 delivers the image, the HTTP layer and the sandbox self-check. Request filtering (T3) and the render lifecycle (T4) are not built yet: `POST /render` currently fails closed with `503 {"error":"failed"}`.
+A small HTTP service that renders a JS-only recipe page in headless Chromium and returns the DOM. Off by default; the app only uses it when `HEADLESS_URL` is set. Every request Chromium makes goes through a per-job filtering proxy (`src/proxy.ts`: resolve once and pin, shared `ip-guard`, CONNECT 443 only, no Upgrade, caps) after a route policy (`src/policy.ts`). Each job gets a fresh context (`src/render.ts`) and a wall-clock kill with process SIGKILL and relaunch (`src/supervisor.ts`). Successful responses carry `warnings`, a count of blocked sub-requests (never their targets). `src/ip-guard.ts` is a byte-identical copy of `src/lib/import/ip-guard.ts` (a test fails on drift).
 
 ## API
 
@@ -38,7 +38,10 @@ Adding any further syscall needs a new security review. To update the base, chan
 ```sh
 docker build -t cellar-browser docker/browser     # pinned base digest, playwright-core 1.64.1 via npm ci
 docker/browser/run.sh -p 127.0.0.1:3001:3001 -e HEADLESS_TOKEN=... cellar-browser
-npm run test:browser                              # from the repo root: grep gate, seccomp diff, node:test
+npm run test:browser                              # from the repo root: grep gate, seccomp diff, node:test (unit; no Chromium)
+# Real-Chromium tests (skipped unless BROWSER_DOCKER_TESTS=1), inside the image:
+docker/browser/run.sh --memory 2g --memory-swap 2g -v "$PWD/docker/browser/test:/srv/test:ro" \
+  -e BROWSER_DOCKER_TESTS=1 -e HEADLESS_ALLOW_NO_TOKEN=1 cellar-browser node --test test/render.docker.test.ts
 ```
 
 `playwright-core` is pinned to the same version as `@playwright/test` in the app. Keep them equal when upgrading.
