@@ -10,7 +10,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p docker/browser",
     "format": "prettier --write .",
     "test": "vitest run",
     "test:e2e": "playwright test",
@@ -19,7 +19,8 @@
     "build:admin-reset": "esbuild scripts/admin-reset.ts --bundle --platform=node --format=esm --target=node22 --external:better-sqlite3 --external:argon2 --tsconfig=tsconfig.json --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" --outfile=dist/admin-reset.mjs",
     "build:seed": "esbuild scripts/seed.ts --bundle --platform=node --format=esm --target=node22 --external:better-sqlite3 --external:argon2 --tsconfig=tsconfig.json --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" --outfile=dist/seed.mjs",
     "test:import": "tsx scripts/import-report.ts",
-    "test:mapper": "tsx scripts/mapper-report.ts"
+    "test:mapper": "tsx scripts/mapper-report.ts",
+    "test:browser": "sh docker/browser/scripts/check-no-nosandbox.sh && node docker/browser/scripts/check-seccomp.mjs && node --test \"docker/browser/test/*.test.ts\""
   },
   "dependencies": {
     "argon2": "0.45.2",

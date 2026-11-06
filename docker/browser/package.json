@@ -1,0 +1,17 @@
+{
+  "name": "cellar-browser-sidecar",
+  "version": "0.3.2",
+  "private": true,
+  "description": "Optional headless-browser sidecar for the recipe importer (v0.3.2).",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node src/server.ts",
+    "test": "node --test \"test/*.test.ts\""
+  },
+  "dependencies": {
+    "playwright-core": "1.64.1"
+  }
+}

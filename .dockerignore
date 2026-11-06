@@ -20,3 +20,4 @@ tests/*
 Dockerfile
 docker-compose*.yml
 Caddyfile
+docker/browser/node_modules

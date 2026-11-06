@@ -23,6 +23,8 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
+      # Sidecar: sandbox-flag grep gate, seccomp profile diff against the pinned Docker default.
+      - run: npm run test:browser
       - run: npm run test:e2e
       - uses: actions/upload-artifact@v4
         if: failure()
@@ -39,6 +41,8 @@ jobs:
         with:
           platforms: arm64
       - uses: docker/setup-buildx-action@v3
+      - name: Build browser sidecar linux/amd64 + linux/arm64
+        run: docker buildx build --platform linux/amd64,linux/arm64 docker/browser
       # Multi-arch build, nothing is pushed.
       - name: Build linux/amd64 + linux/arm64
         run: docker buildx build --platform linux/amd64,linux/arm64 .

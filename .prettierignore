@@ -11,3 +11,4 @@ docs
 milestones
 dist
 tests/fixtures/
+docker/browser/seccomp.base.json
