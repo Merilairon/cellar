@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ImportError } from './errors';
+import type { Headless } from './headless-client';
 import { runImport } from './pipeline';
 import type { SafeFetchOptions, SafeFetchResult } from './safe-fetch';
 
@@ -200,5 +201,173 @@ describe('runImport: never throws (F1)', () => {
   it('deeply nested paste resolves as a failed result', async () => {
     const r = await runImport({ text: deepPage() });
     expect(r.status).toBe('failed');
+  });
+});
+
+describe('runImport: headless fallback (G4 trigger table)', () => {
+  const URL_IN = { url: 'https://example.com/r' };
+  const rendered = (body: string, finalUrl = 'https://example.com/rendered') => ({
+    html: body,
+    finalUrl,
+    status: 200,
+  });
+  const headlessOf = (
+    r: Awaited<ReturnType<Headless['render']>> | Error | 'throw',
+    enabled = true,
+  ) => {
+    const render = vi.fn<Headless['render']>(async () => {
+      if (r === 'throw') throw new Error('kaboom');
+      if (r instanceof Error) throw r;
+      return r;
+    });
+    return { h: { enabled, render } satisfies Headless, render };
+  };
+  const NO_RECIPE_PAGE = '<html><body><div id="app"></div></body></html>';
+
+  it('no Recipe node + headless ok => method headless draft, mapping attached, headless_used', async () => {
+    const { h, render } = headlessOf(rendered(html(RECIPE)));
+    const r = await runImport(URL_IN, { safeFetch: fetchStub(ok(NO_RECIPE_PAGE)), headless: h });
+    expect(r).toMatchObject({
+      status: 'needs_review',
+      method: 'headless',
+      error_code: null,
+      headless: 'used',
+      source_url: 'https://example.com/r',
+    });
+    expect(r.draft?.title).toBe('Pancakes');
+    expect(r.draft?.mapping).toBeTruthy();
+    expect(r.warnings).toContain('headless_used');
+    expect(r.raw_html).toContain('application/ld+json'); // rendered DOM
+    expect(render).toHaveBeenCalledTimes(1);
+    expect(render).toHaveBeenCalledWith('https://example.com/r');
+  });
+
+  it('static 403 (and 429, 401) + headless ok => headless draft', async () => {
+    for (let i = 0; i < 3; i++) {
+      const { h, render } = headlessOf(rendered(html(RECIPE)));
+      const r = await runImport(URL_IN, {
+        safeFetch: fetchStub(new ImportError('blocked')),
+        headless: h,
+      });
+      expect(r).toMatchObject({ status: 'needs_review', method: 'headless' });
+      expect(render).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it('headless disabled => original static error plus unavailable hint, no call', async () => {
+    const { h, render } = headlessOf(rendered('x'), false);
+    const a = await runImport(URL_IN, { safeFetch: fetchStub(ok(NO_RECIPE_PAGE)), headless: h });
+    expect(a).toMatchObject({
+      status: 'failed',
+      method: 'static',
+      error_code: 'no_recipe',
+      headless: 'unavailable',
+    });
+    const b = await runImport(URL_IN, {
+      safeFetch: fetchStub(new ImportError('blocked')),
+      headless: h,
+    });
+    expect(b).toMatchObject({ error_code: 'blocked', headless: 'unavailable' });
+    // no handle at all behaves the same
+    const c = await runImport(URL_IN, { safeFetch: fetchStub(ok(NO_RECIPE_PAGE)) });
+    expect(c).toMatchObject({ error_code: 'no_recipe', headless: 'unavailable' });
+    expect(render).not.toHaveBeenCalled();
+  });
+
+  it.each(['blocked', 'timeout', 'private_address', 'too_large', 'fetch_failed'] as const)(
+    'headless error %s is surfaced as that code',
+    async (code) => {
+      const { h } = headlessOf(new ImportError(code));
+      const r = await runImport(URL_IN, { safeFetch: fetchStub(ok(NO_RECIPE_PAGE)), headless: h });
+      expect(r).toMatchObject({ status: 'failed', method: 'headless', error_code: code });
+      expect(r.draft).toBeNull();
+    },
+  );
+
+  it('headless_unavailable error and an unexpected throw both map to headless_unavailable', async () => {
+    for (const x of [new ImportError('headless_unavailable'), 'throw' as const]) {
+      const { h } = headlessOf(x);
+      const r = await runImport(URL_IN, { safeFetch: fetchStub(ok(NO_RECIPE_PAGE)), headless: h });
+      expect(r).toMatchObject({
+        status: 'failed',
+        error_code: 'headless_unavailable',
+        headless: 'unavailable',
+      });
+    }
+  });
+
+  it('rendered page without a recipe => no_recipe, headless used', async () => {
+    const { h } = headlessOf(rendered(NO_RECIPE_PAGE));
+    const r = await runImport(URL_IN, { safeFetch: fetchStub(ok(NO_RECIPE_PAGE)), headless: h });
+    expect(r).toMatchObject({
+      status: 'failed',
+      method: 'headless',
+      error_code: 'no_recipe',
+      headless: 'used',
+    });
+  });
+
+  it('headless is attempted at most once per job', async () => {
+    const { h, render } = headlessOf(rendered(NO_RECIPE_PAGE));
+    await runImport(URL_IN, { safeFetch: fetchStub(ok(NO_RECIPE_PAGE)), headless: h });
+    expect(render).toHaveBeenCalledTimes(1);
+  });
+
+  it('never for paste', async () => {
+    const { h, render } = headlessOf(rendered(html(RECIPE)));
+    await runImport({ text: 'nothing recipe-like here' }, { headless: h });
+    expect(render).not.toHaveBeenCalled();
+  });
+
+  it.each(['invalid_url', 'private_address', 'too_large', 'timeout', 'fetch_failed'] as const)(
+    'static %s never triggers headless',
+    async (code) => {
+      const { h, render } = headlessOf(rendered(html(RECIPE)));
+      const r = await runImport(URL_IN, {
+        safeFetch: fetchStub(new ImportError(code)),
+        headless: h,
+      });
+      expect(r).toMatchObject({ status: 'failed', method: 'static', error_code: code });
+      expect(r.headless ?? null).toBeNull();
+      expect(render).not.toHaveBeenCalled();
+    },
+  );
+
+  it('an unparsable entered URL never triggers headless', async () => {
+    const { h, render } = headlessOf(rendered(html(RECIPE)));
+    const r = await runImport({ url: 'not a url' }, { headless: h });
+    expect(r.error_code).toBe('invalid_url');
+    expect(render).not.toHaveBeenCalled();
+  });
+
+  it('a Recipe node that normalizes to nothing does not trigger headless', async () => {
+    const { h, render } = headlessOf(rendered(html(RECIPE)));
+    const r = await runImport(URL_IN, {
+      safeFetch: fetchStub(ok(html({ '@type': 'Recipe', name: 'Empty' }))),
+      headless: h,
+    });
+    expect(r).toMatchObject({ status: 'failed', method: 'static', error_code: 'no_recipe' });
+    expect(render).not.toHaveBeenCalled();
+  });
+
+  it('static success never calls headless', async () => {
+    const { h, render } = headlessOf(rendered(html(RECIPE)));
+    const r = await runImport(URL_IN, { safeFetch: fetchStub(ok(html(RECIPE))), headless: h });
+    expect(r).toMatchObject({ status: 'needs_review', method: 'static' });
+    expect(render).not.toHaveBeenCalled();
+  });
+
+  it('mapper is deterministic on headless HTML and resolves relative covers against finalUrl', async () => {
+    const withImg = html({ ...RECIPE, image: '/img/p.jpg' });
+    const a = await runImport(URL_IN, {
+      safeFetch: fetchStub(ok(NO_RECIPE_PAGE)),
+      headless: headlessOf(rendered(withImg, 'https://cdn.example.org/page')).h,
+    });
+    const b = await runImport(URL_IN, {
+      safeFetch: fetchStub(ok(NO_RECIPE_PAGE)),
+      headless: headlessOf(rendered(withImg, 'https://cdn.example.org/page')).h,
+    });
+    expect(JSON.stringify(a.draft)).toBe(JSON.stringify(b.draft));
+    expect(JSON.stringify(a.draft)).toContain('https://cdn.example.org/img/p.jpg');
   });
 });

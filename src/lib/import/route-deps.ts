@@ -1,4 +1,5 @@
 import { getEnv } from '@/lib/env';
+import { createHeadless, type Headless } from './headless-client';
 import type { SafeFetchOptions } from './safe-fetch';
 
 /**
@@ -17,4 +18,18 @@ export function serverFetchOptions(): SafeFetchOptions {
 export function importLog(msg: string, err?: unknown): void {
   const detail = err instanceof Error ? err.message : err === undefined ? '' : 'non-error';
   console.warn(`[import] ${msg}${detail ? ` (${detail})` : ''}`);
+}
+
+/**
+ * Headless handle from env alone (HEADLESS_URL is operator config, never request data).
+ * Disabled and inert when HEADLESS_URL is unset: no sidecar request is ever made.
+ */
+export function serverHeadless(): Headless {
+  const e = getEnv();
+  return createHeadless(
+    e.HEADLESS_URL
+      ? { url: e.HEADLESS_URL, token: e.HEADLESS_TOKEN, timeoutMs: e.HEADLESS_TIMEOUT_MS }
+      : null,
+    { allowLocal: e.IMPORT_ALLOW_LOCAL_FETCH, log: importLog },
+  );
 }

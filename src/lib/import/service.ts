@@ -27,7 +27,7 @@ export type ImportServiceDeps = ImportDeps & {
 
 type Actor = { id: string };
 
-/** A job still `fetching` after this long is dead (the fetch itself is bounded by ~10 s). */
+/** A job still `fetching` after this long is dead (static fetch ~10 s plus headless <= 35 s). */
 export const STALE_FETCHING_MS = 5 * 60 * 1000;
 const failStale = (db: Db, actor: Actor) =>
   failStaleFetchingJobs(db, actor.id, new Date(Date.now() - STALE_FETCHING_MS).toISOString());
@@ -89,6 +89,12 @@ export function toJobResponse(db: Db, job: ImportJobRow, actor: Actor): ImportJo
       ? Math.round(stored.draft.mapping.confidence * 100) / 100
       : null,
     mapping_level: stored?.draft.mapping?.level ?? null,
+    headless:
+      job.errorCode === 'headless_unavailable'
+        ? 'unavailable'
+        : job.method === 'headless'
+          ? 'used'
+          : null,
     duplicate: dup ? { recipe_id: dup.id, title: dup.title } : null,
   };
 }
@@ -137,6 +143,7 @@ export async function createImport(
   const response = toJobResponse(db, fresh, actor);
   // A failed job carries the parser warnings (useful for the paste hint) but no draft.
   if (result.status === 'failed') response.warnings = result.warnings;
+  if (result.headless) response.headless = result.headless;
   return response;
 }
 
