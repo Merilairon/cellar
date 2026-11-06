@@ -2,7 +2,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
-import { createSidecar, tokenOk, RenderError, type Renderer } from '../src/server.ts';
+import { createSidecar, tokenOk, RenderError, HTTP_LIMITS, type Renderer } from '../src/server.ts';
 import { loadConfig } from '../src/config.ts';
 
 const TOKEN = '0123456789abcdef0123456789abcdef';
@@ -126,4 +126,30 @@ test('tokenOk is strict about the Bearer scheme', () => {
   assert.equal(tokenOk('bearer abc', 'abc'), false);
   assert.equal(tokenOk('abc', 'abc'), false);
   assert.equal(tokenOk(undefined, 'abc'), false);
+});
+
+test('F4: header/request timeouts and header size are tightened below Node defaults', () => {
+  assert.equal(server.headersTimeout, 5000);
+  assert.equal(server.requestTimeout, 15_000);
+  assert.ok(HTTP_LIMITS.maxHeaderSize <= 8192);
+});
+
+test('F4: an oversized header block is refused with 431', async () => {
+  const r = await fetch(`${base}/healthz`, { headers: { 'x-pad': 'a'.repeat(10_000) } });
+  assert.equal(r.status, 431);
+});
+
+test('F4: BIND_ADDR is honoured and must be an IP literal', async () => {
+  assert.equal(loadConfig({ HEADLESS_TOKEN: TOKEN }).bindAddr, '0.0.0.0');
+  assert.equal(loadConfig({ HEADLESS_TOKEN: TOKEN, BIND_ADDR: '127.0.0.1' }).bindAddr, '127.0.0.1');
+  assert.throws(
+    () => loadConfig({ HEADLESS_TOKEN: TOKEN, BIND_ADDR: 'evil.example' }),
+    /BIND_ADDR/,
+  );
+  const s = createSidecar({
+    config: loadConfig({ HEADLESS_TOKEN: TOKEN, BIND_ADDR: '127.0.0.1' }),
+  });
+  await new Promise<void>((r) => s.listen(0, '127.0.0.1', r));
+  assert.equal((s.address() as AddressInfo).address, '127.0.0.1');
+  s.close();
 });

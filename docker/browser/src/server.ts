@@ -8,6 +8,14 @@ import { Supervisor } from './supervisor.ts';
 
 export const MAX_BODY_BYTES = 2048;
 
+/** F4: tight HTTP limits; the request is a 2 KB JSON body from the app, never a slow client. */
+export const HTTP_LIMITS = {
+  headersTimeout: 5000,
+  requestTimeout: 15_000,
+  keepAliveTimeout: 1000,
+  maxHeaderSize: 8192,
+} as const;
+
 export type RenderRequest = { url: string; waitMs?: number };
 export type RenderResult = {
   html: string;
@@ -127,7 +135,7 @@ export function createSidecar(opts: ServerOptions): Server {
   const ready = opts.ready ?? (() => true);
   let active = 0;
 
-  return createServer(async (req, res) => {
+  return createServer({ ...HTTP_LIMITS }, async (req, res) => {
     try {
       const path = (req.url ?? '').split('?')[0];
       if (path === '/healthz') {

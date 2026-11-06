@@ -1,3 +1,4 @@
+import { isIP } from 'node:net';
 // Sidecar configuration. Reads only the variables listed here; nothing else from the
 // environment is used, and the only secret is the optional HEADLESS_TOKEN.
 
@@ -38,9 +39,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       'HEADLESS_TOKEN is required (set HEADLESS_ALLOW_NO_TOKEN=1 to run without one)',
     );
   }
+  const bindAddr = env.BIND_ADDR || '0.0.0.0';
+  if (isIP(bindAddr) === 0) throw new Error('BIND_ADDR must be an IP address literal');
   return {
     port: int(env, 'PORT', 3001, 1, 65535),
-    bindAddr: env.BIND_ADDR || '0.0.0.0',
+    bindAddr,
     token,
     noToken: token === null,
     // Clamped: the 30 s ceiling is a security control and cannot be raised by configuration.

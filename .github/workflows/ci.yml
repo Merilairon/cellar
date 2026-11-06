@@ -78,7 +78,7 @@ jobs:
   # image HEALTHCHECK (no backgrounded shell). A render of a JS-only page needs a public target
   # and no external network is used here, so the render check is the SSRF refusal through the real
   # browser process; the real JS-only and real 403 pages are the manual flow 7 of T13.
-  # The Docker test suite and the arm64/QEMU build are T18 and stay out of this job.
+  # The real-Chromium Docker suite (F3) is the `headless-tests` job; arm64/QEMU is `arm64`.
   headless:
     needs: changes
     if: needs.changes.outputs.headless == 'true' || github.event_name != 'pull_request'
@@ -129,3 +129,47 @@ jobs:
       - name: Tear down
         if: always()
         run: docker rm -f browser || true
+
+  # F3: the 39 real-Chromium tests (T9 matrix, sandbox escape, syscall/capability checks) run inside
+  # the hardened image at --memory 2g (the abuse suite exceeds 1g by design). Ubuntu 24.04 runners
+  # restrict unprivileged user namespaces through AppArmor; Chromium's sandbox needs them (unsupported
+  # hosts are documented), so the runner is switched to the supported configuration first.
+  headless-tests:
+    needs: changes
+    if: needs.changes.outputs.headless == 'true' || github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Allow unprivileged user namespaces (supported-host configuration)
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - run: docker build -t cellar-browser:ci docker/browser
+      - name: Real-Chromium Docker suite at --memory 2g
+        run: docker/browser/scripts/docker-tests.sh cellar-browser:ci
+
+  # arm64 under QEMU (emulated, not real hardware): app image + sharp re-encode, sidecar image,
+  # and the sandbox/syscall tests. A green run here is "verified under QEMU", nothing stronger.
+  # continue-on-error is deliberately off: a red job means arm64 stays documented as unverified.
+  arm64:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+      - uses: docker/setup-buildx-action@v3
+      - name: Allow unprivileged user namespaces
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: 'App image (arm64), native modules and a sharp re-encode'
+        run: |
+          docker buildx build --platform linux/arm64 --load -t rb:arm64 .
+          docker run --rm --platform linux/arm64 rb:arm64 node -e "
+            require('argon2'); require('better-sqlite3');
+            const sharp = require('sharp');
+            sharp({ create: { width: 64, height: 64, channels: 3, background: '#a33' } }).jpeg().toBuffer()
+              .then((b) => sharp(b).resize(32).webp().toBuffer())
+              .then((o) => { if (process.arch !== 'arm64' || o.length < 20) process.exit(1); console.log('arm64 sharp re-encode ok', process.arch, o.length); })"
+      - name: Sidecar image (arm64)
+        run: docker buildx build --platform linux/arm64 --load -t cellar-browser:arm64 docker/browser
+      - name: Sidecar sandbox self-check and syscall tests (arm64, QEMU)
+        run: docker/browser/scripts/docker-tests.sh cellar-browser:arm64 linux/arm64
