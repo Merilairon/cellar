@@ -35,6 +35,34 @@ function rateLimitShape() {
   };
 }
 
+/** Optional env strings: unset and empty (compose passes `${VAR:-}`) both mean "not configured". */
+const optionalString = z
+  .string()
+  .optional()
+  .transform((v) => (v === '' ? undefined : v));
+
+/**
+ * HEADLESS_URL is operator-controlled, never user input, so it is intentionally NOT routed
+ * through the SSRF guard (it points at an internal address by design) and is never echoed to
+ * clients. http: only (internal network link), bare origin: no credentials, path, query or hash.
+ */
+function isValidHeadlessUrl(v: string): boolean {
+  try {
+    const u = new URL(v);
+    return (
+      u.protocol === 'http:' &&
+      u.hostname !== '' &&
+      u.username === '' &&
+      u.password === '' &&
+      (u.pathname === '/' || u.pathname === '') &&
+      u.search === '' &&
+      u.hash === ''
+    );
+  } catch {
+    return false;
+  }
+}
+
 const schema = z.object({
   DATABASE_PATH: z.string().min(1).default('/data/app.db'),
   SESSION_SECRET: z
@@ -66,6 +94,17 @@ const schema = z.object({
   KEEP_RAW_HTML: envBool,
   // Directory for photos; defaults to <dir of DATABASE_PATH>/uploads (/data/uploads in Docker).
   UPLOADS_DIR: z.string().min(1).optional(),
+  // Optional headless-browser sidecar (profile `headless`). Unset = feature off, no code path
+  // that can fail an import.
+  HEADLESS_URL: optionalString.refine(
+    (v) => v === undefined || isValidHeadlessUrl(v),
+    'HEADLESS_URL must be a bare http:// origin (no credentials, path, query or hash)',
+  ),
+  HEADLESS_TOKEN: optionalString.refine(
+    (v) => v === undefined || v.length >= 16,
+    'HEADLESS_TOKEN must be at least 16 characters',
+  ),
+  HEADLESS_TIMEOUT_MS: z.coerce.number().int().positive().max(35_000).default(35_000),
   // Non-production seam: let the importer fetch private addresses and non-80/443 ports
   // (local fixture server for tests). It disables the SSRF guard, so production refuses it.
   IMPORT_ALLOW_LOCAL_FETCH: envBool.refine(

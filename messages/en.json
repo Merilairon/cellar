@@ -158,6 +158,7 @@
       "private_address": "This address cannot be imported because it points to a private or internal network.",
       "too_large": "This page is too large to import.",
       "fetch_failed": "The page could not be fetched.",
+      "headless_unavailable": "The browser helper for JavaScript-heavy pages is not available right now.",
       "pasteHint": "You can paste the recipe text or the page source instead.",
       "rateLimited": "Too many imports. Try again in {seconds, plural, one {# second} other {# seconds}}.",
       "network": "The request failed. Check your connection and try again.",

@@ -18,6 +18,7 @@ const CODE_KEYS: Record<ImportErrorCode, string> = {
   private_address: 'import.errors.private_address',
   too_large: 'import.errors.too_large',
   fetch_failed: 'import.errors.fetch_failed',
+  headless_unavailable: 'import.errors.headless_unavailable',
 };
 
 const TABS: Tab[] = ['url', 'paste'];

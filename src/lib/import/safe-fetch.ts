@@ -201,6 +201,21 @@ async function readBody(
   }
 }
 
+/**
+ * Pre-check without fetching: same scheme/port/userinfo policy and the same all-addresses-public
+ * resolution as `safeFetch`. Used by the headless client (G7) so an obviously private URL
+ * never reaches the browser. Throws `ImportError` (invalid_url, private_address, fetch_failed).
+ */
+export async function assertPublicTarget(
+  rawUrl: string,
+  opts: { allowLocal?: boolean; resolve?: Resolver } = {},
+): Promise<URL> {
+  const { allowLocal = false, resolve = defaultResolve } = opts;
+  const u = parseUrl(rawUrl, allowLocal);
+  await pickAddresses(u, resolve, allowLocal);
+  return u;
+}
+
 const ACCEPT = {
   html: {
     header: 'text/html,application/xhtml+xml;q=0.9',
