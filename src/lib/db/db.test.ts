@@ -104,7 +104,7 @@ describe('migrations', () => {
     const n = db2.$client.prepare('SELECT count(*) AS n FROM __drizzle_migrations').get() as {
       n: number;
     };
-    expect(n.n).toBe(4);
+    expect(n.n).toBe(5);
   });
 
   it('enforces uniqueness, defaults, ULID ids and FK cascade', () => {

@@ -123,7 +123,7 @@ describe('createImport', () => {
       db,
       a,
       { url: 'https://example.com/p' },
-      { safeFetch: okFetch(), keepRawHtml: true, uploadsDir: join(dir, 'uploads') },
+      { safeFetch: okFetch(), keepRawHtml: true, rawHtmlDir: join(dir, 'import-raw') },
     );
     const s = JSON.stringify(res);
     expect(s).not.toMatch(/raw_html|rawHtml|ld\+json/);
@@ -135,7 +135,7 @@ describe('createImport', () => {
       db,
       a,
       { url: 'https://example.com/p' },
-      { safeFetch: okFetch(), keepRawHtml: false, uploadsDir: join(dir, 'uploads') },
+      { safeFetch: okFetch(), keepRawHtml: false, rawHtmlDir: join(dir, 'import-raw') },
     );
     expect(db.select().from(importJob).get()!.rawHtmlPath).toBeNull();
     expect(existsSync(join(dir, 'import-raw'))).toBe(false);
@@ -146,7 +146,7 @@ describe('createImport', () => {
       db,
       a,
       { url: 'https://example.com/p' },
-      { safeFetch: okFetch(), keepRawHtml: true, uploadsDir: join(dir, 'uploads') },
+      { safeFetch: okFetch(), keepRawHtml: true, rawHtmlDir: join(dir, 'import-raw') },
     );
     const path = db.select().from(importJob).get()!.rawHtmlPath!;
     expect(path).toBe(join(dir, 'import-raw', `${res.id}.html`));
@@ -375,5 +375,80 @@ describe('markImportJobSaved CAS', () => {
     expect(markImportJobSaved(db, mkJob('failed').id, a.id, r)).toBe(false);
     expect(markImportJobSaved(db, mkJob('fetching').id, a.id, r)).toBe(false);
     expect(markImportJobSaved(db, mkJob('needs_review').id, a.id, r)).toBe(true);
+  });
+});
+
+describe('createImport: headless', () => {
+  const empty = () =>
+    vi.fn<(u: string, o?: SafeFetchOptions) => Promise<SafeFetchResult>>(async () => ({
+      status: 200,
+      headers: { 'content-type': 'text/html' },
+      body: enc.encode('<html><body><div id="app"></div></body></html>'),
+      finalUrl: 'https://example.com/p',
+    }));
+
+  it('persists method headless, returns headless used, and reloads it via GET', async () => {
+    const render = vi.fn(async () => ({
+      html: page,
+      finalUrl: 'https://example.com/p',
+      status: 200,
+    }));
+    const res = await createImport(
+      db,
+      a,
+      { url: 'https://example.com/p' },
+      { safeFetch: empty(), headless: { enabled: true, render } },
+    );
+    expect(res).toMatchObject({ status: 'needs_review', method: 'headless', headless: 'used' });
+    expect(res.warnings).toContain('headless_used');
+    expect(getImportFor(db, a, res.id)).toMatchObject({ method: 'headless', headless: 'used' });
+    expect(db.select().from(recipe).all()).toHaveLength(0);
+  });
+
+  it('headless off: static no_recipe persisted, response carries headless unavailable', async () => {
+    const res = await createImport(db, a, { url: 'https://example.com/p' }, { safeFetch: empty() });
+    expect(res).toMatchObject({
+      status: 'failed',
+      method: 'static',
+      error_code: 'no_recipe',
+      headless: 'unavailable',
+    });
+    expect(getImportFor(db, a, res.id)?.headless).toBeNull(); // hint is not persisted
+  });
+
+  it('sidecar down: persists the headless_unavailable code', async () => {
+    const render = vi.fn(async () => {
+      throw new ImportError('headless_unavailable');
+    });
+    const res = await createImport(
+      db,
+      a,
+      { url: 'https://example.com/p' },
+      { safeFetch: empty(), headless: { enabled: true, render } },
+    );
+    expect(res).toMatchObject({
+      status: 'failed',
+      method: 'headless',
+      error_code: 'headless_unavailable',
+      headless: 'unavailable',
+    });
+    expect(getImportFor(db, a, res.id)).toMatchObject({
+      error_code: 'headless_unavailable',
+      headless: 'unavailable',
+    });
+  });
+
+  it('a sidecar failure after a render attempt reads as "used" on POST and GET alike (m6)', async () => {
+    const render = vi.fn(async () => {
+      throw new ImportError('blocked');
+    });
+    const res = await createImport(
+      db,
+      a,
+      { url: 'https://example.com/p' },
+      { safeFetch: empty(), headless: { enabled: true, render } },
+    );
+    expect(res).toMatchObject({ error_code: 'blocked', method: 'headless', headless: 'used' });
+    expect(getImportFor(db, a, res.id)?.headless).toBe('used');
   });
 });

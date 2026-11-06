@@ -7,7 +7,7 @@ import type { ImportErrorCode } from '@/lib/import/errors';
 import { MAX_IMPORT_TEXT, MAX_IMPORT_URL } from '@/lib/import/schemas';
 import { btn, btnPrimary, input } from '@/components/recipe/styles';
 import { requestImport } from './api';
-import { initialState, reducer, type ImportFailure, type Tab } from './import-state';
+import { initialState, reducer, suggestsPaste, type ImportFailure, type Tab } from './import-state';
 
 // Full literal keys, so the catalogue test can verify them.
 const CODE_KEYS: Record<ImportErrorCode, string> = {
@@ -18,17 +18,25 @@ const CODE_KEYS: Record<ImportErrorCode, string> = {
   private_address: 'import.errors.private_address',
   too_large: 'import.errors.too_large',
   fetch_failed: 'import.errors.fetch_failed',
+  headless_unavailable: 'import.errors.headless_unavailable',
 };
 
 const TABS: Tab[] = ['url', 'paste'];
 const PHASE_DELAY_MS = 1500;
+// Presentational heuristic: the server may have switched to a browser render by now.
+const RENDERING_DELAY_MS = 8000;
+const PROGRESS_KEYS = {
+  fetching: 'import.progress.fetching',
+  parsing: 'import.progress.parsing',
+  rendering: 'import.progress.rendering',
+} as const;
 
 export function ImportDialog() {
   const t = useTranslations();
   const router = useRouter();
   const [s, dispatch] = useReducer(reducer, initialState);
   const abort = useRef<AbortController | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const pasteRef = useRef<HTMLTextAreaElement>(null);
   const urlRef = useRef<HTMLInputElement>(null);
   const tabRefs = useRef<Record<Tab, HTMLButtonElement | null>>({ url: null, paste: null });
@@ -39,14 +47,14 @@ export function ImportDialog() {
   useEffect(
     () => () => {
       abort.current?.abort();
-      if (timer.current) clearTimeout(timer.current);
+      timers.current.forEach(clearTimeout);
     },
     [],
   );
 
   const stopTimer = () => {
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = null;
+    timers.current.forEach(clearTimeout);
+    timers.current = [];
   };
 
   async function submit(e: React.FormEvent) {
@@ -61,10 +69,10 @@ export function ImportDialog() {
     const ctl = new AbortController();
     abort.current = ctl;
     if (s.tab === 'url') {
-      timer.current = setTimeout(
-        () => dispatch({ type: 'phase', phase: 'parsing' }),
-        PHASE_DELAY_MS,
-      );
+      timers.current = [
+        setTimeout(() => dispatch({ type: 'phase', phase: 'parsing' }), PHASE_DELAY_MS),
+        setTimeout(() => dispatch({ type: 'phase', phase: 'rendering' }), RENDERING_DELAY_MS),
+      ];
     }
     const out = await requestImport(s.tab === 'url' ? { url: value } : { text: value }, ctl.signal);
     if (!out) return; // cancelled: the reducer was already reset
@@ -98,13 +106,13 @@ export function ImportDialog() {
 
   function message(f: ImportFailure): string[] {
     if (f.kind === 'code') {
-      const base = t(CODE_KEYS[f.code]);
-      return f.code === 'blocked' ||
-        f.code === 'no_recipe' ||
-        f.code === 'timeout' ||
-        f.code === 'fetch_failed'
-        ? [base, t('import.errors.pasteHint')]
-        : [base];
+      const out = [t(CODE_KEYS[f.code])];
+      // Headless ran and the page still failed, or it was needed but is not available.
+      if (f.headless === 'used') out.push(t('import.errors.headlessTried'));
+      if (f.headless === 'unavailable' && f.code !== 'headless_unavailable')
+        out.push(t('import.errors.headlessUnavailableHint'));
+      if (suggestsPaste(f)) out.push(t('import.errors.pasteHint'));
+      return out;
     }
     if (f.kind === 'rateLimited') return [t('import.errors.rateLimited', { seconds: f.seconds })];
     if (f.kind === 'network') return [t('import.errors.network')];
@@ -184,9 +192,7 @@ export function ImportDialog() {
       <div aria-live="polite" className={s.busy ? '' : 'sr-only'}>
         {s.busy && (
           <div className="flex flex-col gap-2">
-            <p>
-              {t(s.busy === 'fetching' ? 'import.progress.fetching' : 'import.progress.parsing')}
-            </p>
+            <p>{t(PROGRESS_KEYS[s.busy])}</p>
             <div
               role="progressbar"
               aria-label={t('import.progress.label')}

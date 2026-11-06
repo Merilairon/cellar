@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { runCorpus, TARGET } from '../../scripts/import-corpus';
+import { runCorpus, runHeadlessCorpus, TARGET } from '../../scripts/import-corpus';
 
 describe('import fixture corpus', () => {
   it('keeps the static-handleable success rate at or above the target, offline', async () => {
@@ -25,5 +25,29 @@ describe('import fixture corpus', () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+
+  it('headless off: JS-only and blocked fixtures fail as before; on with the fake: they recover', async () => {
+    const hl = await runHeadlessCorpus();
+    expect(hl.off.rate).toBeGreaterThanOrEqual(TARGET);
+    expect(hl.off.failures).toEqual([]);
+    expect(hl.off.rows.find((r) => r.name === 'blocked-403-shell')?.got).toBe('no_recipe');
+    expect(hl.on.failures).toEqual([]);
+    expect(hl.on.overallRate).toBeGreaterThan(hl.off.overallRate);
+    expect(hl.recovered.map((r) => r.name).sort()).toEqual([
+      'blocked-403-shell',
+      'js-only-hydration-state',
+      'js-only-late-injected-jsonld',
+      'js-only-spa-shell',
+    ]);
+    // Still blocked/paywalled after render, and microdata (04a), are not inflated into the rate.
+    expect(hl.stillRejected.map((r) => r.name).sort()).toEqual([
+      'blocked-403-denied',
+      'paywalled-js-shell',
+    ]);
+    expect(hl.stillOut.map((r) => r.name).sort()).toEqual([
+      'microdata-only-basic',
+      'microdata-only-howtostep',
+    ]);
   });
 });

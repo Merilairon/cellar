@@ -7,6 +7,8 @@ export const IMPORT_ERROR_CODES = [
   'private_address',
   'too_large',
   'fetch_failed',
+  // Headless sidecar unreachable, busy, misconfigured or failing (v0.3.2). Never carries details.
+  'headless_unavailable',
 ] as const;
 export type ImportErrorCode = (typeof IMPORT_ERROR_CODES)[number];
 

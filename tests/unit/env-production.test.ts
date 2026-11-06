@@ -44,6 +44,28 @@ describe('import env', () => {
     expect(e.RATE_LIMIT_IMPORT_MAX).toBe(20);
     expect(e.RATE_LIMIT_IMPORT_WINDOW_SEC).toBe(3600);
     expect(e.UPLOADS_DIR).toBe('/data/uploads');
+    // Same location as v0.3.0 (dirname(uploadsDir)/import-raw), so existing volumes are unaffected.
+    expect(e.RAW_HTML_DIR).toBe('/data/import-raw');
+  });
+
+  it('raw dir follows UPLOADS_DIR (v0.3.0 location), exposes it as legacy, and may be overridden', async () => {
+    const e = (
+      await parse('production', { DATABASE_PATH: '/db/app.db', UPLOADS_DIR: '/up/photos' })
+    )();
+    expect(e.RAW_HTML_DIR).toBe('/up/import-raw');
+    const o = (
+      await parse('production', {
+        DATABASE_PATH: '/db/app.db',
+        UPLOADS_DIR: '/up/photos',
+        RAW_HTML_DIR: '/x/raw',
+      })
+    )();
+    expect(o.RAW_HTML_DIR).toBe('/x/raw');
+    expect(o.LEGACY_RAW_HTML_DIR).toBe('/up/import-raw');
+  });
+
+  it('honours RAW_HTML_DIR and rejects empty-string override via min(1)', async () => {
+    expect((await parse('production', { RAW_HTML_DIR: '/x/raw' }))().RAW_HTML_DIR).toBe('/x/raw');
   });
 
   it('parses booleans literally ("false" is false) and honours UPLOADS_DIR', async () => {
@@ -81,4 +103,10 @@ describe('import env', () => {
       expect((await parse(ne, {}))().IMPORT_ALLOW_LOCAL_FETCH).toBe(false);
     },
   );
+
+  it('IMPORT_JOB_TTL_DAYS defaults to 30, accepts 0, rejects negatives', async () => {
+    expect((await parse('production', {}))().IMPORT_JOB_TTL_DAYS).toBe(30);
+    expect((await parse('production', { IMPORT_JOB_TTL_DAYS: '0' }))().IMPORT_JOB_TTL_DAYS).toBe(0);
+    expect(await parse('production', { IMPORT_JOB_TTL_DAYS: '-1' })).toThrow();
+  });
 });

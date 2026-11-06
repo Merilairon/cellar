@@ -1,4 +1,5 @@
 .next
+.next-e2e-headless
 node_modules
 drizzle
 package-lock.json
@@ -11,3 +12,4 @@ docs
 milestones
 dist
 tests/fixtures/
+docker/browser/seccomp.base.json

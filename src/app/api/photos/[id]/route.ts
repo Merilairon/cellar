@@ -26,7 +26,7 @@ export async function GET(request: Request, { params }: Ctx) {
     return new Response(new Uint8Array(data), {
       headers: {
         'Content-Type': 'image/webp',
-        'Cache-Control': 'private, max-age=3600',
+        'Cache-Control': 'private, no-cache',
         'X-Content-Type-Options': 'nosniff',
       },
     });

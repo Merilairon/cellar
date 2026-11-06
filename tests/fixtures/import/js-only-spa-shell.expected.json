@@ -1,5 +1,6 @@
 {
   "expect": "out_of_slice",
   "kind": "JS-rendered: empty SPA root",
-  "carry": "3c headless"
+  "carry": "3c headless (needs sidecar)",
+  "headless": { "render": "js-only-spa-shell.rendered.html", "expect": "draft", "title": "Pancakes", "min_ingredients": 3, "min_steps": 2 }
 }

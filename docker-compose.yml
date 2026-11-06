@@ -2,6 +2,9 @@
 #   (docker-compose.direct.yml publishes the app on :3000)
 # Behind Caddy: docker compose --profile caddy up -d --build
 #   (this file alone never publishes the app port; only Caddy listens on 80/443)
+# Headless import (optional, off by default): see docs/deployment.md
+#   HEADLESS_URL=http://browser:3001 HEADLESS_TOKEN=$(openssl rand -hex 32) in .env, then
+#   docker compose --profile headless up -d --build   (combine with the other flags as needed)
 name: cellar
 services:
   app:
@@ -17,8 +20,13 @@ services:
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
       # Import (v0.3). Defaults match the app defaults.
       KEEP_RAW_HTML: ${KEEP_RAW_HTML:-false}
+      RAW_HTML_DIR: /data/import-raw
+      IMPORT_JOB_TTL_DAYS: ${IMPORT_JOB_TTL_DAYS:-30}
       RATE_LIMIT_IMPORT_MAX: ${RATE_LIMIT_IMPORT_MAX:-20}
       RATE_LIMIT_IMPORT_WINDOW_SEC: ${RATE_LIMIT_IMPORT_WINDOW_SEC:-3600}
+      # Headless import (v0.3.2). Empty = feature off, no sidecar call is ever made.
+      HEADLESS_URL: ${HEADLESS_URL:-}
+      HEADLESS_TOKEN: ${HEADLESS_TOKEN:-}
     volumes:
       - app-data:/data
     healthcheck:
@@ -33,8 +41,40 @@ services:
       retries: 3
     networks:
       default: {}
+      # Always attached (compose cannot attach conditionally). Harmless when the
+      # browser profile is off: nothing else is on this internal network.
+      headless-link: {}
     expose:
       - '3000'
+
+  # Optional headless Chromium sidecar. Executes untrusted JS from imported pages.
+  # No volumes, no published ports, no app-data. Flags mirror docker/browser/run.sh.
+  browser:
+    profiles: [headless]
+    build: ./docker/browser
+    image: cellar-browser:local
+    restart: unless-stopped
+    user: '10001:10001'
+    environment:
+      HEADLESS_TOKEN: ${HEADLESS_TOKEN:-} # sidecar refuses to start if empty
+    cap_drop: [ALL]
+    cap_add: [SYS_CHROOT]
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=./docker/browser/seccomp.json
+    # PID 1 must reap: Chromium children orphaned by the 30 s kill become zombies and count against pids_limit.
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,size=256m
+    shm_size: 256m
+    mem_limit: 2g
+    memswap_limit: 2g
+    cpus: 1.0
+    pids_limit: 256
+    networks:
+      - headless-link
+      - headless-egress
 
   caddy:
     profiles: [caddy]
@@ -64,6 +104,12 @@ volumes:
   caddy-config:
 
 networks:
+  # app <-> browser HTTP only; no egress.
+  headless-link:
+    internal: true
+  # The browser's route to the internet. It also reaches the host and LAN at the
+  # network layer; the in-sidecar proxy is what blocks them (docs/deployment.md).
+  headless-egress: {}
   default:
     ipam:
       config:

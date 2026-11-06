@@ -1,10 +1,11 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import type { Db } from '@/lib/db/connection';
 import { findRecipeBySourceUrl } from '@/lib/db/recipes';
 import {
   createImportJob,
   failStaleFetchingJobs,
+  pruneImportJobs,
   getImportJobForUser,
   updateImportJob,
   type ImportJobRow,
@@ -21,16 +22,43 @@ import type { ImportJobResponse } from './schemas';
 
 export type ImportServiceDeps = ImportDeps & {
   keepRawHtml?: boolean;
-  /** Where raw HTML goes when keepRawHtml: `<uploadsDir parent>/import-raw`. */
-  uploadsDir?: string;
+  /** Where raw HTML goes when keepRawHtml (env RAW_HTML_DIR). */
+  rawHtmlDir?: string;
+  /** Older raw HTML locations pruning may still clean (a moved RAW_HTML_DIR must not orphan files). */
+  legacyRawHtmlDirs?: string[];
+  /** Retention in days for old import jobs (env IMPORT_JOB_TTL_DAYS); 0/unset disables pruning. */
+  jobTtlDays?: number;
 };
 
 type Actor = { id: string };
 
-/** A job still `fetching` after this long is dead (the fetch itself is bounded by ~10 s). */
+/** A job still `fetching` after this long is dead (static fetch ~10 s plus headless <= 35 s). */
 export const STALE_FETCHING_MS = 5 * 60 * 1000;
 const failStale = (db: Db, actor: Actor) =>
   failStaleFetchingJobs(db, actor.id, new Date(Date.now() - STALE_FETCHING_MS).toISOString());
+
+const PRUNE_EVERY_MS = 60 * 60 * 1000;
+let lastPruneAt = 0;
+/** Lazy retention sweep: at most once an hour per process, bounded, never fails the import. */
+export function maybePrune(db: Db, deps: ImportServiceDeps, now = Date.now()): void {
+  if (!deps.jobTtlDays || !deps.rawHtmlDir || now - lastPruneAt < PRUNE_EVERY_MS) return;
+  lastPruneAt = now;
+  try {
+    pruneImportJobs(db, {
+      olderThanDays: deps.jobTtlDays,
+      now: new Date(now),
+      rawHtmlDir: deps.rawHtmlDir,
+      extraRawHtmlDirs: deps.legacyRawHtmlDirs,
+    });
+  } catch (e) {
+    deps.log?.('import job prune failed', e);
+  }
+}
+
+/** Test seam: forget the throttle. */
+export function resetPruneThrottle(): void {
+  lastPruneAt = 0;
+}
 
 /** What is stored in `import_job.draft_json`. */
 export type StoredDraft = { v: 1; draft: Draft; warnings: string[] };
@@ -53,13 +81,12 @@ export function parseStoredDraft(json: string | null): StoredDraft | null {
  * Only reached when KEEP_RAW_HTML is on. Failure is logged and never fails the import.
  */
 function writeRawHtml(
-  uploadsDir: string,
+  dir: string,
   jobId: string,
   html: string,
   log?: ImportDeps['log'],
 ): string | null {
   try {
-    const dir = join(dirname(uploadsDir), 'import-raw');
     mkdirSync(dir, { recursive: true, mode: 0o700 });
     const path = join(dir, `${jobId}.html`);
     writeFileSync(path, html, { mode: 0o600 });
@@ -89,6 +116,12 @@ export function toJobResponse(db: Db, job: ImportJobRow, actor: Actor): ImportJo
       ? Math.round(stored.draft.mapping.confidence * 100) / 100
       : null,
     mapping_level: stored?.draft.mapping?.level ?? null,
+    headless:
+      job.errorCode === 'headless_unavailable'
+        ? 'unavailable'
+        : job.method === 'headless'
+          ? 'used'
+          : null,
     duplicate: dup ? { recipe_id: dup.id, title: dup.title } : null,
   };
 }
@@ -100,6 +133,7 @@ export async function createImport(
   deps: ImportServiceDeps = {},
 ): Promise<ImportJobResponse> {
   failStale(db, actor);
+  maybePrune(db, deps);
   const job = createImportJob(db, actor.id, { method: 'text' in input ? 'paste' : 'static' });
   updateImportJob(db, job.id, { status: 'fetching' });
 
@@ -116,8 +150,8 @@ export async function createImport(
   }
 
   const rawHtmlPath =
-    deps.keepRawHtml && deps.uploadsDir && result.raw_html
-      ? writeRawHtml(deps.uploadsDir, job.id, result.raw_html, log)
+    deps.keepRawHtml && deps.rawHtmlDir && result.raw_html
+      ? writeRawHtml(deps.rawHtmlDir, job.id, result.raw_html, log)
       : null;
 
   const stored: StoredDraft | null =
@@ -137,6 +171,7 @@ export async function createImport(
   const response = toJobResponse(db, fresh, actor);
   // A failed job carries the parser warnings (useful for the paste hint) but no draft.
   if (result.status === 'failed') response.warnings = result.warnings;
+  if (result.headless) response.headless = result.headless;
   return response;
 }
 

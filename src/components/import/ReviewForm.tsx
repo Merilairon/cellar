@@ -27,11 +27,14 @@ export function ReviewForm({
   draft,
   warnings,
   duplicate,
+  headless = false,
 }: {
   jobId: string;
   draft: Draft;
   warnings: string[];
   duplicate: { recipe_id: string; title: string } | null;
+  /** The page was rendered in a browser (method headless). */
+  headless?: boolean;
 }) {
   const t = useTranslations();
   const router = useRouter();
@@ -129,13 +132,18 @@ export function ReviewForm({
           {t('import.review.source', { name: sourceText })}
         </p>
       )}
-      {warnings.length > 0 && (
+      {headless && (
+        <p className="text-sm text-neutral-700 dark:text-neutral-300">
+          {t('import.review.headlessNote')}
+        </p>
+      )}
+      {warnings.some((w) => w !== 'headless_used') && (
         <div className="rounded border border-neutral-500 p-3">
           <h2 className="font-semibold">{t('import.review.warnings')}</h2>
           <ul className="mt-1 list-disc pl-5">
-            {warnings.map((w, i) => (
-              <li key={`${i}${w}`}>{warningMessage(t, w)}</li>
-            ))}
+            {warnings.map((w, i) =>
+              w === 'headless_used' ? null : <li key={`${i}${w}`}>{warningMessage(t, w)}</li>,
+            )}
           </ul>
         </div>
       )}

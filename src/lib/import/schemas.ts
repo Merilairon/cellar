@@ -37,5 +37,11 @@ export type ImportJobResponse = {
   confidence: number | null;
   /** `high` >= 0.70, `medium` 0.40 to < 0.70, `low` below; null with `confidence`. */
   mapping_level: 'high' | 'medium' | 'low' | null;
+  /**
+   * `used`: the page was rendered in the headless browser. `unavailable`: a browser render was
+   * needed but is off or failed, so the UI should explain and offer paste. Not persisted:
+   * GET derives `used` from `method` and `unavailable` from the `headless_unavailable` code; the "headless off" hint exists only on the POST response.
+   */
+  headless: 'used' | 'unavailable' | null;
   duplicate: { recipe_id: string; title: string } | null;
 };

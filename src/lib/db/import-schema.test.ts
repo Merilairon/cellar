@@ -83,6 +83,91 @@ describe('migration 0003', () => {
   });
 });
 
+describe('migration 0004 (headless_unavailable)', () => {
+  it('rebuilds import_job on a v0.3.1 database, keeps every row and accepts the new code', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'mig4-'));
+    try {
+      db = openDb(':memory:');
+      cpSync(MIGRATIONS_FOLDER, dir, { recursive: true });
+      const journalPath = join(dir, 'meta', '_journal.json');
+      const journal = JSON.parse(readFileSync(journalPath, 'utf8'));
+      const full = journal.entries;
+      expect(full).toHaveLength(5);
+      journal.entries = full.slice(0, 4); // v0.3.1 shape
+      writeFileSync(journalPath, JSON.stringify(journal));
+      migrate(db, { migrationsFolder: dir });
+      const u = db
+        .insert(user)
+        .values({ email: 'v@x.test', displayName: 'v', passwordHash: 'h', role: 'member' })
+        .returning()
+        .get();
+      const r = mkRecipe(u.id);
+      const statuses = ['queued', 'fetching', 'parsed', 'needs_review', 'failed', 'saved'];
+      const ins = db.$client.prepare(
+        `INSERT INTO import_job (id, user_id, url, status, method, error_code, draft_json, recipe_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`,
+      );
+      statuses.forEach((st, i) =>
+        ins.run(
+          `J${i}`,
+          u.id,
+          `https://x.example/${i}`,
+          st,
+          st === 'queued' ? null : 'static',
+          st === 'failed' ? 'no_recipe' : null,
+          st === 'needs_review' ? '{"v":1}' : null,
+          st === 'saved' ? r.id : null,
+        ),
+      );
+      const before = db.$client.prepare('SELECT * FROM import_job ORDER BY id').all();
+      journal.entries = full;
+      writeFileSync(journalPath, JSON.stringify(journal));
+      migrate(db, { migrationsFolder: dir });
+      expect(db.$client.prepare('SELECT * FROM import_job ORDER BY id').all()).toEqual(before);
+      expect(db.$client.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+      const idx = db.$client
+        .prepare("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='import_job'")
+        .all()
+        .map((x) => (x as { name: string }).name);
+      expect(idx).toEqual(
+        expect.arrayContaining(['import_job_user_created_idx', 'import_job_recipe_id_idx']),
+      );
+      const j = createImportJob(db, u.id, { url: 'https://x.example/new' });
+      expect(() =>
+        updateImportJob(db, j.id, { status: 'failed', errorCode: 'headless_unavailable' }),
+      ).not.toThrow();
+      expect(() => db.$client.prepare("UPDATE import_job SET error_code='bogus'").run()).toThrow(
+        /CHECK/,
+      );
+      // idempotent
+      expect(() => migrate(db, { migrationsFolder: dir })).not.toThrow();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('migration 0004 safety invariant (m8)', () => {
+  it('no table has a foreign key that points at import_job', () => {
+    // 0004 rebuilds import_job with DROP TABLE inside Drizzle's transaction, where
+    // PRAGMA foreign_keys=OFF is a no-op. That is only safe while nothing references import_job:
+    // with enforcement on, DROP TABLE would implicitly delete and cascade into child rows.
+    // If this fails, do not copy the 0004 rebuild pattern for import_job again.
+    const db = openDb(':memory:');
+    runMigrations(db);
+    const tables = db.$client
+      .prepare("SELECT name FROM sqlite_master WHERE type='table'")
+      .all() as { name: string }[];
+    const referencing = tables.filter(({ name }) =>
+      (
+        db.$client.prepare(`PRAGMA foreign_key_list(\`${name}\`)`).all() as { table: string }[]
+      ).some((fk) => fk.table === 'import_job'),
+    );
+    expect(referencing).toEqual([]);
+    db.$client.close();
+  });
+});
+
 describe('import_job', () => {
   it('defaults, owner scoping and CHECK enums', () => {
     const { a, b } = setup();

@@ -1,7 +1,7 @@
 import { getDb } from '@/lib/db';
 import { getEnv } from '@/lib/env';
 import { createImport } from '@/lib/import/service';
-import { importLog, serverFetchOptions } from '@/lib/import/route-deps';
+import { importLog, serverFetchOptions, serverHeadless } from '@/lib/import/route-deps';
 import { busyResponse, LimiterBusyError } from '@/lib/import/limiter';
 import { importRequestSchema } from '@/lib/import/schemas';
 import { authenticate, IMPORT_BODY_MAX, json, readJson } from '@/lib/recipes/http';
@@ -39,8 +39,11 @@ export async function POST(request: Request) {
       input.data.url !== undefined ? { url: input.data.url } : { text: input.data.text! },
       {
         fetchOptions: serverFetchOptions(),
+        headless: serverHeadless(),
         keepRawHtml: env.KEEP_RAW_HTML,
-        uploadsDir: env.UPLOADS_DIR,
+        rawHtmlDir: env.RAW_HTML_DIR,
+        legacyRawHtmlDirs: [env.LEGACY_RAW_HTML_DIR],
+        jobTtlDays: env.IMPORT_JOB_TTL_DAYS,
         log: importLog,
       },
     );

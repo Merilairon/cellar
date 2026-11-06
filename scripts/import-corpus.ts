@@ -1,6 +1,8 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Draft } from '@/lib/import/normalize';
+import { ImportError } from '@/lib/import/errors';
+import type { Headless } from '@/lib/import/headless-client';
 import { runImport } from '@/lib/import/pipeline';
 
 // Fixture corpus runner (spec req 14, data-model G9/G11). Offline: runImport gets a fake
@@ -26,6 +28,22 @@ export type Expectation = {
   map?: MapExpectation;
   carry?: string;
   note?: string;
+  /** Static fetch answers this status (401/403/429 become `blocked`); the body is the .html file. */
+  raw_status?: number;
+  /**
+   * What a headless render of the page yields. The rendered DOM is self-written
+   * (`<name>.rendered.html`); with the sidecar off it is never read. Only used by the
+   * fake sidecar, never a real browser.
+   */
+  headless?: HeadlessExpectation;
+};
+
+export type HeadlessExpectation = {
+  render: string;
+  expect: 'draft' | 'no_recipe';
+  title?: string;
+  min_ingredients?: number;
+  min_steps?: number;
 };
 
 export type MapExpectation = {
@@ -85,7 +103,11 @@ function checkMap(exp: MapExpectation, m: Draft['mapping'], pageWarnings: string
   return problems;
 }
 
-function check(exp: Expectation, r: Awaited<ReturnType<typeof runImport>>): string[] {
+function check(
+  exp: Expectation,
+  r: Awaited<ReturnType<typeof runImport>>,
+  rawError = 'no_recipe',
+): string[] {
   const problems: string[] = [];
   const got = r.status === 'needs_review' && r.draft ? 'draft' : 'no_recipe';
   if (exp.expect === 'draft') {
@@ -105,13 +127,21 @@ function check(exp: Expectation, r: Awaited<ReturnType<typeof runImport>>): stri
     if (exp.cover_image === null && d.cover_image_url !== null)
       problems.push(`cover image kept: ${d.cover_image_url}`);
     if (exp.map) problems.push(...checkMap(exp.map, d.mapping, r.warnings));
-  } else if (got !== 'no_recipe' || r.error_code !== 'no_recipe') {
-    problems.push(`expected no_recipe, got ${got}`);
+  } else if (got !== 'no_recipe' || r.error_code !== rawError) {
+    problems.push(`expected ${rawError}, got ${r.error_code ?? got}`);
   }
   return problems;
 }
 
-export async function runCorpus(dir = FIXTURE_DIR): Promise<Report> {
+export type CorpusOptions = {
+  /**
+   * Simulate an enabled sidecar with a fake client that serves `<name>.rendered.html`
+   * (the raw page for fixtures without one). No browser, no network. Default: off.
+   */
+  headless?: boolean;
+};
+
+export async function runCorpus(dir = FIXTURE_DIR, opts: CorpusOptions = {}): Promise<Report> {
   const names = readdirSync(dir)
     .filter((f) => f.endsWith('.expected.json'))
     .map((f) => f.replace(/\.expected\.json$/, ''))
@@ -123,23 +153,54 @@ export async function runCorpus(dir = FIXTURE_DIR): Promise<Report> {
     const paste = exp.input === 'paste';
     const html = readFileSync(join(dir, `${name}.${paste ? 'txt' : 'html'}`));
     bytes += html.length;
-    const fakeFetch = async (url: string) => ({
+    const fakeFetch = async (url: string) => {
+      if (exp.raw_status !== undefined && exp.raw_status >= 400) {
+        if ([401, 403, 429].includes(exp.raw_status)) throw new ImportError('blocked');
+        throw new ImportError('fetch_failed');
+      }
+      return rawPage(url);
+    };
+    const rawPage = (url: string) => ({
       status: 200,
       headers: { 'content-type': 'text/html; charset=utf-8' },
       body: new Uint8Array(html),
       finalUrl: url,
     });
+    // Effective expectation: with the fake sidecar on, a fixture with a `headless` block is
+    // judged on what the rendered page yields; all others keep their label (a sidecar
+    // rendering a static page returns the same DOM).
+    const h = opts.headless ? exp.headless : undefined;
+    const eff: Expectation = h ? { ...exp, ...h, expect: h.expect } : exp;
+    let headless: Headless | undefined;
+    if (opts.headless) {
+      const rendered = h ? readFileSync(join(dir, h.render)) : html;
+      if (h) bytes += rendered.length;
+      headless = {
+        enabled: true,
+        render: async (url) => ({
+          html: rendered.toString('utf8'),
+          finalUrl: url,
+          status: 200,
+        }),
+      };
+    }
     let row: Row;
     try {
       const r = await runImport(
         paste ? { text: html.toString('utf8') } : { url: `https://fixtures.example.com/${name}` },
-        { safeFetch: fakeFetch },
+        { safeFetch: fakeFetch, headless },
       );
-      const problems = check(exp, r);
+      const problems = check(
+        eff,
+        r,
+        exp.raw_status !== undefined && !h && [401, 403, 429].includes(exp.raw_status)
+          ? 'blocked'
+          : 'no_recipe',
+      );
       row = {
         name,
         kind: exp.kind,
-        expect: exp.expect,
+        expect: eff.expect,
         got: r.status === 'needs_review' && r.draft ? 'draft' : 'no_recipe',
         pass: problems.length === 0,
         reason: problems.join('; '),
@@ -148,7 +209,7 @@ export async function runCorpus(dir = FIXTURE_DIR): Promise<Report> {
       row = {
         name,
         kind: exp.kind,
-        expect: exp.expect,
+        expect: eff.expect,
         got: 'error',
         pass: false,
         reason: `threw: ${e instanceof Error ? e.message : String(e)}`,
@@ -169,5 +230,50 @@ export async function runCorpus(dir = FIXTURE_DIR): Promise<Report> {
     negatives: rows.filter((r) => r.expect === 'no_recipe'),
     failures: rows.filter((r) => !r.pass),
     bytes,
+  };
+}
+
+export type HeadlessReport = {
+  /** Sidecar off (the default and the number that counts). */
+  off: Report;
+  /** Sidecar simulated by the fake client. NOT a measurement of a real browser. */
+  on: Report;
+  /** Out-of-slice fixtures that become valid drafts with the fake sidecar. */
+  recovered: Row[];
+  /** Still out of slice with the sidecar on (microdata: needs the 04a extractor). */
+  stillOut: Row[];
+  /** Rendered page is still blocked, paywalled or not a recipe: correctly rejected. */
+  stillRejected: Row[];
+  /** Fixtures that fail (or are out of slice) when the sidecar is off but have a render. */
+  needSidecar: string[];
+};
+
+export async function runHeadlessCorpus(dir = FIXTURE_DIR): Promise<HeadlessReport> {
+  const off = await runCorpus(dir);
+  const on = await runCorpus(dir, { headless: true });
+  const withRender = new Set(
+    readdirSync(dir)
+      .filter((f) => f.endsWith('.expected.json'))
+      .map((f) => f.replace(/\.expected\.json$/, ''))
+      .filter(
+        (n) =>
+          !!(JSON.parse(readFileSync(join(dir, `${n}.expected.json`), 'utf8')) as Expectation)
+            .headless,
+      ),
+  );
+  const offByName = new Map(off.rows.map((r) => [r.name, r]));
+  const recovered = on.rows.filter(
+    (r) => offByName.get(r.name)?.expect === 'out_of_slice' && r.expect === 'draft' && r.pass,
+  );
+  const stillRejected = on.rows.filter(
+    (r) => withRender.has(r.name) && r.expect === 'no_recipe' && r.pass,
+  );
+  return {
+    off,
+    on,
+    recovered,
+    stillOut: on.rows.filter((r) => r.expect === 'out_of_slice'),
+    stillRejected,
+    needSidecar: [...withRender].sort(),
   };
 }

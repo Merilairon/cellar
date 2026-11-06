@@ -35,6 +35,34 @@ function rateLimitShape() {
   };
 }
 
+/** Optional env strings: unset and empty (compose passes `${VAR:-}`) both mean "not configured". */
+const optionalString = z
+  .string()
+  .optional()
+  .transform((v) => (v === '' ? undefined : v));
+
+/**
+ * HEADLESS_URL is operator-controlled, never user input, so it is intentionally NOT routed
+ * through the SSRF guard (it points at an internal address by design) and is never echoed to
+ * clients. http: only (internal network link), bare origin: no credentials, path, query or hash.
+ */
+function isValidHeadlessUrl(v: string): boolean {
+  try {
+    const u = new URL(v);
+    return (
+      u.protocol === 'http:' &&
+      u.hostname !== '' &&
+      u.username === '' &&
+      u.password === '' &&
+      (u.pathname === '/' || u.pathname === '') &&
+      u.search === '' &&
+      u.hash === ''
+    );
+  } catch {
+    return false;
+  }
+}
+
 const schema = z.object({
   DATABASE_PATH: z.string().min(1).default('/data/app.db'),
   SESSION_SECRET: z
@@ -66,6 +94,26 @@ const schema = z.object({
   KEEP_RAW_HTML: envBool,
   // Directory for photos; defaults to <dir of DATABASE_PATH>/uploads (/data/uploads in Docker).
   UPLOADS_DIR: z.string().min(1).optional(),
+  // Directory for kept raw HTML; defaults to <dir of UPLOADS_DIR>/import-raw, the v0.3.0/v0.3.1
+  // location (= <dir of DATABASE_PATH>/import-raw unless UPLOADS_DIR is moved), so upgrades
+  // keep finding old files.
+  RAW_HTML_DIR: z.string().min(1).optional(),
+  // Lazy pruning of old import jobs and their raw HTML files; 0 disables.
+  IMPORT_JOB_TTL_DAYS: z.coerce.number().int().min(0).max(36500).default(30),
+  // Optional headless-browser sidecar (profile `headless`). Unset = feature off, no code path
+  // that can fail an import.
+  HEADLESS_URL: optionalString.refine(
+    (v) => v === undefined || isValidHeadlessUrl(v),
+    'HEADLESS_URL must be a bare http:// origin (no credentials, path, query or hash)',
+  ),
+  // Same rule as the sidecar (docker/browser/src/config.ts): 32+ of [A-Za-z0-9+/_=-].
+  HEADLESS_TOKEN: optionalString.refine(
+    (v) => v === undefined || /^[A-Za-z0-9+/_=-]{32,}$/.test(v),
+    'HEADLESS_TOKEN must be 32+ characters from A-Za-z0-9+/_=- (openssl rand -hex 32)',
+  ),
+  // Mirrors the sidecar's escape hatch: HEADLESS_URL without a token only with this set to 1.
+  HEADLESS_ALLOW_NO_TOKEN: z.enum(['1']).optional(),
+  HEADLESS_TIMEOUT_MS: z.coerce.number().int().positive().max(35_000).default(35_000),
   // Non-production seam: let the importer fetch private addresses and non-80/443 ports
   // (local fixture server for tests). It disables the SSRF guard, so production refuses it.
   IMPORT_ALLOW_LOCAL_FETCH: envBool.refine(
@@ -74,10 +122,22 @@ const schema = z.object({
   ),
 });
 
-const schemaWithDerived = schema.transform((e) => ({
-  ...e,
-  UPLOADS_DIR: e.UPLOADS_DIR ?? join(dirname(e.DATABASE_PATH), 'uploads'),
-}));
+const schemaWithDerived = schema
+  .refine((e) => !e.HEADLESS_URL || !!e.HEADLESS_TOKEN || e.HEADLESS_ALLOW_NO_TOKEN === '1', {
+    path: ['HEADLESS_TOKEN'],
+    message: 'HEADLESS_URL requires HEADLESS_TOKEN (the sidecar refuses to start without one)',
+  })
+  .transform((e) => {
+    const uploads = e.UPLOADS_DIR ?? join(dirname(e.DATABASE_PATH), 'uploads');
+    const legacyRaw = join(dirname(uploads), 'import-raw');
+    return {
+      ...e,
+      UPLOADS_DIR: uploads,
+      RAW_HTML_DIR: e.RAW_HTML_DIR ?? legacyRaw,
+      /** v0.3.0/v0.3.1 raw HTML location; pruning may still unlink files there. */
+      LEGACY_RAW_HTML_DIR: legacyRaw,
+    };
+  });
 
 export type Env = z.infer<typeof schemaWithDerived>;
 

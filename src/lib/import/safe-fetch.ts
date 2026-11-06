@@ -116,16 +116,16 @@ function parseUrl(raw: string, allowLocal: boolean): URL {
   return u;
 }
 
-async function pickAddress(
+async function pickAddresses(
   u: URL,
   resolve: Resolver,
   allowLocal: boolean,
-): Promise<ResolvedAddress> {
+): Promise<ResolvedAddress[]> {
   const host = u.hostname;
   if (isIpLiteral(host)) {
     const address = host.replace(/^\[|\]$/g, '');
     if (!allowLocal && isBlockedIp(address)) throw new ImportError('private_address');
-    return { address, family: address.includes(':') ? 6 : 4 };
+    return [{ address, family: address.includes(':') ? 6 : 4 }];
   }
   if (!allowLocal && isBlockedHostname(host)) throw new ImportError('private_address');
   let addrs: ResolvedAddress[];
@@ -139,7 +139,15 @@ async function pickAddress(
   if (!allowLocal && addrs.some((a) => isBlockedIp(a.address))) {
     throw new ImportError('private_address');
   }
-  return addrs[0]!;
+  return addrs;
+}
+
+/** Connect-level failures after which the next already-validated address may be tried. */
+const CONNECT_FALLBACK = new Set(['ECONNREFUSED', 'ETIMEDOUT', 'EHOSTUNREACH', 'ENETUNREACH']);
+
+function isConnectError(e: unknown): boolean {
+  const code = (e as { code?: unknown } | null)?.code;
+  return typeof code === 'string' && CONNECT_FALLBACK.has(code);
 }
 
 function decoderFor(enc: string | undefined) {
@@ -193,6 +201,21 @@ async function readBody(
   }
 }
 
+/**
+ * Pre-check without fetching: same scheme/port/userinfo policy and the same all-addresses-public
+ * resolution as `safeFetch`. Used by the headless client (G7) so an obviously private URL
+ * never reaches the browser. Throws `ImportError` (invalid_url, private_address, fetch_failed).
+ */
+export async function assertPublicTarget(
+  rawUrl: string,
+  opts: { allowLocal?: boolean; resolve?: Resolver } = {},
+): Promise<URL> {
+  const { allowLocal = false, resolve = defaultResolve } = opts;
+  const u = parseUrl(rawUrl, allowLocal);
+  await pickAddresses(u, resolve, allowLocal);
+  return u;
+}
+
 const ACCEPT = {
   html: {
     header: 'text/html,application/xhtml+xml;q=0.9',
@@ -235,60 +258,72 @@ export async function safeFetch(
   const run = async (): Promise<SafeFetchResult> => {
     let current = parseUrl(rawUrl, allowLocal);
     for (let hop = 0; ; hop++) {
-      const addr = await pickAddress(current, resolve, allowLocal);
-      let res: TransportResponse;
-      try {
-        res = await transport({
-          url: current,
-          ip: addr.address,
-          family: addr.family,
-          signal: ctl.signal,
-          headers: {
-            'User-Agent': userAgent,
-            Accept: ACCEPT[accept].header,
-            'Accept-Encoding': 'gzip, deflate, br',
-          },
-        });
-      } catch (e) {
-        if (e instanceof ImportError) throw e;
-        throw new ImportError('fetch_failed', e);
-      }
-      ctl.signal.addEventListener('abort', () => res.destroy?.(), { once: true });
-
-      if (REDIRECT.has(res.status)) {
-        res.destroy?.();
-        const loc = res.headers['location'];
-        if (!loc) throw new ImportError('fetch_failed');
-        if (hop >= MAX_REDIRECTS) throw new ImportError('fetch_failed');
-        let next: URL;
+      const addrs = await pickAddresses(current, resolve, allowLocal);
+      let res: TransportResponse | undefined;
+      // Every address was validated above; on a connect error try the next one.
+      // No re-resolution, and the shared deadline still bounds the total time.
+      for (let i = 0; i < addrs.length && !res; i++) {
+        const addr = addrs[i]!;
         try {
-          next = new URL(loc, current);
-        } catch {
-          throw new ImportError('invalid_url');
+          res = await transport({
+            url: current,
+            ip: addr.address,
+            family: addr.family,
+            signal: ctl.signal,
+            headers: {
+              'User-Agent': userAgent,
+              Accept: ACCEPT[accept].header,
+              'Accept-Encoding': 'gzip, deflate, br',
+            },
+          });
+        } catch (e) {
+          if (e instanceof ImportError) throw e;
+          if (isConnectError(e) && i < addrs.length - 1 && !ctl.signal.aborted) continue;
+          throw new ImportError('fetch_failed', e);
         }
-        current = parseUrl(next.href, allowLocal); // re-validates scheme, userinfo, port
-        continue;
       }
-      if (res.status === 401 || res.status === 403 || res.status === 429) {
-        res.destroy?.();
-        throw new ImportError('blocked');
+      if (!res) throw new ImportError('fetch_failed');
+      const live = res;
+      const onAbort = () => live.destroy?.();
+      ctl.signal.addEventListener('abort', onAbort, { once: true });
+      try {
+        if (REDIRECT.has(res.status)) {
+          res.destroy?.();
+          const loc = res.headers['location'];
+          if (!loc) throw new ImportError('fetch_failed');
+          if (hop >= MAX_REDIRECTS) throw new ImportError('fetch_failed');
+          let next: URL;
+          try {
+            next = new URL(loc, current);
+          } catch {
+            throw new ImportError('invalid_url');
+          }
+          current = parseUrl(next.href, allowLocal); // re-validates scheme, userinfo, port
+          continue;
+        }
+        if (res.status === 401 || res.status === 403 || res.status === 429) {
+          res.destroy?.();
+          throw new ImportError('blocked');
+        }
+        if (res.status < 200 || res.status >= 300) {
+          res.destroy?.();
+          throw new ImportError('fetch_failed');
+        }
+        const ctype = res.headers['content-type'] ?? '';
+        if (!ACCEPT[accept].ok.test(ctype)) {
+          res.destroy?.();
+          throw new ImportError('fetch_failed');
+        }
+        const declared = Number(res.headers['content-length']);
+        if (Number.isFinite(declared) && declared > maxBytes) {
+          res.destroy?.();
+          throw new ImportError('too_large');
+        }
+        const body = await readBody(res.body, res.headers['content-encoding'], maxBytes);
+        return { status: res.status, headers: res.headers, body, finalUrl: current.href };
+      } finally {
+        ctl.signal.removeEventListener('abort', onAbort);
       }
-      if (res.status < 200 || res.status >= 300) {
-        res.destroy?.();
-        throw new ImportError('fetch_failed');
-      }
-      const ctype = res.headers['content-type'] ?? '';
-      if (!ACCEPT[accept].ok.test(ctype)) {
-        res.destroy?.();
-        throw new ImportError('fetch_failed');
-      }
-      const declared = Number(res.headers['content-length']);
-      if (Number.isFinite(declared) && declared > maxBytes) {
-        res.destroy?.();
-        throw new ImportError('too_large');
-      }
-      const body = await readBody(res.body, res.headers['content-encoding'], maxBytes);
-      return { status: res.status, headers: res.headers, body, finalUrl: current.href };
     }
   };
 

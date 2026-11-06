@@ -379,6 +379,62 @@ describe('saveImport cover (T8)', () => {
     expect(db.select().from(importJob).get()!.status).toBe('saved');
   });
 
+  it('a pixel bomb cover (declared 25 MP, tiny on the wire) is refused: saved without cover, no file', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const bomb = await sharp({
+      create: { width: 5000, height: 5000, channels: 3, background: '#000' },
+    })
+      .png({ compressionLevel: 9 })
+      .toBuffer();
+    expect(bomb.length).toBeLessThan(200_000);
+    const id = await start();
+    const r = await saveImport(
+      db,
+      a,
+      id,
+      draft({ import_cover: true }),
+      deps(async () => ({
+        status: 200,
+        headers: { 'content-type': 'image/png' },
+        body: bomb,
+        finalUrl: 'https://cdn.example.com/p.jpg',
+      })),
+    );
+    expect(r).toMatchObject({ ok: true, warnings: ['cover_failed'] });
+    if (!r.ok || !('id' in r)) throw new Error('fail');
+    expect(getCoverPhoto(db, r.id)).toBeUndefined();
+    expect(existsSync(join(dir, 'uploads'))).toBe(false);
+  });
+
+  it('a cover whose header lies about its size (undeclared pixels) never produces a file', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const real = await sharp({
+      create: { width: 5000, height: 5000, channels: 3, background: '#000' },
+    })
+      .png({ compressionLevel: 9 })
+      .toBuffer();
+    const lying = Buffer.from(real);
+    lying.writeUInt32BE(8, 16); // IHDR width -> 8, height -> 8; CRC no longer matches
+    lying.writeUInt32BE(8, 20);
+    const id = await start();
+    const r = await saveImport(
+      db,
+      a,
+      id,
+      draft({ import_cover: true }),
+      deps(async () => ({
+        status: 200,
+        headers: { 'content-type': 'image/png' },
+        body: lying,
+        finalUrl: 'https://cdn.example.com/p.jpg',
+      })),
+    );
+    expect(r).toMatchObject({ ok: true, warnings: ['cover_failed'] });
+    if (!r.ok || !('id' in r)) throw new Error('fail');
+    expect(getCoverPhoto(db, r.id)).toBeUndefined();
+    expect(existsSync(join(dir, 'uploads'))).toBe(false);
+  });
+
   it('does not fetch a cover when import_cover is false', async () => {
     const id = await start();
     const sf = vi.fn();

@@ -40,6 +40,19 @@ Runner: `scripts/import-corpus.ts`. Each fixture is `name.html` plus `name.expec
 
 The `map-*` fixtures (v0.3.1) additionally check the auto-mapper proposal through the `map` block. They test the wiring, not mapper accuracy: that is `tests/fixtures/mapper/` (see its README).
 
+## Headless fixtures (3c)
+
+Fixtures with a `headless: { render, expect, ... }` block have a rendered variant
+`<name>.rendered.html` (self-written minimal DOM, what a browser would produce; no site names).
+The `.html` is the raw variant (empty shell, or the body of a blocked response with
+`raw_status: 403`). With the sidecar off the label (`expect`) applies and nothing is read from
+the rendered file. `npm run test:import` additionally runs a second pass with a **fake**
+sidecar that serves the rendered file: this flips `js-only-*` and `blocked-403-shell` to valid
+drafts, while `blocked-403-denied` and `paywalled-js-shell` still correctly yield `no_recipe`.
+That pass is simulated: it proves the fixtures and the static -> headless chain, not real-site
+recovery or a real browser (T13 browser job and the manual real-site run). The extractor reads
+JSON-LD only, so rendered variants carry JSON-LD. The headline rate stays the sidecar-off one.
+
 ## Success rate
 
 `valid drafts / fixtures with expect = "draft"`, target >= 85%. The report also prints every

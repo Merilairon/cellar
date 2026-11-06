@@ -1,5 +1,6 @@
 {
   "expect": "out_of_slice",
   "kind": "JS-rendered: JSON-LD injected by script at runtime",
-  "carry": "3c headless"
+  "carry": "3c headless (needs sidecar)",
+  "headless": { "render": "js-only-late-injected-jsonld.rendered.html", "expect": "draft", "title": "Pancakes", "min_ingredients": 3, "min_steps": 2 }
 }

@@ -1,4 +1,4 @@
-import { runCorpus, TARGET, type Row } from './import-corpus';
+import { runCorpus, runHeadlessCorpus, TARGET, type Row } from './import-corpus';
 import { printMapperReport, runMapperCorpus } from './mapper-corpus';
 
 // Usage: npm run test:import. Prints the corpus report and the auto-mapper accuracy report;
@@ -40,10 +40,41 @@ async function main(): Promise<void> {
     console.log(`\nFailures (${report.failures.length}):`);
     for (const r of report.failures) console.log(`  ${r.name}: ${r.reason}`);
   }
+  const hl = await runHeadlessCorpus();
+  console.log('\nHeadless (sidecar) section');
+  console.log(
+    'The numbers above are with the sidecar OFF (HEADLESS_URL unset) and are the ones that count.\n' +
+      'Below, a FAKE sidecar serves self-written rendered pages (no browser, no network): it proves\n' +
+      'the static -> headless chain and the fixtures, not real-site recovery. The real-browser check\n' +
+      'is the T13 browser job and the manual real-site run.',
+  );
+  console.log(
+    `Headless disabled: ${hl.off.outOfSlice.length} out-of-slice fixtures fail as before ` +
+      `(${hl.needSidecar.length} fixtures have a rendered variant and need the sidecar; ` +
+      `rate unchanged at ${(hl.off.rate * 100).toFixed(1)}%)`,
+  );
+  console.log(`Recovered with the fake sidecar (${hl.recovered.length}):`);
+  for (const r of hl.recovered) console.log(`  + ${r.name}: ${r.kind}`);
+  console.log(`Still rejected after render, correctly (${hl.stillRejected.length}):`);
+  for (const r of hl.stillRejected) console.log(`  = ${r.name}: ${r.kind}`);
+  console.log(`Stay out of slice with the sidecar on (${hl.stillOut.length}):`);
+  for (const r of hl.stillOut) console.log(`  - ${r.name}: ${r.kind}`);
+  console.log(
+    `With the fake sidecar: ${hl.on.draftPassed}/${hl.on.draftTotal + hl.on.outOfSlice.length} recipe pages are valid drafts = ` +
+      `${(hl.on.overallRate * 100).toFixed(1)}% overall (simulated; ${(hl.off.overallRate * 100).toFixed(1)}% with the sidecar off). ` +
+      `The static-handleable rate is ${(hl.on.rate * 100).toFixed(1)}% vs ${(hl.off.rate * 100).toFixed(1)}%.`,
+  );
+  if (hl.on.failures.length) {
+    console.log(`Headless-on failures (${hl.on.failures.length}):`);
+    for (const r of hl.on.failures) console.log(`  ${r.name}: ${r.reason}`);
+  }
   const mapper = runMapperCorpus();
   printMapperReport(mapper);
   const importOk =
-    report.rate >= TARGET && report.failures.filter((r) => r.expect !== 'draft').length === 0;
+    report.rate >= TARGET &&
+    report.failures.filter((r) => r.expect !== 'draft').length === 0 &&
+    hl.on.failures.length === 0 &&
+    hl.on.overallRate > report.overallRate;
   process.exit(importOk && mapper.pass ? 0 : 1);
 }
 

@@ -415,6 +415,100 @@ describe('timeout', () => {
   });
 });
 
+describe('connect fallback across resolved addresses', () => {
+  const A = '93.184.216.34';
+  const B = '93.184.216.35';
+  const refuse = (code = 'ECONNREFUSED') => Object.assign(new Error(`connect ${code}`), { code });
+  const multi = (): Resolver =>
+    vi.fn(async () => [
+      { address: A, family: 4 as const },
+      { address: B, family: 4 as const },
+    ]);
+
+  it('tries the second address when the first refuses, without re-resolving', async () => {
+    const seen: string[] = [];
+    const transport: Transport = async (req) => {
+      seen.push(req.ip);
+      if (req.ip === A) throw refuse();
+      return page('ok');
+    };
+    const resolve = multi();
+    const res = await safeFetch('https://multi.example/', { transport, resolve });
+    expect(seen).toEqual([A, B]);
+    expect(resolve).toHaveBeenCalledTimes(1);
+    expect(new TextDecoder().decode(res.body)).toBe('ok');
+  });
+
+  it.each(['ETIMEDOUT', 'EHOSTUNREACH'])('falls back on %s', async (c) => {
+    const transport: Transport = async (req) => {
+      if (req.ip === A) throw refuse(c);
+      return page('ok');
+    };
+    expect(await code(safeFetch('https://multi.example/', { transport, resolve: multi() }))).toBe(
+      'ok',
+    );
+  });
+
+  it('all addresses refusing maps to fetch_failed', async () => {
+    const transport = vi.fn<Transport>(async () => {
+      throw refuse();
+    });
+    expect(await code(safeFetch('https://multi.example/', { transport, resolve: multi() }))).toBe(
+      'fetch_failed',
+    );
+    expect(transport).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not fall back on non-connect errors', async () => {
+    const transport = vi.fn<Transport>(async () => {
+      throw refuse('ECONNRESET');
+    });
+    expect(await code(safeFetch('https://multi.example/', { transport, resolve: multi() }))).toBe(
+      'fetch_failed',
+    );
+    expect(transport).toHaveBeenCalledTimes(1);
+  });
+
+  it('never tries a private address, even as a fallback', async () => {
+    const transport = vi.fn<Transport>(async () => {
+      throw refuse();
+    });
+    const resolve: Resolver = async () => [
+      { address: A, family: 4 },
+      { address: '10.0.0.7', family: 4 },
+    ];
+    expect(await code(safeFetch('https://mixed.example/', { transport, resolve }))).toBe(
+      'private_address',
+    );
+    expect(transport).not.toHaveBeenCalled();
+  });
+
+  it('total time stays bounded by the shared deadline', async () => {
+    vi.useFakeTimers();
+    const transport: Transport = async () => {
+      await new Promise((r) => setTimeout(r, 6000));
+      throw refuse('ETIMEDOUT');
+    };
+    const p = code(safeFetch('https://multi.example/', { transport, resolve: multi() }));
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(await p).toBe('timeout');
+  });
+
+  it('removes the per-hop abort listener when the hop completes', async () => {
+    const add = vi.spyOn(AbortSignal.prototype, 'addEventListener');
+    const remove = vi.spyOn(AbortSignal.prototype, 'removeEventListener');
+    const r = rig([page('x')]);
+    await safeFetch('https://example.com/', r.opts);
+    const added = add.mock.calls.filter((c) => c[0] === 'abort').map((c) => c[1]);
+    expect(added.length).toBeGreaterThan(0);
+    for (const fn of added) {
+      expect(remove.mock.calls.some((c) => c[0] === 'abort' && c[1] === fn)).toBe(true);
+    }
+    add.mockRestore();
+    remove.mockRestore();
+  });
+});
+
 describe('error hygiene', () => {
   it('errors never carry addresses, bodies or internal text', async () => {
     const r = rig([
