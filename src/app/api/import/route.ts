@@ -42,6 +42,7 @@ export async function POST(request: Request) {
         headless: serverHeadless(),
         keepRawHtml: env.KEEP_RAW_HTML,
         rawHtmlDir: env.RAW_HTML_DIR,
+        legacyRawHtmlDirs: [env.LEGACY_RAW_HTML_DIR],
         jobTtlDays: env.IMPORT_JOB_TTL_DAYS,
         log: importLog,
       },

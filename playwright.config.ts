@@ -78,6 +78,7 @@ export default defineConfig({
         IMPORT_ALLOW_LOCAL_FETCH: 'true',
         NODE_TLS_REJECT_UNAUTHORIZED: '0',
         HEADLESS_URL: 'http://127.0.0.1:3199',
+        HEADLESS_ALLOW_NO_TOKEN: '1', // the stub sidecar has no token
         HEADLESS_TIMEOUT_MS: '20000',
         // Small per-user cap so the "a headless import counts once" flow can reach it.
         RATE_LIMIT_IMPORT_MAX: '10',

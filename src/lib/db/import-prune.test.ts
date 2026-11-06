@@ -150,17 +150,37 @@ describe('pruneImportJobs', () => {
     rmSync(outside, { recursive: true, force: true });
   });
 
-  it('skips a row changed since it was selected (CAS)', () => {
+  it('skips a row changed between the SELECT and the write (CAS)', () => {
     const u = mkUser();
     const j = mkJob(u.id, 'needs_review', OLD);
-    // Simulate a concurrent save landing first.
-    db.update(importJob)
-      .set({ status: 'saved', updatedAt: FRESH })
-      .where(eq(importJob.id, j.id))
-      .run();
-    expect(prune()).toEqual({ deleted: 0, trimmed: 0, filesRemoved: 0 });
+    // A concurrent save lands after the row was selected as prunable.
+    const res = prune(30, {
+      afterSelect: () =>
+        db
+          .update(importJob)
+          .set({ status: 'saved', updatedAt: FRESH })
+          .where(eq(importJob.id, j.id))
+          .run(),
+    });
+    expect(res).toEqual({ deleted: 0, trimmed: 0, filesRemoved: 0 });
+    expect(row(j.id)).toMatchObject({ status: 'saved' });
     expect(row(j.id)!.draftJson).not.toBeNull();
     expect(existsSync(j.path)).toBe(true);
+  });
+
+  it('unlinks files in an extra (legacy) raw dir and still confines them', () => {
+    const u = mkUser();
+    const legacy = mkdtempSync(join(tmpdir(), 'legacy-'));
+    const id = ulid26();
+    const p = join(legacy, `${id}.html`);
+    writeFileSync(p, '<html/>');
+    mkJob(u.id, 'failed', OLD, { id, rawHtmlPath: p }, false);
+    const outsider = mkJob(u.id, 'failed', OLD, {}, true);
+    expect(prune(30, { extraRawHtmlDirs: [legacy] }).filesRemoved).toBe(2);
+    expect(existsSync(p)).toBe(false);
+    expect(existsSync(outsider.path)).toBe(false);
+    expect(prune(30, { extraRawHtmlDirs: [legacy] }).filesRemoved).toBe(0);
+    rmSync(legacy, { recursive: true, force: true });
   });
 });
 

@@ -105,13 +105,23 @@ export type PruneResult = { deleted: number; trimmed: number; filesRemoved: numb
  */
 export function pruneImportJobs(
   db: Db,
-  opts: { olderThanDays: number; now?: Date; rawHtmlDir: string; limit?: number },
+  opts: {
+    olderThanDays: number;
+    now?: Date;
+    rawHtmlDir: string;
+    /** Further directories whose raw files may be unlinked (e.g. the v0.3.0 location). */
+    extraRawHtmlDirs?: string[];
+    limit?: number;
+    /** Test seam: runs between the SELECT and the compare-and-set writes. */
+    afterSelect?: (rows: { id: string }[]) => void;
+  },
 ): PruneResult {
   const result: PruneResult = { deleted: 0, trimmed: 0, filesRemoved: 0 };
   if (!(opts.olderThanDays > 0)) return result;
   const cutoff = new Date((opts.now ?? new Date()).getTime() - opts.olderThanDays * 86_400_000);
   const cutoffIso = cutoff.toISOString();
   const files: string[] = [];
+  const dirs = [opts.rawHtmlDir, ...(opts.extraRawHtmlDirs ?? [])];
 
   db.transaction(
     (tx) => {
@@ -138,6 +148,7 @@ export function pruneImportJobs(
         .orderBy(asc(importJob.updatedAt))
         .limit(opts.limit ?? PRUNE_BATCH)
         .all();
+      opts.afterSelect?.(rows);
       for (const r of rows) {
         const same = and(
           eq(importJob.id, r.id),
@@ -152,8 +163,13 @@ export function pruneImportJobs(
         if (changed !== 1) continue;
         if (r.status === 'saved') result.trimmed++;
         else result.deleted++;
-        const f = confinedRawHtmlPath(opts.rawHtmlDir, r.rawHtmlPath);
-        if (f) files.push(f);
+        for (const d of dirs) {
+          const f = confinedRawHtmlPath(d, r.rawHtmlPath);
+          if (f) {
+            files.push(f);
+            break;
+          }
+        }
       }
     },
     { behavior: 'immediate' },

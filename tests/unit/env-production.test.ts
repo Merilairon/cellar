@@ -48,6 +48,22 @@ describe('import env', () => {
     expect(e.RAW_HTML_DIR).toBe('/data/import-raw');
   });
 
+  it('raw dir follows UPLOADS_DIR (v0.3.0 location), exposes it as legacy, and may be overridden', async () => {
+    const e = (
+      await parse('production', { DATABASE_PATH: '/db/app.db', UPLOADS_DIR: '/up/photos' })
+    )();
+    expect(e.RAW_HTML_DIR).toBe('/up/import-raw');
+    const o = (
+      await parse('production', {
+        DATABASE_PATH: '/db/app.db',
+        UPLOADS_DIR: '/up/photos',
+        RAW_HTML_DIR: '/x/raw',
+      })
+    )();
+    expect(o.RAW_HTML_DIR).toBe('/x/raw');
+    expect(o.LEGACY_RAW_HTML_DIR).toBe('/up/import-raw');
+  });
+
   it('honours RAW_HTML_DIR and rejects empty-string override via min(1)', async () => {
     expect((await parse('production', { RAW_HTML_DIR: '/x/raw' }))().RAW_HTML_DIR).toBe('/x/raw');
   });

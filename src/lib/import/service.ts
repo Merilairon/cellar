@@ -24,6 +24,8 @@ export type ImportServiceDeps = ImportDeps & {
   keepRawHtml?: boolean;
   /** Where raw HTML goes when keepRawHtml (env RAW_HTML_DIR). */
   rawHtmlDir?: string;
+  /** Older raw HTML locations pruning may still clean (a moved RAW_HTML_DIR must not orphan files). */
+  legacyRawHtmlDirs?: string[];
   /** Retention in days for old import jobs (env IMPORT_JOB_TTL_DAYS); 0/unset disables pruning. */
   jobTtlDays?: number;
 };
@@ -46,6 +48,7 @@ export function maybePrune(db: Db, deps: ImportServiceDeps, now = Date.now()): v
       olderThanDays: deps.jobTtlDays,
       now: new Date(now),
       rawHtmlDir: deps.rawHtmlDir,
+      extraRawHtmlDirs: deps.legacyRawHtmlDirs,
     });
   } catch (e) {
     deps.log?.('import job prune failed', e);

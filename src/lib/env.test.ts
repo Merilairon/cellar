@@ -13,9 +13,10 @@ describe('headless env', () => {
   });
 
   it('accepts a bare http origin', () => {
-    expect(parseEnv({ ...base, HEADLESS_URL: 'http://browser:3001' }).HEADLESS_URL).toBe(
-      'http://browser:3001',
-    );
+    expect(
+      parseEnv({ ...base, HEADLESS_URL: 'http://browser:3001', HEADLESS_TOKEN: 'a'.repeat(32) })
+        .HEADLESS_URL,
+    ).toBe('http://browser:3001');
   });
 
   it.each([
@@ -26,7 +27,23 @@ describe('headless env', () => {
     'ftp://browser',
     'not a url',
   ])('rejects %s', (v) => {
-    expect(() => parseEnv({ ...base, HEADLESS_URL: v })).toThrow();
+    expect(() => parseEnv({ ...base, HEADLESS_URL: v, HEADLESS_TOKEN: 'a'.repeat(32) })).toThrow(
+      /HEADLESS_URL/,
+    );
+  });
+
+  it('HEADLESS_URL requires a token unless HEADLESS_ALLOW_NO_TOKEN=1', () => {
+    const url = 'http://browser:3001';
+    expect(() => parseEnv({ ...base, HEADLESS_URL: url })).toThrow(/HEADLESS_TOKEN/);
+    expect(() => parseEnv({ ...base, HEADLESS_URL: url, HEADLESS_TOKEN: '' })).toThrow();
+    expect(parseEnv({ ...base, HEADLESS_URL: url, HEADLESS_TOKEN: 'a'.repeat(32) })).toBeTruthy();
+    expect(parseEnv({ ...base, HEADLESS_URL: url, HEADLESS_ALLOW_NO_TOKEN: '1' })).toBeTruthy();
+  });
+
+  it('token uses the sidecar charset, not just its length', () => {
+    expect(() => parseEnv({ ...base, HEADLESS_TOKEN: 'a'.repeat(31) + '!' })).toThrow();
+    expect(() => parseEnv({ ...base, HEADLESS_TOKEN: 'a'.repeat(40) + ' x' })).toThrow();
+    expect(parseEnv({ ...base, HEADLESS_TOKEN: 'aB3+/_=-'.repeat(5) }).HEADLESS_TOKEN).toBeTruthy();
   });
 
   it('token needs 32+ chars (same as the sidecar); timeout is capped at 35000', () => {
