@@ -9,6 +9,7 @@ const KEYS: Record<string, string> = {
   cookTime_invalid: 'import.warning.cookTime_invalid',
   times_missing: 'import.warning.times_missing',
   image_dropped: 'import.warning.image_dropped',
+  headless_used: 'import.warning.headless_used',
   draft_invalid: 'import.warning.draft_invalid',
   // Mapper codes (closed set, see MappingWarning).
   ingredient_unmentioned: 'import.warning.ingredient_unmentioned',

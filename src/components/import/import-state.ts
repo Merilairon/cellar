@@ -3,10 +3,11 @@ import { IMPORT_ERROR_CODES, type ImportErrorCode } from '@/lib/import/errors';
 // Pure state machine for the import dialog (no react, no fetch).
 
 export type Tab = 'url' | 'paste';
-export type Phase = 'fetching' | 'parsing';
+export type Phase = 'fetching' | 'parsing' | 'rendering';
+export type HeadlessState = 'used' | 'unavailable' | null;
 
 export type ImportFailure =
-  | { kind: 'code'; code: ImportErrorCode }
+  | { kind: 'code'; code: ImportErrorCode; headless?: HeadlessState }
   | { kind: 'rateLimited'; seconds: number }
   | { kind: 'network' }
   | { kind: 'generic' };
@@ -48,6 +49,7 @@ const PASTE_RECOVERY = new Set<ImportErrorCode>([
   'no_recipe',
   'timeout',
   'fetch_failed',
+  'headless_unavailable',
 ]);
 export const suggestsPaste = (f: ImportFailure): boolean =>
   f.kind === 'code' && PASTE_RECOVERY.has(f.code);
@@ -64,7 +66,9 @@ export function reducer(s: DialogState, a: DialogAction): DialogState {
       if (s.busy) return s; // double submit
       return { ...s, error: null, busy: s.tab === 'url' ? 'fetching' : 'parsing' };
     case 'phase':
-      return s.busy ? { ...s, busy: a.phase } : s;
+      // Rendering is only a label for a URL import still waiting; never move backwards from it.
+      if (!s.busy || s.busy === 'rendering') return s;
+      return { ...s, busy: a.phase };
     case 'failed': {
       if (!s.busy) return s;
       const toPaste = s.tab === 'url' && suggestsPaste(a.failure);
@@ -106,7 +110,10 @@ export function classifyResponse(
     if (b.status === 'needs_review' && typeof b.id === 'string' && b.draft) {
       return { ok: true, id: b.id };
     }
-    if (isCode(b.error_code)) return { ok: false, failure: { kind: 'code', code: b.error_code } };
+    if (isCode(b.error_code)) {
+      const headless = b.headless === 'used' || b.headless === 'unavailable' ? b.headless : null;
+      return { ok: false, failure: { kind: 'code', code: b.error_code, headless } };
+    }
   }
   return { ok: false, failure: { kind: 'generic' } };
 }

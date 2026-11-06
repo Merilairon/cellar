@@ -27,7 +27,7 @@ describe('import dialog state', () => {
     expect(c.url).toBe('https://a.test/r');
   });
 
-  it.each(['blocked', 'no_recipe', 'timeout', 'fetch_failed'] as const)(
+  it.each(['blocked', 'no_recipe', 'timeout', 'fetch_failed', 'headless_unavailable'] as const)(
     'recovers to the paste tab after %s, keeping the typed URL',
     (code) => {
       const s = run(
@@ -66,6 +66,26 @@ describe('import dialog state', () => {
   });
 });
 
+describe('rendering phase and headless', () => {
+  it('moves fetching to rendering, and never back', () => {
+    const s = run(initialState, { type: 'submit' }, { type: 'phase', phase: 'rendering' });
+    expect(s.busy).toBe('rendering');
+    expect(reducer(s, { type: 'phase', phase: 'parsing' })).toBe(s);
+  });
+  it('keeps the headless state from the response', () => {
+    expect(
+      classifyResponse(
+        200,
+        { status: 'failed', error_code: 'no_recipe', headless: 'unavailable' },
+        null,
+      ),
+    ).toEqual({ ok: false, failure: { kind: 'code', code: 'no_recipe', headless: 'unavailable' } });
+    expect(
+      classifyResponse(200, { status: 'failed', error_code: 'blocked', headless: 'bogus' }, null),
+    ).toEqual({ ok: false, failure: { kind: 'code', code: 'blocked', headless: null } });
+  });
+});
+
 describe('classifyResponse', () => {
   it('accepts a reviewable draft', () => {
     expect(
@@ -78,7 +98,7 @@ describe('classifyResponse', () => {
   it('maps failed jobs to their error_code', () => {
     expect(classifyResponse(200, { status: 'failed', error_code: 'too_large' }, null)).toEqual({
       ok: false,
-      failure: { kind: 'code', code: 'too_large' },
+      failure: { kind: 'code', code: 'too_large', headless: null },
     });
   });
   it('maps 429 to the retry seconds, defaulting when the header is missing', () => {

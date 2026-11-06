@@ -158,7 +158,9 @@
       "private_address": "This address cannot be imported because it points to a private or internal network.",
       "too_large": "This page is too large to import.",
       "fetch_failed": "The page could not be fetched.",
-      "headless_unavailable": "The browser helper for JavaScript-heavy pages is not available right now.",
+      "headless_unavailable": "Loading this page in a browser is not available on this server.",
+      "headlessTried": "We also tried loading the page in a browser.",
+      "headlessUnavailableHint": "Loading this page in a browser is not available on this server.",
       "pasteHint": "You can paste the recipe text or the page source instead.",
       "rateLimited": "Too many imports. Try again in {seconds, plural, one {# second} other {# seconds}}.",
       "network": "The request failed. Check your connection and try again.",
@@ -173,6 +175,7 @@
       "duplicateLink": "Open the existing recipe",
       "importAnyway": "Import anyway",
       "warnings": "Things to check",
+      "headlessNote": "Page was loaded in a browser",
       "includeCover": "Include the cover image from the source",
       "coverNote": "The image is downloaded when you save. It is not shown here.",
       "tags": "Tags found on the page",
@@ -245,6 +248,7 @@
       }
     },
     "warning": {
+      "headless_used": "The page was loaded in a browser to read it.",
       "yield_unparsed": "The number of servings could not be read.",
       "ingredients_truncated": "The ingredient list was too long and was shortened.",
       "ingredients_unparsed": "{count, plural, one {# ingredient line was not recognised and is kept as written.} other {# ingredient lines were not recognised and are kept as written.}}",

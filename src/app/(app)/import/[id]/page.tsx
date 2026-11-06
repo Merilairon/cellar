@@ -24,6 +24,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
         draft={job.draft as Draft}
         warnings={job.warnings}
         duplicate={job.duplicate}
+        headless={job.method === 'headless'}
       />
     </main>
   );

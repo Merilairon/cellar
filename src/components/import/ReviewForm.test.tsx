@@ -32,7 +32,7 @@ const draft = {
   ],
 } as unknown as Draft;
 
-const render = (duplicate: { recipe_id: string; title: string } | null) =>
+const render = (duplicate: { recipe_id: string; title: string } | null, headless = false) =>
   renderToStaticMarkup(
     <NextIntlClientProvider locale="en" timeZone="UTC" messages={messages}>
       <ReviewForm
@@ -40,11 +40,17 @@ const render = (duplicate: { recipe_id: string; title: string } | null) =>
         draft={draft}
         warnings={['ingredients_unparsed:2', 'weird']}
         duplicate={duplicate}
+        headless={headless}
       />
     </NextIntlClientProvider>,
   );
 
 describe('ReviewForm', () => {
+  it('shows the browser note only for headless imports', () => {
+    expect(render(null)).not.toContain('loaded in a browser');
+    expect(render(null, true)).toContain('Page was loaded in a browser');
+  });
+
   it('renders imported text escaped, never as markup', () => {
     const html = render(null);
     expect(html).not.toContain('<script>');
