@@ -147,6 +147,27 @@ describe('migration 0004 (headless_unavailable)', () => {
   });
 });
 
+describe('migration 0004 safety invariant (m8)', () => {
+  it('no table has a foreign key that points at import_job', () => {
+    // 0004 rebuilds import_job with DROP TABLE inside Drizzle's transaction, where
+    // PRAGMA foreign_keys=OFF is a no-op. That is only safe while nothing references import_job:
+    // with enforcement on, DROP TABLE would implicitly delete and cascade into child rows.
+    // If this fails, do not copy the 0004 rebuild pattern for import_job again.
+    const db = openDb(':memory:');
+    runMigrations(db);
+    const tables = db.$client
+      .prepare("SELECT name FROM sqlite_master WHERE type='table'")
+      .all() as { name: string }[];
+    const referencing = tables.filter(({ name }) =>
+      (
+        db.$client.prepare(`PRAGMA foreign_key_list(\`${name}\`)`).all() as { table: string }[]
+      ).some((fk) => fk.table === 'import_job'),
+    );
+    expect(referencing).toEqual([]);
+    db.$client.close();
+  });
+});
+
 describe('import_job', () => {
   it('defaults, owner scoping and CHECK enums', () => {
     const { a, b } = setup();
