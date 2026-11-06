@@ -87,4 +87,10 @@ describe('import env', () => {
       expect((await parse(ne, {}))().IMPORT_ALLOW_LOCAL_FETCH).toBe(false);
     },
   );
+
+  it('IMPORT_JOB_TTL_DAYS defaults to 30, accepts 0, rejects negatives', async () => {
+    expect((await parse('production', {}))().IMPORT_JOB_TTL_DAYS).toBe(30);
+    expect((await parse('production', { IMPORT_JOB_TTL_DAYS: '0' }))().IMPORT_JOB_TTL_DAYS).toBe(0);
+    expect(await parse('production', { IMPORT_JOB_TTL_DAYS: '-1' })).toThrow();
+  });
 });

@@ -5,6 +5,7 @@ import { findRecipeBySourceUrl } from '@/lib/db/recipes';
 import {
   createImportJob,
   failStaleFetchingJobs,
+  pruneImportJobs,
   getImportJobForUser,
   updateImportJob,
   type ImportJobRow,
@@ -23,6 +24,8 @@ export type ImportServiceDeps = ImportDeps & {
   keepRawHtml?: boolean;
   /** Where raw HTML goes when keepRawHtml (env RAW_HTML_DIR). */
   rawHtmlDir?: string;
+  /** Retention in days for old import jobs (env IMPORT_JOB_TTL_DAYS); 0/unset disables pruning. */
+  jobTtlDays?: number;
 };
 
 type Actor = { id: string };
@@ -31,6 +34,28 @@ type Actor = { id: string };
 export const STALE_FETCHING_MS = 5 * 60 * 1000;
 const failStale = (db: Db, actor: Actor) =>
   failStaleFetchingJobs(db, actor.id, new Date(Date.now() - STALE_FETCHING_MS).toISOString());
+
+const PRUNE_EVERY_MS = 60 * 60 * 1000;
+let lastPruneAt = 0;
+/** Lazy retention sweep: at most once an hour per process, bounded, never fails the import. */
+export function maybePrune(db: Db, deps: ImportServiceDeps, now = Date.now()): void {
+  if (!deps.jobTtlDays || !deps.rawHtmlDir || now - lastPruneAt < PRUNE_EVERY_MS) return;
+  lastPruneAt = now;
+  try {
+    pruneImportJobs(db, {
+      olderThanDays: deps.jobTtlDays,
+      now: new Date(now),
+      rawHtmlDir: deps.rawHtmlDir,
+    });
+  } catch (e) {
+    deps.log?.('import job prune failed', e);
+  }
+}
+
+/** Test seam: forget the throttle. */
+export function resetPruneThrottle(): void {
+  lastPruneAt = 0;
+}
 
 /** What is stored in `import_job.draft_json`. */
 export type StoredDraft = { v: 1; draft: Draft; warnings: string[] };
@@ -105,6 +130,7 @@ export async function createImport(
   deps: ImportServiceDeps = {},
 ): Promise<ImportJobResponse> {
   failStale(db, actor);
+  maybePrune(db, deps);
   const job = createImportJob(db, actor.id, { method: 'text' in input ? 'paste' : 'static' });
   updateImportJob(db, job.id, { status: 'fetching' });
 

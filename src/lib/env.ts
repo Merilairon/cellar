@@ -96,6 +96,8 @@ const schema = z.object({
   UPLOADS_DIR: z.string().min(1).optional(),
   // Directory for kept raw HTML; defaults to <dir of DATABASE_PATH>/import-raw (the v0.3.0 location).
   RAW_HTML_DIR: z.string().min(1).optional(),
+  // Lazy pruning of old import jobs and their raw HTML files; 0 disables.
+  IMPORT_JOB_TTL_DAYS: z.coerce.number().int().min(0).max(36500).default(30),
   // Optional headless-browser sidecar (profile `headless`). Unset = feature off, no code path
   // that can fail an import.
   HEADLESS_URL: optionalString.refine(
