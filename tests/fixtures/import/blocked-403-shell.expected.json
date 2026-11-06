@@ -1,0 +1,7 @@
+{
+  "expect": "out_of_slice",
+  "kind": "blocked: static fetch answers 403, rendered page has a Recipe",
+  "carry": "3c headless (needs sidecar)",
+  "raw_status": 403,
+  "headless": { "render": "blocked-403-shell.rendered.html", "expect": "draft", "title": "Blocked Pancakes", "min_ingredients": 3, "min_steps": 2 }
+}

@@ -1,0 +1,6 @@
+{
+  "expect": "no_recipe",
+  "kind": "blocked: static 403 and the rendered page is still a challenge page (user pastes)",
+  "raw_status": 403,
+  "headless": { "render": "blocked-403-denied.rendered.html", "expect": "no_recipe" }
+}

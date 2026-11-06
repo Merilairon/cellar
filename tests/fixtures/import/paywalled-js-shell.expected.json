@@ -1,0 +1,5 @@
+{
+  "expect": "no_recipe",
+  "kind": "paywalled + JS-rendered: empty shell, rendered Recipe has no ingredients or steps",
+  "headless": { "render": "paywalled-js-shell.rendered.html", "expect": "no_recipe" }
+}
