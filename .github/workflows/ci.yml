@@ -3,6 +3,9 @@ on:
   push:
     branches: [main, 'release/**']
   pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 3 * * *' # nightly: the headless job runs regardless of paths (Q8)
 
 jobs:
   check:
@@ -52,3 +55,77 @@ jobs:
             docker buildx build --platform "$p" --load -t "rb:${p#*/}" .
             docker run --rm --platform "$p" "rb:${p#*/}" node -e "require('argon2'); require('better-sqlite3'); require('sharp'); console.log('$p native ok')"
           done
+
+  # Which paths a PR touched, so the heavier `headless` job runs only when it can matter (Q8).
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      headless: ${{ steps.f.outputs.headless }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: f
+        with:
+          filters: |
+            headless:
+              - 'docker/browser/**'
+              - 'docker-compose.yml'
+              - 'src/lib/import/**'
+              - 'tests/e2e/stub-sidecar.mjs'
+              - '.github/workflows/ci.yml'
+
+  # Real sidecar image, run with the hardened flags of docker/browser/run.sh, health-gated by the
+  # image HEALTHCHECK (no backgrounded shell). A render of a JS-only page needs a public target
+  # and no external network is used here, so the render check is the SSRF refusal through the real
+  # browser process; the real JS-only and real 403 pages are the manual flow 7 of T13.
+  # The Docker test suite and the arm64/QEMU build are T18 and stay out of this job.
+  headless:
+    needs: changes
+    if: needs.changes.outputs.headless == 'true' || github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    env:
+      HEADLESS_TOKEN: ci-token-ci-token-ci-token-ci-token
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Static sandbox gates (no --no-sandbox, seccomp profile diff, compose gate)
+        run: npm run test:browser
+      - name: Build sidecar image
+        run: docker build -t cellar-browser:ci docker/browser
+      - name: Start sidecar with the hardened flags
+        run: |
+          docker run -d --name browser --init \
+            --user 10001:10001 \
+            --cap-drop ALL --cap-add SYS_CHROOT \
+            --security-opt no-new-privileges \
+            --security-opt seccomp="$PWD/docker/browser/seccomp.json" \
+            --read-only --tmpfs /tmp:rw,noexec,size=256m --shm-size 256m \
+            --memory 1g --memory-swap 1g --cpus 1 --pids-limit 256 \
+            -e HEADLESS_TOKEN -p 127.0.0.1:3001:3001 \
+            cellar-browser:ci
+      - name: Wait for the image health check
+        timeout-minutes: 2
+        run: |
+          until [ "$(docker inspect -f '{{.State.Health.Status}}' browser)" = healthy ]; do
+            [ "$(docker inspect -f '{{.State.Running}}' browser)" = true ] || { docker logs browser; exit 1; }
+            sleep 2
+          done
+      - name: Sidecar answers, refuses unauthenticated and private targets
+        run: |
+          curl -fsS http://127.0.0.1:3001/healthz
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' \
+            -d '{"url":"http://example.com/"}' http://127.0.0.1:3001/render)
+          [ "$code" = 401 ] || { echo "unauthenticated /render returned $code"; exit 1; }
+          out=$(curl -s -X POST -H 'Content-Type: application/json' -H "Authorization: Bearer $HEADLESS_TOKEN" \
+            -d '{"url":"http://127.0.0.1/"}' http://127.0.0.1:3001/render)
+          echo "$out"
+          echo "$out" | grep -q private_address
+      - if: always()
+        run: docker logs browser || true
+      - name: Tear down
+        if: always()
+        run: docker rm -f browser || true

@@ -52,5 +52,36 @@ export default defineConfig({
         NODE_TLS_REJECT_UNAUTHORIZED: '0',
       },
     },
+    {
+      // Stub of the headless sidecar for import-headless.spec.ts (control surface in the file).
+      command: 'node tests/e2e/stub-sidecar.mjs',
+      url: 'http://127.0.0.1:3199/healthz',
+      reuseExistingServer: false,
+      timeout: 30_000,
+      env: { STUB_SIDECAR_PORT: '3199' },
+    },
+    {
+      // Third instance: like :3101 (local fixture seam) but with HEADLESS_URL pointing at the
+      // stub, so the static -> headless -> paste chain is exercised. :3101 keeps HEADLESS_URL
+      // unset ("headless off"). Own dist dir: two `next dev` cannot share one.
+      command: 'npm run dev -- -p 3102',
+      url: 'http://localhost:3102/login',
+      reuseExistingServer: false,
+      timeout: 120_000,
+      env: {
+        NEXT_DIST_DIR: '.next-e2e-headless',
+        SESSION_SECRET: 'e2e-secret-e2e-secret-e2e-secret-e2e',
+        BASE_URL: 'http://localhost:3102',
+        DATABASE_PATH: './data/e2e.db',
+        UPLOADS_DIR: './data/e2e-uploads',
+        TRUSTED_PROXIES: '127.0.0.1,::1',
+        IMPORT_ALLOW_LOCAL_FETCH: 'true',
+        NODE_TLS_REJECT_UNAUTHORIZED: '0',
+        HEADLESS_URL: 'http://127.0.0.1:3199',
+        HEADLESS_TIMEOUT_MS: '20000',
+        // Small per-user cap so the "a headless import counts once" flow can reach it.
+        RATE_LIMIT_IMPORT_MAX: '10',
+      },
+    },
   ],
 });

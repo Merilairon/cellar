@@ -34,6 +34,7 @@ export default defineConfig([
   },
   globalIgnores([
     '.next/**',
+    '.next-e2e-headless/**',
     'out/**',
     'next-env.d.ts',
     'node_modules/**',
