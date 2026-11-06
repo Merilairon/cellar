@@ -213,7 +213,7 @@ row \ col   (banner rows span full width)
 
 ## 3. Import Pipeline
 
-> Status: v0.3.0 implemented the static path (fetch, JSON-LD, normalize, paste fallback, review, save). v0.3.1 implements the auto-mapper below (pure TypeScript in `src/lib/import/map-*.ts`, no LLM, no network, no new dependency). Headless rendering is planned for v0.3.2. Microdata (`itemprop`) extraction was not built in v0.3.1.
+> Status: v0.3.0 implemented the static path (fetch, JSON-LD, normalize, paste fallback, review, save). v0.3.1 implements the auto-mapper below (pure TypeScript in `src/lib/import/map-*.ts`, no LLM, no network, no new dependency). v0.3.2 implements the optional headless sidecar: `import_job.method = headless` is now produced, `error_code` gains `headless_unavailable` (migration `0004`), and `ImportJobResponse` carries the `headless` field. The sidecar mechanism (filtering proxy, two-network layout, limits) is described in `docs/deployment.md` and `docs/tasks/v0.3.2-threat-model.md`. Microdata (`itemprop`) extraction was not built in v0.3.1.
 
 ```
 URL ─► SSRF check ─► fetch (static) ─► JSON-LD Recipe found? ─┐
