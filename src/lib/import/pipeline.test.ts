@@ -242,16 +242,45 @@ describe('runImport: headless fallback (G4 trigger table)', () => {
     expect(render).toHaveBeenCalledWith('https://example.com/r');
   });
 
-  it('static 403 (and 429, 401) + headless ok => headless draft', async () => {
-    for (let i = 0; i < 3; i++) {
+  // Runs the real safeFetch (injected transport + resolver) so the HTTP status is what
+  // decides the trigger, not a hand-made ImportError.
+  it.each([401, 403, 429] as const)(
+    'static HTTP %i + headless ok => headless draft',
+    async (status) => {
       const { h, render } = headlessOf(rendered(html(RECIPE)));
+      const transport = vi.fn(async () => ({
+        status,
+        headers: { 'content-type': 'text/html' },
+        body: (async function* () {})(),
+      }));
       const r = await runImport(URL_IN, {
-        safeFetch: fetchStub(new ImportError('blocked')),
         headless: h,
+        fetchOptions: {
+          transport,
+          resolve: async () => [{ address: '93.184.216.34', family: 4 as const }],
+        },
       });
+      expect(transport).toHaveBeenCalledTimes(1);
       expect(r).toMatchObject({ status: 'needs_review', method: 'headless' });
       expect(render).toHaveBeenCalledTimes(1);
-    }
+    },
+  );
+
+  it.each([404, 500, 503] as const)('static HTTP %i never triggers headless', async (status) => {
+    const { h, render } = headlessOf(rendered(html(RECIPE)));
+    const r = await runImport(URL_IN, {
+      headless: h,
+      fetchOptions: {
+        transport: async () => ({
+          status,
+          headers: { 'content-type': 'text/html' },
+          body: (async function* () {})(),
+        }),
+        resolve: async () => [{ address: '93.184.216.34', family: 4 as const }],
+      },
+    });
+    expect(r).toMatchObject({ status: 'failed', error_code: 'fetch_failed' });
+    expect(render).not.toHaveBeenCalled();
   });
 
   it('headless disabled => original static error plus unavailable hint, no call', async () => {
@@ -279,7 +308,12 @@ describe('runImport: headless fallback (G4 trigger table)', () => {
     async (code) => {
       const { h } = headlessOf(new ImportError(code));
       const r = await runImport(URL_IN, { safeFetch: fetchStub(ok(NO_RECIPE_PAGE)), headless: h });
-      expect(r).toMatchObject({ status: 'failed', method: 'headless', error_code: code });
+      expect(r).toMatchObject({
+        status: 'failed',
+        method: 'headless',
+        error_code: code,
+        headless: 'used',
+      });
       expect(r.draft).toBeNull();
     },
   );

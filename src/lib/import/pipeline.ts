@@ -156,7 +156,9 @@ export async function runImport(input: ImportInput, deps: ImportDeps = {}): Prom
     deps.log?.(`headless failed: ${code}`, e instanceof Error ? e.cause : undefined);
     return failed('headless', code, {
       source_url: sourceUrl,
-      headless: code === 'headless_unavailable' ? 'unavailable' : null,
+      // A render was attempted unless the sidecar was unreachable; same rule as the job read in
+      // service.ts, so POST and GET agree.
+      headless: code === 'headless_unavailable' ? 'unavailable' : 'used',
     });
   }
   const out = processHtml(rendered.html, 'headless', {

@@ -437,4 +437,18 @@ describe('createImport: headless', () => {
       headless: 'unavailable',
     });
   });
+
+  it('a sidecar failure after a render attempt reads as "used" on POST and GET alike (m6)', async () => {
+    const render = vi.fn(async () => {
+      throw new ImportError('blocked');
+    });
+    const res = await createImport(
+      db,
+      a,
+      { url: 'https://example.com/p' },
+      { safeFetch: empty(), headless: { enabled: true, render } },
+    );
+    expect(res).toMatchObject({ error_code: 'blocked', method: 'headless', headless: 'used' });
+    expect(getImportFor(db, a, res.id)?.headless).toBe('used');
+  });
 });
