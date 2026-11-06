@@ -29,9 +29,10 @@ describe('headless env', () => {
     expect(() => parseEnv({ ...base, HEADLESS_URL: v })).toThrow();
   });
 
-  it('token needs 16+ chars; timeout is capped at 35000', () => {
+  it('token needs 32+ chars (same as the sidecar); timeout is capped at 35000', () => {
     expect(() => parseEnv({ ...base, HEADLESS_TOKEN: 'short' })).toThrow();
-    expect(parseEnv({ ...base, HEADLESS_TOKEN: 'a'.repeat(16) }).HEADLESS_TOKEN).toBeDefined();
+    expect(() => parseEnv({ ...base, HEADLESS_TOKEN: 'a'.repeat(31) })).toThrow();
+    expect(parseEnv({ ...base, HEADLESS_TOKEN: 'a'.repeat(32) }).HEADLESS_TOKEN).toBeDefined();
     expect(() => parseEnv({ ...base, HEADLESS_TIMEOUT_MS: '40000' })).toThrow();
     expect(parseEnv({ ...base, HEADLESS_TIMEOUT_MS: '1000' }).HEADLESS_TIMEOUT_MS).toBe(1000);
   });

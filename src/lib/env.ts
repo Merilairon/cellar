@@ -105,8 +105,8 @@ const schema = z.object({
     'HEADLESS_URL must be a bare http:// origin (no credentials, path, query or hash)',
   ),
   HEADLESS_TOKEN: optionalString.refine(
-    (v) => v === undefined || v.length >= 16,
-    'HEADLESS_TOKEN must be at least 16 characters',
+    (v) => v === undefined || v.length >= 32,
+    'HEADLESS_TOKEN must be at least 32 characters (the sidecar requires 32+; openssl rand -hex 32)',
   ),
   HEADLESS_TIMEOUT_MS: z.coerce.number().int().positive().max(35_000).default(35_000),
   // Non-production seam: let the importer fetch private addresses and non-80/443 ports
