@@ -41,7 +41,7 @@ export async function POST(request: Request) {
         fetchOptions: serverFetchOptions(),
         headless: serverHeadless(),
         keepRawHtml: env.KEEP_RAW_HTML,
-        uploadsDir: env.UPLOADS_DIR,
+        rawHtmlDir: env.RAW_HTML_DIR,
         log: importLog,
       },
     );

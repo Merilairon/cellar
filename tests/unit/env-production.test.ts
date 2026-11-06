@@ -44,6 +44,12 @@ describe('import env', () => {
     expect(e.RATE_LIMIT_IMPORT_MAX).toBe(20);
     expect(e.RATE_LIMIT_IMPORT_WINDOW_SEC).toBe(3600);
     expect(e.UPLOADS_DIR).toBe('/data/uploads');
+    // Same location as v0.3.0 (dirname(uploadsDir)/import-raw), so existing volumes are unaffected.
+    expect(e.RAW_HTML_DIR).toBe('/data/import-raw');
+  });
+
+  it('honours RAW_HTML_DIR and rejects empty-string override via min(1)', async () => {
+    expect((await parse('production', { RAW_HTML_DIR: '/x/raw' }))().RAW_HTML_DIR).toBe('/x/raw');
   });
 
   it('parses booleans literally ("false" is false) and honours UPLOADS_DIR', async () => {

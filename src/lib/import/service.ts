@@ -1,5 +1,5 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import type { Db } from '@/lib/db/connection';
 import { findRecipeBySourceUrl } from '@/lib/db/recipes';
 import {
@@ -21,8 +21,8 @@ import type { ImportJobResponse } from './schemas';
 
 export type ImportServiceDeps = ImportDeps & {
   keepRawHtml?: boolean;
-  /** Where raw HTML goes when keepRawHtml: `<uploadsDir parent>/import-raw`. */
-  uploadsDir?: string;
+  /** Where raw HTML goes when keepRawHtml (env RAW_HTML_DIR). */
+  rawHtmlDir?: string;
 };
 
 type Actor = { id: string };
@@ -53,13 +53,12 @@ export function parseStoredDraft(json: string | null): StoredDraft | null {
  * Only reached when KEEP_RAW_HTML is on. Failure is logged and never fails the import.
  */
 function writeRawHtml(
-  uploadsDir: string,
+  dir: string,
   jobId: string,
   html: string,
   log?: ImportDeps['log'],
 ): string | null {
   try {
-    const dir = join(dirname(uploadsDir), 'import-raw');
     mkdirSync(dir, { recursive: true, mode: 0o700 });
     const path = join(dir, `${jobId}.html`);
     writeFileSync(path, html, { mode: 0o600 });
@@ -122,8 +121,8 @@ export async function createImport(
   }
 
   const rawHtmlPath =
-    deps.keepRawHtml && deps.uploadsDir && result.raw_html
-      ? writeRawHtml(deps.uploadsDir, job.id, result.raw_html, log)
+    deps.keepRawHtml && deps.rawHtmlDir && result.raw_html
+      ? writeRawHtml(deps.rawHtmlDir, job.id, result.raw_html, log)
       : null;
 
   const stored: StoredDraft | null =

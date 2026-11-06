@@ -123,7 +123,7 @@ describe('createImport', () => {
       db,
       a,
       { url: 'https://example.com/p' },
-      { safeFetch: okFetch(), keepRawHtml: true, uploadsDir: join(dir, 'uploads') },
+      { safeFetch: okFetch(), keepRawHtml: true, rawHtmlDir: join(dir, 'import-raw') },
     );
     const s = JSON.stringify(res);
     expect(s).not.toMatch(/raw_html|rawHtml|ld\+json/);
@@ -135,7 +135,7 @@ describe('createImport', () => {
       db,
       a,
       { url: 'https://example.com/p' },
-      { safeFetch: okFetch(), keepRawHtml: false, uploadsDir: join(dir, 'uploads') },
+      { safeFetch: okFetch(), keepRawHtml: false, rawHtmlDir: join(dir, 'import-raw') },
     );
     expect(db.select().from(importJob).get()!.rawHtmlPath).toBeNull();
     expect(existsSync(join(dir, 'import-raw'))).toBe(false);
@@ -146,7 +146,7 @@ describe('createImport', () => {
       db,
       a,
       { url: 'https://example.com/p' },
-      { safeFetch: okFetch(), keepRawHtml: true, uploadsDir: join(dir, 'uploads') },
+      { safeFetch: okFetch(), keepRawHtml: true, rawHtmlDir: join(dir, 'import-raw') },
     );
     const path = db.select().from(importJob).get()!.rawHtmlPath!;
     expect(path).toBe(join(dir, 'import-raw', `${res.id}.html`));

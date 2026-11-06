@@ -94,6 +94,8 @@ const schema = z.object({
   KEEP_RAW_HTML: envBool,
   // Directory for photos; defaults to <dir of DATABASE_PATH>/uploads (/data/uploads in Docker).
   UPLOADS_DIR: z.string().min(1).optional(),
+  // Directory for kept raw HTML; defaults to <dir of DATABASE_PATH>/import-raw (the v0.3.0 location).
+  RAW_HTML_DIR: z.string().min(1).optional(),
   // Optional headless-browser sidecar (profile `headless`). Unset = feature off, no code path
   // that can fail an import.
   HEADLESS_URL: optionalString.refine(
@@ -116,6 +118,7 @@ const schema = z.object({
 const schemaWithDerived = schema.transform((e) => ({
   ...e,
   UPLOADS_DIR: e.UPLOADS_DIR ?? join(dirname(e.DATABASE_PATH), 'uploads'),
+  RAW_HTML_DIR: e.RAW_HTML_DIR ?? join(dirname(e.DATABASE_PATH), 'import-raw'),
 }));
 
 export type Env = z.infer<typeof schemaWithDerived>;
