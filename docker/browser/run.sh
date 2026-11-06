@@ -1,7 +1,7 @@
 #!/bin/sh
 # Runs the sidecar image with the hardened flags the compose service (T5) must also use.
 # Usage: docker/browser/run.sh [docker run args...] <image> [cmd...]
-exec docker run --rm \
+exec docker run --rm --init \
   --user 10001:10001 \
   --cap-drop ALL --cap-add SYS_CHROOT \
   --security-opt no-new-privileges \

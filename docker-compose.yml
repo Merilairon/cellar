@@ -54,12 +54,14 @@ services:
     restart: unless-stopped
     user: '10001:10001'
     environment:
-      HEADLESS_TOKEN: ${HEADLESS_TOKEN:-}  # sidecar refuses to start if empty
+      HEADLESS_TOKEN: ${HEADLESS_TOKEN:-} # sidecar refuses to start if empty
     cap_drop: [ALL]
     cap_add: [SYS_CHROOT]
     security_opt:
       - no-new-privileges:true
       - seccomp=./docker/browser/seccomp.json
+    # PID 1 must reap: Chromium children orphaned by the 30 s kill become zombies and count against pids_limit.
+    init: true
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,size=256m
