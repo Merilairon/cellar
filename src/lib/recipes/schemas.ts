@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MAX_TAGS_PER_RECIPE, normalizeTagName } from './tag-name';
 
 // Shared by client and server: no node, db or react imports here.
 
@@ -29,6 +30,16 @@ const httpUrl = z
       return false;
     }
   }, 'invalid_url');
+
+// Normalizes (trim, whitespace, NFC, lowercase); a name that cannot be a tag is a field error.
+const tagName = z.string().transform((v, ctx) => {
+  const n = normalizeTagName(v);
+  if (n === null) {
+    ctx.addIssue({ code: 'custom', message: 'invalid_tag' });
+    return z.NEVER;
+  }
+  return n;
+});
 
 export const ingredientInputSchema = z
   .object({
@@ -135,6 +146,12 @@ export const recipeInputSchema = z
     visibility: visibilitySchema.optional(),
     view_mode: viewModeSchema.optional(),
     sections: z.array(sectionInputSchema).min(1).max(20),
+    // Omitted: keep stored tags on update, none on create. [] clears. Deduped after normalizing.
+    tags: z
+      .array(tagName)
+      .max(MAX_TAGS_PER_RECIPE)
+      .transform((t) => [...new Set(t)])
+      .optional(),
   })
   .superRefine((v, ctx) => {
     if (v.view_mode !== 'grid') return;

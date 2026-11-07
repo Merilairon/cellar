@@ -2,6 +2,7 @@ import type { Db } from '@/lib/db/connection';
 import { getImportJobForUser, markImportJobSaved } from '@/lib/db/import-jobs';
 import { insertRecipeTree } from '@/lib/db/recipes';
 import { prepareRecipe, type Failure } from '@/lib/recipes/service';
+import { normalizeTagList } from '@/lib/recipes/tag-name';
 import type { RecipeTree } from '@/lib/db/recipes';
 import { fetchAndStoreCover, type CoverDeps } from './cover';
 import { sanitizeText } from './sanitize';
@@ -20,6 +21,7 @@ const clean = (v: string | null | undefined, maxLen: number, multiline = false) 
 /** Server-side re-sanitize of every free-text field: a tampered draft is stored clean. */
 function sanitizeTree(tree: RecipeTree): RecipeTree {
   return {
+    tags: tree.tags, // already normalized by the schema; not free text
     fields: {
       ...tree.fields,
       title: sanitizeText(tree.fields.title, { maxLen: 200 }),
@@ -80,6 +82,10 @@ export async function saveImport(
   }
   const prepared = prepareRecipe({
     ...recipeBody,
+    // Tags: what the client sends wins (strictly validated, so tampering is a 422; `[]` means
+    // none). Only when the key is absent do the stored draft's keywords/category apply; those
+    // are leniently normalized because the user never typed them and cannot fix a bad one.
+    tags: recipeBody.tags ?? normalizeTagList(stored.draft.tags ?? []),
     // Imported recipes open as a list unless the form explicitly chose otherwise.
     view_mode: recipeBody.view_mode ?? 'list',
   });

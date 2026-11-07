@@ -13,6 +13,7 @@ import {
   type RecipeGuard,
   type RecipeTree,
 } from '@/lib/db/recipes';
+import { TagLimitError, listReadableTags } from '@/lib/db/tags';
 import { listPhotoPathsByRecipe } from '@/lib/db/photos';
 import { removeUploadFiles } from '@/lib/import/uploads';
 import { joinQtyRange } from '@/lib/import/ingredient-parser';
@@ -63,6 +64,7 @@ export function toTree(input: RecipeInput, viewMode: ViewMode): RecipeTree {
       visibility: input.visibility,
       viewMode,
     },
+    tags: input.tags,
     sections: input.sections.map((s) => ({
       title: s.title ?? null,
       ingredients: s.ingredients.map((i) => ({
@@ -112,6 +114,10 @@ function guarded<T>(fn: () => T): { ok: true; value: T } | Failure {
     if (e instanceof RecipeGuardError) {
       return { ok: false, status: e.status === 'forbidden' ? 403 : 404 };
     }
+    // The schema checks first; this is the DB backstop trigger (recipe_tag_limit) surfacing.
+    if (e instanceof TagLimitError) {
+      return { ok: false, status: 422, errors: [{ path: 'tags', code: 'too_many_tags' }] };
+    }
     throw e;
   }
 }
@@ -147,6 +153,7 @@ export function toApiRecipe(r: RecipeFull, canEdit: boolean) {
     source_name: r.sourceName,
     visibility: r.visibility,
     view_mode: r.viewMode,
+    tags: [...r.tags].sort(),
     copied_from_id: r.copiedFromId,
     created_at: r.createdAt,
     updated_at: r.updatedAt,
@@ -209,8 +216,9 @@ export function createRecipeFor(
 ): Result<{ recipe: ApiRecipe }> {
   const prepared = prepareRecipe(body);
   if (!prepared.ok) return prepared;
-  const id = createRecipe(db, actor.id, prepared.tree);
-  return { ok: true, recipe: toApiRecipe(getRecipeFull(db, id)!, true) };
+  const res = guarded(() => createRecipe(db, actor.id, prepared.tree));
+  if (!res.ok) return res;
+  return { ok: true, recipe: toApiRecipe(getRecipeFull(db, res.value)!, true) };
 }
 
 export function getRecipeFor(db: Db, actor: Actor, id: string): Result<{ recipe: ApiRecipe }> {
@@ -284,4 +292,9 @@ export function copyRecipeFor(db: Db, actor: Actor, id: string): Result<{ id: st
   const res = guarded(() => copyRecipe(db, id, actor.id, readGuard(actor)));
   if (!res.ok) return res;
   return res.value ? { ok: true, id: res.value } : { ok: false, status: 404 };
+}
+
+/** Tag autocomplete / chips for the caller; only tags on recipes they can read. `q` is a prefix. */
+export function listTagsFor(db: Db, actor: Actor, q: string | null) {
+  return listReadableTags(db, actor.id, { prefix: q ?? undefined });
 }

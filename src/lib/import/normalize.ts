@@ -9,7 +9,7 @@ import { sanitizeText, sanitizeUrl } from './sanitize';
 // section; the auto-mapper (3b) re-maps from the stored draft.
 
 export type Draft = RecipeInput & {
-  /** keywords + recipeCategory; no tag table until M4, kept only inside the draft. */
+  /** keywords + recipeCategory. Persisted on save as recipe tags (normalized there, see save.ts). */
   tags: string[];
   /** Absolute https URL of the cover image, or null. Downloaded on save (T8), never hotlinked. */
   cover_image_url: string | null;
