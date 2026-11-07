@@ -128,6 +128,26 @@ describe('GET/PUT/DELETE /api/recipes/:id', () => {
     expect((await listGet(req('GET', undefined, {}))).status).toBe(401);
   });
 
+  it('I1: GET /api/recipes/:id is private, no-store on 200, 404 and 401', async () => {
+    const { json } = await create();
+    const ok = await GET(req('GET', undefined, {}), ctx(json.id));
+    expect([ok.status, ok.headers.get('cache-control')]).toEqual([200, 'private, no-store']);
+    const missing = await GET(req('GET', undefined, {}), ctx('NOPE'));
+    expect([missing.status, missing.headers.get('cache-control')]).toEqual([
+      404,
+      'private, no-store',
+    ]);
+    state.current = other;
+    const hidden = await GET(req('GET', undefined, {}), ctx(json.id));
+    expect([hidden.status, hidden.headers.get('cache-control')]).toEqual([
+      404,
+      'private, no-store',
+    ]);
+    state.current = null;
+    const anon = await GET(req('GET', undefined, {}), ctx(json.id));
+    expect([anon.status, anon.headers.get('cache-control')]).toEqual([401, 'private, no-store']);
+  });
+
   it('PUT: 200, 403 for non-owner of a shared recipe, 403 without CSRF, 422', async () => {
     const { json } = await create({ ...SAMPLE_SKILLET_COOKIES, visibility: 'users' });
     const put = await PUT(
