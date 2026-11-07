@@ -356,7 +356,7 @@ The instance is internet-exposed (PRD §6), so this is a hard requirement. Block
 | POST | /api/recipes | Create (accepts `tags`, at most 20) |
 | GET | /api/tags | Tags on recipes the caller can read, with counts; optional `?q=` prefix (at most 40 characters, else 400 `invalid_query`) |
 | GET/PUT/DELETE | /api/recipes/:id | Read, update, delete |
-| PUT | /api/recipes/:id/grid | Replace ingredient order + step spans atomically |
+| PUT | /api/recipes/:id/grid | Grid editor save. Body `{ base_updated_at, sections }` (the same section schema as the recipe body: ingredients and steps, 1 to 20 sections; unknown keys such as `title`, `tags`, `view_mode` are 422). Replaces all sections, ingredients and steps atomically in one transaction; recipe fields, tags and visibility are never touched. Authorization as `PUT /api/recipes/:id` (404 not readable, 403 read-only). `base_updated_at` must equal the stored `updated_at`, else 409 `{ error: "conflict", updated_at }` and nothing is written. The server recomputes `view_mode` (`grid` with a column step, else `list`), rewrites `split_group_id`, and derives a missing alternate measure; a client changing a quantity or unit must send the other side as null (a non-null side is stored as sent). 422 `{ errors: [{ path, code }] }` (validator errors only; an uncovered row is a warning and saves). Every response is `Cache-Control: private, no-store` |
 | PUT | /api/recipes/:id/visibility | Set `private` or `users` |
 | POST/DELETE | /api/recipes/:id/share-link | Create / rotate / revoke the public link token |
 | POST | /api/recipes/:id/copy | **Save a copy** of a visible recipe into the caller's book |
