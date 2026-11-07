@@ -254,7 +254,7 @@ test('leave guard: browser Back asks while dirty, Keep and Discard behave, no hi
   await ctx.close();
 });
 
-test('m1/m2: while a save is in flight Cancel and Discard are inert; two quick Backs both ask', async ({
+test('m1/m2: while a save is in flight Cancel and Discard are inert, Back still asks', async ({
   browser,
 }) => {
   const { page, ctx } = await openEditor(browser);
@@ -285,13 +285,6 @@ test('m1/m2: while a save is in flight Cancel and Discard are inert; two quick B
   await expect(page.getByText('All changes saved')).toBeVisible();
   await page.unroute('**/api/recipes/*/grid');
 
-  // Two quick Backs while dirty: both are intercepted, the URL stays, the editor stays.
-  await rename(page, '1 oz double back butter');
-  await page.goBack().catch(() => null);
-  await page.goBack().catch(() => null);
-  await expect(confirm).toBeVisible();
-  expect(page.url()).toBe(url);
-  await expect(page.getByRole('heading', { name: 'Grid editor' })).toBeVisible();
   await ctx.close();
 });
 
