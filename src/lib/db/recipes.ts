@@ -61,6 +61,16 @@ export class RecipeGuardError extends Error {
   }
 }
 
+/**
+ * A stamp strictly later than `prev`. Every writer of the recipe stamp uses it: the grid
+ * save compares the stamp as its optimistic lock, so two writes within one millisecond must
+ * still produce different values or a stale base would pass (v0.4.1 checkpoint L1).
+ */
+export function stampAfter(prev: string): string {
+  const now = nowIso();
+  return now > prev ? now : new Date(Date.parse(prev) + 1).toISOString();
+}
+
 function enforce(guard: RecipeGuard | undefined, row: RecipeRow): void {
   const verdict = guard ? guard(row) : 'ok';
   if (verdict !== 'ok') throw new RecipeGuardError(verdict);
@@ -163,7 +173,7 @@ export function replaceRecipe(
       enforce(opts.guard, row);
       const viewMode = opts.viewMode ? opts.viewMode(row.viewMode) : tree.fields.viewMode;
       tx.update(recipe)
-        .set({ ...tree.fields, viewMode, updatedAt: nowIso() })
+        .set({ ...tree.fields, viewMode, updatedAt: stampAfter(row.updatedAt) })
         .where(eq(recipe.id, id))
         .run();
       withDeferredFts(tx, id, () => {
@@ -204,11 +214,10 @@ export function replaceGrid(
       enforce(opts.guard, row);
       if (row.updatedAt !== opts.baseUpdatedAt) throw new GridConflictError(row.updatedAt);
       // Same-millisecond saves must still change the stamp, or a stale base would pass.
-      let updatedAt = nowIso();
-      if (updatedAt <= row.updatedAt) {
-        updatedAt = new Date(Date.parse(row.updatedAt) + 1).toISOString();
-      }
-      tx.update(recipe).set({ viewMode: opts.viewMode, updatedAt }).where(eq(recipe.id, id)).run();
+      tx.update(recipe)
+        .set({ viewMode: opts.viewMode, updatedAt: stampAfter(row.updatedAt) })
+        .where(eq(recipe.id, id))
+        .run();
       withDeferredFts(tx, id, () => {
         tx.delete(section).where(eq(section.recipeId, id)).run();
         insertSections(tx, id, sections);
@@ -290,7 +299,10 @@ export function setRecipeVisibility(
       const row = tx.select().from(recipe).where(eq(recipe.id, id)).get();
       if (!row) return false;
       enforce(guard, row);
-      tx.update(recipe).set({ visibility, updatedAt: nowIso() }).where(eq(recipe.id, id)).run();
+      tx.update(recipe)
+        .set({ visibility, updatedAt: stampAfter(row.updatedAt) })
+        .where(eq(recipe.id, id))
+        .run();
       return true;
     },
     { behavior: 'immediate' },

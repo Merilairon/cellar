@@ -4,6 +4,7 @@ import { runMigrations } from '@/lib/db/migrate';
 import { user } from '@/lib/db/schema';
 import type { User } from '@/lib/db/users';
 import { SAMPLE_SKILLET_COOKIES } from './samples';
+import { GRID_BODY_MAX } from './http';
 
 const state = vi.hoisted(() => ({ db: undefined as unknown, current: null as unknown }));
 vi.mock('@/lib/db', () => ({ getDb: () => state.db }));
@@ -328,7 +329,7 @@ describe('PUT /api/recipes/:id/grid', () => {
     });
   });
 
-  it('a maximal valid payload (20 sections x 200 ingredients) fits the body cap or is a clean 413', async () => {
+  it('a payload at the schema ceiling (20 sections x 200 ingredients, about 475 KB) is a 200 under the grid body cap; over 1 MB is 413', async () => {
     const r = await created();
     const ingredients = Array.from({ length: 200 }, (_, i) => ({
       name: `ingredient number ${i}`,
@@ -341,7 +342,9 @@ describe('PUT /api/recipes/:id/grid', () => {
       base_updated_at: r.updated_at,
       sections: Array.from({ length: 20 }, (_, i) => ({ title: `S${i}`, ingredients, steps: [] })),
     };
-    expect([200, 413]).toContain((await put(r.id, body)).status);
+    expect(JSON.stringify(body).length).toBeGreaterThan(256 * 1024); // why the cap is not SAVE_BODY_MAX
+    expect(JSON.stringify(body).length).toBeLessThan(GRID_BODY_MAX);
+    expect((await put(r.id, body)).status).toBe(200);
   });
 
   it('C3: GET /api/recipes and /api/tags error responses are no-store too', async () => {

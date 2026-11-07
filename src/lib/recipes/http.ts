@@ -37,6 +37,13 @@ export async function authenticate(request: Request): Promise<{ user: User } | R
 /** Body caps (bytes) for JSON endpoints that accept free text. */
 export const IMPORT_BODY_MAX = 1024 * 1024;
 export const SAVE_BODY_MAX = 256 * 1024;
+/**
+ * Grid save cap. Not lowered to SAVE_BODY_MAX: a legitimate payload at the schema ceiling
+ * (20 sections x 200 ingredients with short fields) is about 475 KB, and the replace cost is
+ * bounded by the row limits (about 0.7 s measured), not by bytes. The cap bounds memory and
+ * parse work only (v0.4.1 checkpoint L2).
+ */
+export const GRID_BODY_MAX = 1024 * 1024;
 
 /**
  * Read the body as text, never buffering more than `maxBytes`. Rejects early on an

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { openDb, type Db } from '@/lib/db/connection';
 import { runMigrations } from '@/lib/db/migrate';
 import { reindexRecipe } from '@/lib/db/fts';
@@ -16,7 +16,10 @@ import {
 type Loose = Record<string, any>;
 
 let db: Db;
-afterEach(() => db.$client.close());
+afterEach(() => {
+  vi.useRealTimers();
+  db.$client.close();
+});
 const mk = (email: string, role: 'admin' | 'member' = 'member') =>
   db.insert(user).values({ email, displayName: email, passwordHash: 'h', role }).returning().get();
 const setup = () => {
@@ -397,6 +400,28 @@ describe('updateGridFor: conflicts (409)', () => {
     const body2 = bodyFrom(r2.recipe);
     setVisibilityFor(db, owner, r.id, { visibility: 'users' });
     expect(updateGridFor(db, owner, r.id, body2)).toMatchObject({ ok: false, status: 409 });
+  });
+
+  // L1: with the clock frozen, a write in the same millisecond as the load must still move the
+  // stamp, or a stale base would pass the compare.
+  it('a recipe-form PUT or a visibility change in the same millisecond still conflicts (L1)', () => {
+    const { owner } = setup();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2030-01-01T00:00:00.000Z'));
+    const r = make(owner);
+    const body = bodyFrom(r);
+    expect(updateRecipeFor(db, owner, r.id, { ...clone(), title: 'Same ms' })).toMatchObject({
+      ok: true,
+    });
+    expect(updateGridFor(db, owner, r.id, body)).toMatchObject({ ok: false, status: 409 });
+    const r2 = getRecipeFor(db, owner, r.id);
+    if (!r2.ok) throw new Error();
+    const body2 = bodyFrom(r2.recipe);
+    setVisibilityFor(db, owner, r.id, { visibility: 'users' });
+    expect(updateGridFor(db, owner, r.id, body2)).toMatchObject({ ok: false, status: 409 });
+    const r3 = getRecipeFor(db, owner, r.id);
+    if (!r3.ok) throw new Error();
+    expect(r3.recipe.updated_at > r2.recipe.updated_at).toBe(true);
   });
 
   it('a tag-only change on the recipe form also conflicts (the form PUT bumps updated_at)', () => {
