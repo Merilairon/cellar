@@ -1,0 +1,45 @@
+{
+  "class": "clean",
+  "note": "m4: 'Prepare the sauce' as an ordinary first step stays a step.",
+  "ingredients": [
+    "1 cup tomatoes",
+    "1 tsp salt",
+    "1 tbsp oil"
+  ],
+  "steps": [
+    "Prepare the sauce",
+    "Heat the oil and add the tomatoes.",
+    "Season with salt."
+  ],
+  "expected": {
+    "view": "grid",
+    "sections": [
+      {
+        "title": null,
+        "rows": [
+          "oil",
+          "tomato",
+          "salt"
+        ],
+        "steps": [
+          {
+            "kind": "banner_top"
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 1
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          }
+        ]
+      }
+    ]
+  },
+  "confidence": {
+    "min": 0.7
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "class": "clean",
+  "note": "m4: 'Make the dough:' with a trailing colon is a heading.",
+  "ingredients": [
+    "2 cups flour",
+    "1 cup water",
+    "1 tsp salt"
+  ],
+  "steps": [
+    "Make the dough:",
+    "Mix the flour and water.",
+    "Add the salt and knead."
+  ],
+  "expected": {
+    "view": "grid",
+    "sections": [
+      {
+        "title": "Dough",
+        "rows": [
+          "flour",
+          "water",
+          "salt"
+        ],
+        "steps": [
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 1
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          }
+        ]
+      }
+    ]
+  },
+  "confidence": {
+    "min": 0.7
+  }
+}

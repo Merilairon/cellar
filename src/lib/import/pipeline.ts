@@ -1,5 +1,5 @@
 import { ImportError, type ImportErrorCode } from './errors';
-import { extractRecipeNode } from './extract-jsonld';
+import { extractRecipe } from './extract-recipe';
 import { attachMapping, type MapFn } from './mapping';
 import { normalizeRecipe, type Draft } from './normalize';
 import { MAX_PASTE_CHARS, recipeNodeFromPaste } from './paste';
@@ -186,7 +186,7 @@ export async function runImport(input: ImportInput, deps: ImportDeps = {}): Prom
 
 /**
  * Shared by the static and headless paths so they cannot diverge:
- * extractRecipeNode -> normalizeRecipe -> attachMapping. `noRecipeNode` tells the caller
+ * extractRecipe (JSON-LD, then microdata) -> normalizeRecipe -> attachMapping. `noRecipeNode` tells the caller
  * whether the page had no Recipe at all (the headless trigger).
  */
 function processHtml(
@@ -196,10 +196,10 @@ function processHtml(
 ): { result: ImportResult; noRecipeNode: boolean } {
   const { deps } = ctx;
   const base = { source_url: ctx.sourceUrl, raw_html: html };
-  let node: ReturnType<typeof extractRecipeNode>['node'];
+  let node: ReturnType<typeof extractRecipe>['node'];
   let normalized: ReturnType<typeof normalizeRecipe> | null = null;
   try {
-    node = extractRecipeNode(html).node;
+    node = extractRecipe(html).node;
     // Relative cover URLs resolve against where the page really is (final URL after redirects).
     if (node)
       normalized = normalizeRecipe(node, { sourceUrl: ctx.storedUrl, baseUrl: ctx.baseUrl });

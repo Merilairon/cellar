@@ -1,7 +1,7 @@
 import { recipeInputSchema, type RecipeInput } from '@/lib/recipes/schemas';
 import { isoDurationToMinutes } from './duration';
 import { parseIngredientLine, toIngredientFields } from './ingredient-parser';
-import { ingredientsFromLines, stepHeadingTitle, titleKey } from './map-sections';
+import { ingredientsFromLines, resolveStepHeadings, titleKey } from './map-sections';
 import type { MapInput, MappingProposal } from './map-types';
 import { sanitizeText, sanitizeUrl } from './sanitize';
 
@@ -169,9 +169,10 @@ function buildMapInput(lines: string[], steps: RawStep[]): MapInput | null {
   try {
     // Bare words that match a step section title ("Frosting") become ingredient group headings.
     const known = new Set<string>();
-    for (const s of steps) {
+    const headings = resolveStepHeadings(steps.map((s) => ({ text: s.text, section: s.prefix })));
+    for (const [i, s] of steps.entries()) {
       if (s.prefix) known.add(titleKey(s.prefix));
-      const heading = stepHeadingTitle(s.text);
+      const heading = headings[i];
       if (heading) known.add(titleKey(heading));
     }
     return {

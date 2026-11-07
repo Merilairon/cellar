@@ -6,6 +6,7 @@ import {
   ingredientsFromLines,
   isIngredientHeading,
   isStepHeading,
+  resolveStepHeadings,
   stepHeadingTitle,
   titleKey,
 } from './map-sections';
@@ -178,5 +179,36 @@ describe('assignIngredients', () => {
     expect(titleKey('For the Frostings')).toBe('frosting');
     expect(titleKey('To make the sauce:')).toBe('sauce');
     expect(titleKey('Sauce Instructions')).toBe('sauce');
+  });
+});
+
+describe('ambiguous make/prepare headings (m4)', () => {
+  const texts = (...t: string[]) => t.map((text) => ({ text, section: null }));
+  it('keeps "Make the dough" as a step when nothing else marks a heading', () => {
+    expect(resolveStepHeadings(texts('Make the dough', 'Knead it.'))).toEqual([null, null]);
+    expect(resolveStepHeadings(texts('Prepare the sauce', 'Simmer it.'))).toEqual([null, null]);
+    expect(resolveStepHeadings(texts('To make the dough', 'Knead it.'))).toEqual([null, null]);
+  });
+  it('treats it as a heading with a trailing colon', () => {
+    expect(resolveStepHeadings(texts('Make the dough:', 'Knead it.'))).toEqual(['Dough', null]);
+    expect(resolveStepHeadings(texts('Prepare the sauce:', 'Simmer it.'))).toEqual(['Sauce', null]);
+  });
+  it('treats it as a heading when another heading exists', () => {
+    expect(
+      resolveStepHeadings(texts('Make the dough', 'Knead it.', 'For the sauce:', 'Stir.')),
+    ).toEqual(['Dough', null, 'Sauce', null]);
+  });
+  it('a section hint counts as another heading', () => {
+    const r = resolveStepHeadings([
+      { text: 'Make the dough', section: null },
+      { text: 'Knead.', section: 'Bread' },
+    ]);
+    expect(r[0]).toBe('Dough');
+  });
+  it('groupSteps keeps the step text and creates no phantom section', () => {
+    const g = groupSteps(texts('Make the dough', 'Knead it.'));
+    expect(g).toEqual([{ title: null, steps: ['Make the dough', 'Knead it.'] }]);
+    const h = groupSteps(texts('Make the dough:', 'Knead it.'));
+    expect(h).toEqual([{ title: 'Dough', steps: ['Knead it.'] }]);
   });
 });

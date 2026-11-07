@@ -40,14 +40,12 @@ describe('import fixture corpus', () => {
       'js-only-late-injected-jsonld',
       'js-only-spa-shell',
     ]);
-    // Still blocked/paywalled after render, and microdata (04a), are not inflated into the rate.
+    // Still blocked/paywalled after render are not inflated into the rate.
     expect(hl.stillRejected.map((r) => r.name).sort()).toEqual([
       'blocked-403-denied',
       'paywalled-js-shell',
     ]);
-    expect(hl.stillOut.map((r) => r.name).sort()).toEqual([
-      'microdata-only-basic',
-      'microdata-only-howtostep',
-    ]);
+    // Microdata fixtures became drafts in 04a (T13); nothing stays out of slice with the sidecar on.
+    expect(hl.stillOut).toEqual([]);
   });
 });

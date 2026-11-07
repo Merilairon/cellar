@@ -19,9 +19,8 @@ import type { IngredientInput } from '@/lib/recipes/schemas';
 
 // Security checkpoint for weekend 1 (tasklist T9, G10, Security note): the mapper consumes
 // attacker-controlled text, so every pattern, every input cap and the operation budget is
-// exercised here. The assertions are on the deterministic operation count (`onUsed`), never on
-// elapsed time; the only wall-clock checks are very generous backstops (BACKSTOP_MS) that
-// catch an outright hang and cannot flake on a loaded CI runner.
+// exercised here. The assertions are on the deterministic operation count (`onUsed`) and on the
+// structure of the registered patterns, never on elapsed time (v0.3.1 m6).
 
 const MAPPER_FILES = [
   'ingredient-match',
@@ -53,20 +52,11 @@ const ing = (name: string, extra: Partial<IngredientInput> = {}): IngredientInpu
   ...extra,
 });
 
-/** Generous hang detector only; correctness is asserted on operation counts. */
-const BACKSTOP_MS = 10_000;
-
 /** Run the mapper and report the operations it counted. */
 function counted(input: MapInput, budget?: number) {
   let used = -1;
   const value = mapGrid(input, { budget, onUsed: (u) => (used = u) });
   return { value, used };
-}
-
-function timed<T>(fn: () => T): { value: T; ms: number } {
-  const t0 = performance.now();
-  const value = fn();
-  return { value, ms: performance.now() - t0 };
 }
 
 describe('pattern registry', () => {
@@ -95,14 +85,27 @@ describe('pattern registry', () => {
     expect(new Set(names).size).toBe(names.length);
   });
 
+  // Deterministic, not timing: a registered pattern must be provably linear, i.e. anchored at
+  // both ends with a single character class and no quantifier, group or alternation. That
+  // shape cannot backtrack; the behaviour checks pin what it matches. A pattern that does not
+  // fit this shape fails here and needs its own adversarial operation-count test.
+  const LINEAR_SHAPE = /^\^\[[^\]]+\]\$$/;
   for (const { name, re } of MAPPER_PATTERNS) {
+    it(`${name} is an anchored single character class`, () => {
+      expect(re.source).toMatch(LINEAR_SHAPE);
+      expect(re.global || re.sticky).toBe(false); // no lastIndex state shared between calls
+    });
+    it(`${name} accepts exactly one character`, () => {
+      expect(re.test('a')).toBe(true);
+      expect(re.test('7')).toBe(true);
+      expect(re.test('!')).toBe(false);
+      expect(re.test('')).toBe(false);
+      expect(re.test('ab')).toBe(false);
+    });
     for (const [label, input] of Object.entries(adversarial)) {
-      it(`${name} survives "${label}"`, () => {
-        const { ms } = timed(() => {
-          re.lastIndex = 0;
-          return re.test(input);
-        });
-        expect(ms).toBeLessThan(BACKSTOP_MS);
+      it(`${name} rejects "${label}"`, () => {
+        expect(input.length).toBeGreaterThan(1);
+        expect(re.test(input)).toBe(false);
       });
     }
   }
@@ -408,13 +411,6 @@ describe('maximum-size inputs finish quickly and deterministically', () => {
       expect(a.used).toBe(b.used);
     });
   }
-
-  it('finishes all maximum-size cases within the hang backstop', () => {
-    const { ms } = timed(() => {
-      for (const make of Object.values(cases)) mapGrid(make());
-    });
-    expect(ms).toBeLessThan(BACKSTOP_MS * 3);
-  });
 });
 
 describe('per-mention candidate work is charged (security F1)', () => {
@@ -624,15 +620,14 @@ describe('ingredient parser is bounded and linear (security F2)', () => {
     expect(out[0]!.raw_text!.length).toBeLessThanOrEqual(500);
     expect(out[0]!.name.length).toBeLessThanOrEqual(MAP_LIMITS.ingredientNameChars);
   });
-  it('mapGrid with a 500k-character ingredient line completes within the backstop', () => {
-    const { ms, value } = timed(() =>
-      mapGrid({
-        ingredients: ingredientsFromLines(['1 cup flour' + ';'.repeat(500_000) + 'x']),
-        steps: [{ text: 'Stir the flour.', section: null }],
-      }),
-    );
+  it('mapGrid with a 500k-character ingredient line stays within the operation budget', () => {
+    const { value, used } = counted({
+      ingredients: ingredientsFromLines(['1 cup flour' + ';'.repeat(500_000) + 'x']),
+      steps: [{ text: 'Stir the flour.', section: null }],
+    });
     expect(value.mapped).toBe(true);
-    expect(ms).toBeLessThan(BACKSTOP_MS);
+    expect(used).toBeGreaterThanOrEqual(0);
+    expect(used).toBeLessThanOrEqual(MAP_LIMITS.budget);
   });
 });
 

@@ -22,8 +22,7 @@ Runner: `scripts/import-corpus.ts`. Each fixture is `name.html` plus `name.expec
 - `expect: "draft"`: must produce a valid draft; counts in the success rate.
 - `expect: "no_recipe"`: deliberately rejected (paywalled stub, non-recipe pages,
   unrecoverable JSON-LD, Recipe without steps). Must return `no_recipe`; not in the rate.
-- `expect: "out_of_slice"`: needs headless rendering (JS-only, carried to 3c) or a microdata
-  parser (carried to 3b). Listed separately, **not** counted for or against the 85% target
+- `expect: "out_of_slice"`: needs headless rendering (JS-only, carried to 3c). Listed separately, **not** counted for or against the 85% target
   (owner decision). Today they must still return `no_recipe`, not crash.
 - `forbid`: substrings that must not appear anywhere in the draft (sanitizer checks).
 - `cover_image: null`: the draft must have no cover image (unsafe URL schemes dropped).
@@ -36,7 +35,7 @@ Runner: `scripts/import-corpus.ts`. Each fixture is `name.html` plus `name.expec
 
 ## Microdata status
 
-`microdata-only-basic` and `microdata-only-howtostep` are still `out_of_slice` ("carry: 3b microdata parser"). The v0.3.1 microdata extractor (T14) was a cuttable stretch and was not built, so both still return `no_recipe` and stay excluded from the success rate. Re-carried to 03c or 04; see `docs/tasks/v0.3.1-carryover.md`.
+`microdata-only-basic` and `microdata-only-howtostep` are `draft` fixtures since v0.4.0 (T13): `src/lib/import/extract-microdata.ts` reads `itemprop` markup when the page has no JSON-LD Recipe (JSON-LD wins; `method` stays `static`). They count in the success rate.
 
 The `map-*` fixtures (v0.3.1) additionally check the auto-mapper proposal through the `map` block. They test the wiring, not mapper accuracy: that is `tests/fixtures/mapper/` (see its README).
 
