@@ -242,7 +242,7 @@
         },
         "explain": {
           "summary": "How does this work?",
-          "body": "Cellar reads the steps and guesses which ingredients each one uses. The grid then shows each step next to those ingredients. This is a guess made by fixed rules on this server; nothing is sent to an AI service. Recipes the guess cannot handle are best kept as a list. A drag-and-drop grid editor is planned; until then, change the row numbers in each step."
+          "body": "Cellar reads the steps and guesses which ingredients each one uses. The grid then shows each step next to those ingredients. This is a guess made by fixed rules on this server; nothing is sent to an AI service. Recipes the guess cannot handle are best kept as a list. After saving, use Edit grid layout on the recipe page to adjust which rows each step covers. Before saving, you can also change the row numbers in each step."
         }
       }
     },
