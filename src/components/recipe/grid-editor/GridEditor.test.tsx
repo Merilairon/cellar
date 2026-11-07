@@ -42,7 +42,8 @@ describe('GridEditor shell', () => {
   });
 
   it('starts clean: Undo, Redo and Save are aria-disabled (still focusable) and Save says why', () => {
-    expect(count(html, /aria-disabled="true"/g)).toBe(3);
+    // Toolbar only: row Move buttons and the lone section's Delete are disabled too (T5, T7).
+    expect(count(html.split('class="ge-sections"')[0], /aria-disabled="true"/g)).toBe(3);
     expect(html).not.toMatch(/<button[^>]*\sdisabled(=|\s|>)/);
     expect(html).toContain('No changes to save.');
     expect(html).toMatch(/aria-describedby="ge-save-reason"/);

@@ -20,6 +20,12 @@ import { IssuesPanel } from './IssuesPanel';
 import { initSession, reduceSession, type ActionLabel } from './session';
 import { announceText, historyText } from './text';
 import { bannerId, rowId, stepId } from './roving';
+import { SectionHeader } from './SectionHeader';
+import { useFocusLater } from './useFocusLater';
+import { useRowActions } from './useRowActions';
+import { useSectionActions } from './useSectionActions';
+import { useStepWiring } from './useStepWiring';
+import { useUndoToast } from './useUndoToast';
 
 export type GridEditorProps = {
   recipe: ApiRecipe;
@@ -74,6 +80,51 @@ export function GridEditor({ recipe, onClose, onSave }: GridEditorProps) {
   }, []);
   const say = useCallback((m: string) => announcer.current?.announce(m), []);
 
+  // T5/T7: row and section behaviour. `announce` also leaves the message in `lead`, so the
+  // uncovered-rows sentence the session adds a moment later is appended, not replacing it.
+  const lead = useRef<string | null>(null);
+  const announce = useCallback(
+    (m: string) => {
+      lead.current = m;
+      setTimeout(() => {
+        if (lead.current === m) lead.current = null;
+      }, 450);
+      say(m);
+    },
+    [say],
+  );
+  const focusLater = useFocusLater();
+  const { showToast, toastNode } = useUndoToast(d);
+  const rows = useRowActions({
+    editor,
+    lastLabel: session.labels.past.at(-1) ?? null,
+    dispatch,
+    announce,
+    root,
+    focusLater,
+    showToast,
+    t,
+  });
+  const sections = useSectionActions({
+    editor,
+    dispatch,
+    announce,
+    root,
+    focusLater,
+    showToast,
+    t,
+  });
+
+  const stepUi = useStepWiring({
+    editor,
+    dispatch,
+    announce,
+    focusLater,
+    root,
+    showToast,
+    issues: [...issues.errors, ...issues.warnings],
+  });
+
   useEffect(() => {
     heading.current?.focus();
   }, []);
@@ -88,7 +139,9 @@ export function GridEditor({ recipe, onClose, onSave }: GridEditorProps) {
     const a = session.announcement;
     if (!a || a.seq === lastSeq.current) return;
     lastSeq.current = a.seq;
-    say(a.parts.map((p) => announceText(t, p)).join(' '));
+    const own = lead.current;
+    lead.current = null;
+    say([own, ...a.parts.map((p) => announceText(t, p))].filter(Boolean).join(' '));
   }, [session.announcement, say, t]);
 
   const errorCount = issues.errors.length;
@@ -282,6 +335,9 @@ export function GridEditor({ recipe, onClose, onSave }: GridEditorProps) {
         </div>
       </div>
 
+      {toastNode}
+      {stepUi.tooltip}
+
       <div className="ge-sections">
         {d.sections.map((section, si) => {
           const title = section.title?.trim() || t('recipe.section', { n: si + 1 });
@@ -293,29 +349,45 @@ export function GridEditor({ recipe, onClose, onSave }: GridEditorProps) {
               aria-labelledby={`ge-sec-${si}`}
               className="ge-section"
             >
-              <h3 id={`ge-sec-${si}`} tabIndex={-1} data-ge-heading={section.key} className="ge-h3">
-                {title}
-              </h3>
-              {/* SEAM T7: section toolbar (rename, delete, move) and T5/T6: Add row, Add step, Add banner. */}
+              <SectionHeader
+                index={si}
+                sectionKey={section.key}
+                title={title}
+                rawTitle={section.title}
+                multiple={multiple}
+                rowCount={section.ingredients.length}
+                stepCount={section.steps.length}
+                atRowCap={rows.capMessage(si) !== null}
+                capMessage={rows.capMessage(si)}
+                onRename={(v) => sections.rename(si, v)}
+                onDelete={() => sections.remove(si)}
+                onAddRow={() => rows.addRow(si)}
+                extraActions={stepUi.toolbar(si)}
+                // SEAM T7 stretch: Move up / down.
+              />
               <GridEditorTable
                 section={section}
                 name={name}
                 selectedStepKey={editor.selection.stepKey}
                 onSelectStep={(stepKey) => dispatch({ type: 'select', stepKey })}
                 onSectionJump={(dir) => jumpSection(si, dir)}
-                // SEAM T5 to T7: onChord, onActivateRow, onActivateBanner.
+                {...stepUi.tableProps(si, (e, target) => rows.onRowKey(si, e, target))}
+                onActivateRow={rows.activate}
+                renderRowEditor={(r, previewId) => rows.renderEditor(si, r, previewId)}
+                renderRowControls={(r) => rows.renderControls(si, r)}
               />
+              {stepUi.panel(si)}
               {gapNames(section).length > 0 && (
                 <p className="ge-warnline">
                   <span aria-hidden="true">!</span>{' '}
                   {t('gridEditor.issue.row_uncovered', { names: gapNames(section).join(', ') })}
                 </p>
               )}
-              {/* SEAM T6 and T8: step panel with Adjust rows under the table (phone: sheet). */}
+              {/* SEAM T8: phone (< 640 px) bottom sheet reuses StepPanel's Adjust rows block. */}
             </section>
           );
         })}
-        {/* SEAM T7: Add section. */}
+        {sections.renderAdd()}
       </div>
 
       <IssuesPanel

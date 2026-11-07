@@ -37,8 +37,22 @@ export type GridEditorTableProps = {
   onChord?: (e: React.KeyboardEvent, target: TableTarget) => boolean;
   /** SEAM T5: Enter / Space / click on an ingredient row (inline text edit). */
   onActivateRow?: (target: TableTarget) => void;
+  /**
+   * T5: the inline text editor that replaces row `r`'s button (null when not editing) and the
+   * per-row controls (portion chip, Move, Row actions) rendered after it.
+   */
+  renderRowEditor?: (r: number, previewId: string) => React.ReactNode;
+  renderRowControls?: (r: number) => React.ReactNode;
   /** SEAM T6: Enter / Space / click on a banner (banner panel). */
   onActivateBanner?: (target: TableTarget) => void;
+  /** T6: span handles (and anything else) rendered inside a column step's cell. */
+  renderStepExtras?: (info: {
+    step: EditorSection['steps'][number];
+    rowStart: number;
+    rowEnd: number;
+  }) => React.ReactNode;
+  /** T6: while a handle is dragged, the proposed span drives the live highlight. */
+  previewSpan?: { stepKey: string; start: number; end: number } | null;
 };
 
 const isTextField = (el: EventTarget | null) =>
@@ -79,7 +93,11 @@ export function GridEditorTable({
   onSectionJump,
   onChord,
   onActivateRow,
+  renderRowEditor,
+  renderRowControls,
   onActivateBanner,
+  renderStepExtras,
+  previewSpan,
 }: GridEditorTableProps) {
   const t = useTranslations();
   const stepT: StepT = (key, values) => t(key, values);
@@ -100,7 +118,14 @@ export function GridEditorTable({
     if (!el || isTextField(e.target) || e.nativeEvent.isComposing) return;
     const target = targetOf(el.dataset.geTarget ?? '');
     if (!target) return;
-    if (e.altKey || e.shiftKey || e.metaKey) {
+    if (
+      e.altKey ||
+      e.shiftKey ||
+      e.metaKey ||
+      e.key === 'Delete' ||
+      e.key === 'Backspace' ||
+      e.key === 'F2'
+    ) {
       onChord?.(e, target);
       return;
     }
@@ -179,7 +204,12 @@ export function GridEditorTable({
             {layout.bannersTop.map(banner)}
             {rows.map((ing, r) => {
               const id = rowId(ing.key);
-              const covered = !!selected && selected.rowStart <= r && r <= selected.rowEnd;
+              const range = previewSpan
+                ? { s: previewSpan.start, e: previewSpan.end }
+                : selected
+                  ? { s: selected.rowStart, e: selected.rowEnd }
+                  : null;
+              const covered = !!range && range.s <= r && r <= range.e;
               const gap = uncovered.has(r);
               return (
                 <tr key={ing.key}>
@@ -189,29 +219,38 @@ export function GridEditorTable({
                     data-covered={covered || undefined}
                     data-uncovered={gap || undefined}
                   >
-                    <button
-                      type="button"
-                      className="ge-target ge-rowbtn"
-                      data-ge-target={id}
-                      tabIndex={tab(id)}
-                      onClick={() => {
-                        const tg = targetOf(id);
-                        if (tg) onActivateRow?.(tg);
-                      }}
-                    >
-                      <span className="sr-only">
-                        {t('gridEditor.row.prefix', { n: r + 1, total: rows.length })}
-                      </span>
-                      <IngredientCell ingredient={toCellIngredient(ing, r)} />
-                      {gap && (
-                        <>
-                          <span className="ge-bang" aria-hidden="true">
-                            !
-                          </span>
-                          <span className="sr-only"> {t('gridEditor.row.uncovered')}</span>
-                        </>
-                      )}
-                    </button>
+                    {(() => {
+                      const editorNode = renderRowEditor?.(r, `ge-prev-${ing.key}`);
+                      if (editorNode) return editorNode;
+                      return (
+                        <div className="ge-rowcell flex items-center">
+                          <button
+                            type="button"
+                            className="ge-target ge-rowbtn min-w-0 flex-1"
+                            data-ge-target={id}
+                            tabIndex={tab(id)}
+                            onClick={() => {
+                              const tg = targetOf(id);
+                              if (tg) onActivateRow?.(tg);
+                            }}
+                          >
+                            <span className="sr-only">
+                              {t('gridEditor.row.prefix', { n: r + 1, total: rows.length })}
+                            </span>
+                            <IngredientCell ingredient={toCellIngredient(ing, r)} />
+                            {gap && (
+                              <>
+                                <span className="ge-bang" aria-hidden="true">
+                                  !
+                                </span>
+                                <span className="sr-only"> {t('gridEditor.row.uncovered')}</span>
+                              </>
+                            )}
+                          </button>
+                          {renderRowControls?.(r)}
+                        </div>
+                      );
+                    })()}
                   </th>
                   {layout.rows[r].map((cell) => {
                     if (cell.type === 'empty')
@@ -251,6 +290,7 @@ export function GridEditorTable({
                                 })}
                           </span>
                         </button>
+                        {renderStepExtras?.({ step, rowStart: c.rowStart, rowEnd: c.rowEnd })}
                       </td>
                     );
                   })}
