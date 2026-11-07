@@ -26,16 +26,15 @@ import { useRowActions } from './useRowActions';
 import { useSectionActions } from './useSectionActions';
 import { useStepWiring } from './useStepWiring';
 import { useUndoToast } from './useUndoToast';
+import { ConflictPanel, ListNotice, NetworkAlert } from './SavePanels';
+import { useSaveFlow } from './useSaveFlow';
 
 export type GridEditorProps = {
   recipe: ApiRecipe;
   /** Done (clean) or a confirmed Cancel. The page returns to the read view. */
   onClose: () => void;
-  /**
-   * SEAM T9: called by Save and Ctrl/Cmd+S when Save is enabled. T9 owns the request, the
-   * `base_updated_at` conflict handling, `markSaved` and replacing the page data (G4).
-   */
-  onSave?: () => void;
+  /** A successful save or "Load the latest": the page replaces its recipe data (G4). */
+  onRecipe?: (recipe: ApiRecipe) => void;
 };
 
 const gapNames = (s: EditorSection) =>
@@ -50,7 +49,7 @@ const isTextField = (el: EventTarget | null) =>
  * table per section. Ingredient rows (T5), steps (T6), sections (T7), the phone sheet (T8)
  * and the save flow (T9) plug into the SEAM markers below.
  */
-export function GridEditor({ recipe, onClose, onSave }: GridEditorProps) {
+export function GridEditor({ recipe, onClose, onRecipe }: GridEditorProps) {
   const t = useTranslations();
   const [session, dispatch] = useReducer(reduceSession, recipe, initSession);
   const { editor } = session;
@@ -144,6 +143,49 @@ export function GridEditor({ recipe, onClose, onSave }: GridEditorProps) {
     say([own, ...a.parts.map((p) => announceText(t, p))].filter(Boolean).join(' '));
   }, [session.announcement, say, t]);
 
+  // T9: save flow. Outcomes are announced through the single status region.
+  const sayOutcome = useCallback(
+    (arg: string, kind: 'saving' | 'saved' | 'savedList' | 'rejected' | 'loaded' | 'failed') => {
+      const key: Record<typeof kind, string> = {
+        saving: 'gridEditor.announce.saving',
+        saved: 'gridEditor.announce.saved',
+        savedList: 'gridEditor.announce.savedList',
+        rejected: 'gridEditor.announce.rejected',
+        loaded: 'gridEditor.conflict.loaded',
+        failed: 'gridEditor.save.failedShort',
+      };
+      say(t(key[kind], { count: Number(arg) || 0 }));
+    },
+    [say, t],
+  );
+  const flow = useSaveFlow({
+    recipeId: recipe.id,
+    initialBase: recipe.updated_at,
+    editor,
+    dispatch,
+    onRecipe,
+    say: sayOutcome,
+  });
+  useEffect(() => {
+    if (flow.focusTick.n > 0 && flow.focusTick.what === 'issues') issuesHeading.current?.focus();
+  }, [flow.focusTick]);
+
+  const shownErrors = useMemo(() => {
+    const seen = new Set(issues.errors.map((e) => `${e.path}|${e.code}`));
+    return [...issues.errors, ...flow.rejected.filter((e) => !seen.has(`${e.path}|${e.code}`))];
+  }, [issues.errors, flow.rejected]);
+  const hasColumn = d.sections.some((s) => s.steps.some((st) => st.kind === 'column'));
+  const addStepSection = d.sections.findIndex((s) => s.ingredients.length > 0);
+  const addFirstStep = () => {
+    if (addStepSection < 0) return;
+    dispatch({
+      type: 'stepAdd',
+      section: addStepSection,
+      step: { label: t('gridEditor.step.newLabel') },
+    });
+    announce(t('gridEditor.save.stepAddedForList'));
+  };
+
   const errorCount = issues.errors.length;
   const warningCount = issues.warnings.length;
   const saveReason: string | null =
@@ -158,7 +200,8 @@ export function GridEditor({ recipe, onClose, onSave }: GridEditorProps) {
       say(saveReason);
       return;
     }
-    onSave?.();
+    if (flow.saving) return;
+    void flow.save();
   };
 
   const findIn = (selector: string, match: (el: HTMLElement) => boolean) =>
@@ -218,7 +261,7 @@ export function GridEditor({ recipe, onClose, onSave }: GridEditorProps) {
     redoable && redoName ? t('gridEditor.toolbar.redoWith', { action: redoName }) : null;
 
   const countText = [
-    errorCount > 0 ? t('gridEditor.toolbar.problems', { count: errorCount }) : null,
+    shownErrors.length > 0 ? t('gridEditor.toolbar.problems', { count: shownErrors.length }) : null,
     warningCount > 0 ? t('gridEditor.toolbar.warnings', { count: warningCount }) : null,
   ]
     .filter(Boolean)
@@ -319,11 +362,12 @@ export function GridEditor({ recipe, onClose, onSave }: GridEditorProps) {
               <button
                 type="button"
                 className={`${btnPrimary} aria-disabled:opacity-60`}
-                aria-disabled={saveReason !== null}
+                aria-disabled={saveReason !== null || flow.saving}
+                aria-busy={flow.saving || undefined}
                 aria-describedby={saveReason ? saveReasonId : undefined}
                 onClick={trySave}
               >
-                {t('gridEditor.toolbar.save')}
+                {flow.saving ? t('gridEditor.toolbar.saving') : t('gridEditor.toolbar.save')}
               </button>
               {saveReason && (
                 <span id={saveReasonId} className="sr-only">
@@ -335,6 +379,9 @@ export function GridEditor({ recipe, onClose, onSave }: GridEditorProps) {
         </div>
       </div>
 
+      {flow.phase === 'network' && (
+        <NetworkAlert focusKey={flow.focusTick.n} onRetry={() => void flow.save()} />
+      )}
       {toastNode}
       {stepUi.tooltip}
 
@@ -390,14 +437,25 @@ export function GridEditor({ recipe, onClose, onSave }: GridEditorProps) {
         {sections.renderAdd()}
       </div>
 
-      <IssuesPanel
-        doc={d}
-        errors={issues.errors}
-        warnings={issues.warnings}
-        headingRef={issuesHeading}
-        onGoTo={goTo}
-      />
-      {/* SEAM T9: conflict panel, network error alert, no-column-steps notice, beforeunload. */}
+      {!hasColumn && <ListNotice onAddStep={addStepSection >= 0 ? addFirstStep : null} />}
+      {flow.phase === 'conflict' ? (
+        <ConflictPanel
+          confirm={flow.confirm}
+          focusKey={flow.focusTick.n}
+          onConfirm={flow.setConfirm}
+          onKeep={flow.keepEditing}
+          onLoad={() => void flow.loadLatest()}
+          onSaveMine={() => void flow.saveMine()}
+        />
+      ) : (
+        <IssuesPanel
+          doc={d}
+          errors={shownErrors}
+          warnings={issues.warnings}
+          headingRef={issuesHeading}
+          onGoTo={goTo}
+        />
+      )}
     </div>
   );
 }

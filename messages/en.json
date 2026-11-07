@@ -498,7 +498,8 @@
       "dirty": "Unsaved changes",
       "clean": "All changes saved",
       "problems": "{count, plural, one {# problem} other {# problems}}",
-      "warnings": "{count, plural, one {# warning} other {# warnings}}"
+      "warnings": "{count, plural, one {# warning} other {# warnings}}",
+      "saving": "Saving..."
     },
     "leave": {
       "confirm": "Discard your unsaved changes?",
@@ -641,7 +642,11 @@
       "nothingToUndo": "Nothing to undo.",
       "nothingToRedo": "Nothing to redo.",
       "uncoveredNow": "Not used by any step: {names}.",
-      "allCovered": "All ingredients are used by a step."
+      "allCovered": "All ingredients are used by a step.",
+      "saving": "Saving.",
+      "saved": "Saved.",
+      "savedList": "Saved as a list.",
+      "rejected": "{count, plural, one {The server rejected # item. See Problems and warnings.} other {The server rejected # items. See Problems and warnings.}}"
     },
     "limit": {
       "ingredients": "A section can have at most {max} ingredients.",
@@ -666,6 +671,27 @@
       "deleted": "Deleted section {title}.",
       "last": "A recipe needs at least one section.",
       "actionsFor": "Actions for {title}"
+    },
+    "save": {
+      "failed": "Could not save. Check your connection and try again. Your changes are still here.",
+      "failedShort": "Could not save. Your changes are still here.",
+      "retry": "Try again",
+      "viewModeList": "This recipe has no step columns. It will be saved as a list.",
+      "addStep": "Add a step",
+      "stepAddedForList": "Step added. The recipe will stay a grid."
+    },
+    "conflict": {
+      "title": "This recipe changed while you were editing.",
+      "body": "Someone saved it after you opened the editor. Your changes are not saved yet.",
+      "keepEditing": "Keep editing",
+      "loadLatest": "Load the latest version",
+      "loadLatestConfirm": "This throws away your changes in the editor.",
+      "loadLatestYes": "Discard and load",
+      "overwrite": "Save mine anyway",
+      "overwriteConfirm": "This replaces what the other person saved with your version.",
+      "overwriteYes": "Save mine",
+      "back": "Cancel",
+      "loaded": "Loaded the latest version."
     },
     "sheet": {
       "close": "Close",

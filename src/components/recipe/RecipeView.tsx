@@ -2,6 +2,7 @@
 
 import { useId, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
+import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import type { UnitSystem } from '@/lib/units/units';
 import type { ViewMode } from '@/lib/recipes/schemas';
@@ -33,7 +34,7 @@ const GridEditor = dynamic(() => import('./grid-editor/GridEditor').then((m) => 
 });
 
 export function RecipeView({
-  recipe,
+  recipe: serverRecipe,
   userId,
   unitPref = 'metric',
   actions,
@@ -45,6 +46,17 @@ export function RecipeView({
   actions?: React.ReactNode;
 }) {
   const t = useTranslations();
+  const router = useRouter();
+  // T9 / G4: after a grid save the PUT response is the freshest data, so it is used at once;
+  // `router.refresh()` then brings the server props (meta, page chrome) in line. The local copy
+  // yields as soon as the server prop carries the same or a newer `updated_at`.
+  const [saved, setSaved] = useState<ApiRecipe | null>(null);
+  const recipe = saved && saved.updated_at > serverRecipe.updated_at ? saved : serverRecipe;
+  const onRecipe = (r: ApiRecipe) => {
+    setSaved(r);
+    setSelected(null);
+    router.refresh();
+  };
   const root = useRef<HTMLDivElement>(null);
   const noteId = useId();
   const [stored, setStored] = useViewPreference(userId);
@@ -110,7 +122,7 @@ export function RecipeView({
   if (editing)
     return (
       <div ref={root}>
-        <GridEditor recipe={recipe} onClose={closeEditor} />
+        <GridEditor recipe={recipe} onClose={closeEditor} onRecipe={onRecipe} />
       </div>
     );
 
