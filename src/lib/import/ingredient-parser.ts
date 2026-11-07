@@ -1,7 +1,10 @@
 // Pure module: no node, db or react imports. Runs on the client (live preview)
-// and on the server. No unit conversion happens here, ever (see data-model §4, M5+).
+// and on the server. No unit conversion happens here, ever (see data-model §4, M5+);
+// the unit alias table is shared with src/lib/units/units.ts, which owns conversion.
 
-export type UnitSystem = 'metric' | 'us';
+import { lookupAlias, type UnitSystem } from '../units/units';
+
+export type { UnitSystem };
 
 export type ParsedIngredient = {
   qty: number | null;
@@ -17,30 +20,6 @@ export type ParsedIngredient = {
   /** True when the line could not be understood; `name` then holds the trimmed raw line. */
   unparsed?: true;
 };
-
-type UnitInfo = { canonical: string; system: UnitSystem };
-
-const UNIT_DEFS: Array<[UnitInfo, string[]]> = [
-  [{ canonical: 'g', system: 'metric' }, ['g', 'gr', 'gram', 'grams', 'gramme', 'grammes']],
-  [{ canonical: 'kg', system: 'metric' }, ['kg', 'kgs', 'kilogram', 'kilograms', 'kilo', 'kilos']],
-  [
-    { canonical: 'mL', system: 'metric' },
-    ['ml', 'milliliter', 'milliliters', 'millilitre', 'millilitres'],
-  ],
-  [{ canonical: 'L', system: 'metric' }, ['l', 'liter', 'liters', 'litre', 'litres']],
-  [{ canonical: 'oz', system: 'us' }, ['oz', 'ounce', 'ounces']],
-  [{ canonical: 'lb', system: 'us' }, ['lb', 'lbs', 'pound', 'pounds']],
-  [{ canonical: 'cup', system: 'us' }, ['cup', 'cups']],
-  [{ canonical: 'tbsp', system: 'us' }, ['tbsp', 'tbsps', 'tbs', 'tablespoon', 'tablespoons']],
-  [{ canonical: 'tsp', system: 'us' }, ['tsp', 'tsps', 'teaspoon', 'teaspoons']],
-  [{ canonical: 'fl oz', system: 'us' }, ['floz']],
-  [{ canonical: 'pt', system: 'us' }, ['pt', 'pint', 'pints']],
-  [{ canonical: 'qt', system: 'us' }, ['qt', 'quart', 'quarts']],
-  [{ canonical: 'gal', system: 'us' }, ['gal', 'gallon', 'gallons']],
-];
-
-const UNITS = new Map<string, UnitInfo>();
-for (const [info, names] of UNIT_DEFS) for (const n of names) UNITS.set(n, info);
 
 /** Count-like units kept as written (not a measurement system). */
 const CONTAINERS = new Set([
@@ -75,7 +54,7 @@ export function joinQtyRange(qty: number, max: number | null | undefined): strin
 }
 
 export function unitSystem(unit: string | null): UnitSystem | null {
-  return unit ? (UNITS.get(unit.toLowerCase().replace(/\./g, ''))?.system ?? null) : null;
+  return unit ? (lookupAlias(unit)?.system ?? null) : null;
 }
 
 const FRACTIONS: Record<string, number> = {
@@ -142,9 +121,9 @@ function readUnit(s: string): { unit: string; known: boolean; rest: string } | n
   const m = /^([A-Za-z]+)\.?(?![A-Za-z])/.exec(s);
   if (!m) return null;
   const word = m[1]!.toLowerCase();
-  const info = UNITS.get(word);
+  const info = lookupAlias(word);
   const rest = s.slice(m[0].length).trimStart();
-  if (info) return { unit: info.canonical, known: true, rest };
+  if (info) return { unit: info.id, known: true, rest };
   if (CONTAINERS.has(word) || VAGUE.has(word)) return { unit: word, known: false, rest };
   return null;
 }
