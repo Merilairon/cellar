@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslations } from 'next-intl';
+import { PHONE_QUERY, useMediaQuery } from '../useViewPreference';
+import { RowSheet } from './RowSheet';
 
 export type RowActionId =
   'edit' | 'moveUp' | 'moveDown' | 'addBelow' | 'split' | 'renamePortion' | 'delete';
@@ -27,7 +29,7 @@ const iconBtn =
  * Per-row controls (UX spec 3, 7). Move up / Move down are inline only from 900 px up (CSS
  * `display: none` under it removes them from the tab order and the accessibility tree); the
  * Row actions menu button is always there and lists every action, so under 900 px it is the
- * only per-row control. SEAM T8: below 640 px the row sheet replaces this menu.
+ * only per-row control. Below 640 px the row sheet (T8) replaces this menu.
  */
 export function RowControls({
   name,
@@ -40,7 +42,9 @@ export function RowControls({
   menuButtonRef,
 }: RowControlsProps) {
   const t = useTranslations();
+  const isPhone = useMediaQuery(PHONE_QUERY);
   const [open, setOpen] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
   const button = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
@@ -139,15 +143,30 @@ export function RowControls({
           menuButtonRef?.(el);
         }}
         className={iconBtn}
-        aria-haspopup="menu"
-        aria-expanded={open}
+        aria-haspopup={isPhone ? 'dialog' : 'menu'}
+        aria-expanded={isPhone ? sheetOpen : open}
         aria-label={t('gridEditor.row.actionsFor', { name })}
         title={t('gridEditor.row.actions')}
-        onClick={() => (open ? close(false) : openMenu())}
+        onClick={() => (isPhone ? setSheetOpen(true) : open ? close(false) : openMenu())}
       >
         <span aria-hidden="true">…</span>
       </button>
-      {open &&
+      {isPhone && sheetOpen && (
+        <RowSheet
+          name={name}
+          items={items}
+          onClose={() => setSheetOpen(false)}
+          onPick={(id) => {
+            const it = items.find((x) => x.id === id);
+            // Disabled items stay focusable but do nothing (same as the menu).
+            if (!it || it.disabled) return;
+            setSheetOpen(false);
+            onAction(id as RowActionId, 'menu');
+          }}
+        />
+      )}
+      {!isPhone &&
+        open &&
         pos &&
         createPortal(
           <div

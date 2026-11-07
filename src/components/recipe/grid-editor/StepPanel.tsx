@@ -2,7 +2,7 @@
 
 import { useId, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import type { EditorIssue } from '@/lib/grid/editor';
+import { uncoveredRows, type EditorIssue } from '@/lib/grid/editor';
 import type { EditorSection } from '@/lib/grid/editor';
 import type { EditorStep } from '@/lib/grid/editor';
 import type { StepFields } from '@/lib/grid/editor';
@@ -33,6 +33,10 @@ export type StepPanelProps = {
   issues: EditorIssue[];
   doc: Parameters<typeof issueText>[0];
   api: StepPanelApi;
+  /** Phone sheet variant (T8): steppers always shown, text fields in a closed disclosure. */
+  sheet?: { onClose: () => void };
+  /** Id for the heading when a dialog labels itself by it. */
+  headingId?: string;
 };
 
 const toInt = (v: string, max: number): number | null | undefined => {
@@ -54,11 +58,15 @@ export function StepPanel({
   issues,
   doc,
   api,
+  sheet,
+  headingId,
 }: StepPanelProps) {
   const t = useTranslations();
-  const headId = useId();
+  const autoId = useId();
+  const headId = headingId ?? autoId;
   const adjustId = useId();
-  const [adjusting, setAdjusting] = useState(false);
+  const [adjustOpen, setAdjusting] = useState(false);
+  const adjusting = adjustOpen || !!sheet;
   const [choosing, setChoosing] = useState(false);
   const isColumn = step.kind === 'column';
   const label =
@@ -156,9 +164,21 @@ export function StepPanel({
   const defaultWhere = isColumn && end === n - 1 ? 'banner_bottom' : 'banner_top';
   const [where, setWhere] = useState<'banner_top' | 'banner_bottom'>(defaultWhere);
 
+  const gaps = uncoveredRows(section.steps, n).map((i) => rows[i].name || '...');
+
   const covered = rows.slice(start, end + 1).map((r) => r.name || '...');
   const coveredNames =
     covered.length > 4 ? `${covered[0]} ... ${covered[covered.length - 1]}` : covered.join(', ');
+
+  const wrapFields = (node: React.ReactNode) =>
+    sheet ? (
+      <details className="ge-details">
+        <summary className="ge-summary">{t('gridEditor.sheet.details')}</summary>
+        {node}
+      </details>
+    ) : (
+      node
+    );
 
   return (
     <section
@@ -170,22 +190,31 @@ export function StepPanel({
         if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) e.preventDefault();
       }}
     >
-      <h4 id={headId} className="ge-h4" tabIndex={-1}>
-        {heading}
-      </h4>
+      <div className="ge-panelhead">
+        <h4 id={headId} className="ge-h4" tabIndex={-1}>
+          {heading}
+        </h4>
+        {sheet && (
+          <button type="button" className={btn} data-ge-sheet-close onClick={sheet.onClose}>
+            {t('gridEditor.sheet.close')}
+          </button>
+        )}
+      </div>
 
       <div className="ge-panelbar">
         {isColumn ? (
           <>
-            <button
-              type="button"
-              className={btn}
-              aria-expanded={adjusting}
-              aria-controls={adjustId}
-              onClick={() => setAdjusting((v) => !v)}
-            >
-              {t('gridEditor.step.adjust')}
-            </button>
+            {!sheet && (
+              <button
+                type="button"
+                className={btn}
+                aria-expanded={adjusting}
+                aria-controls={adjustId}
+                onClick={() => setAdjusting((v) => !v)}
+              >
+                {t('gridEditor.step.adjust')}
+              </button>
+            )}
             <button
               type="button"
               className={btn}
@@ -280,54 +309,73 @@ export function StepPanel({
         >
           {stepper('start', 'stepGrowStart', 'stepShrinkStart', start, start <= 0, start >= end)}
           {stepper('end', 'stepShrinkEnd', 'stepGrowEnd', end, end <= start, end >= n - 1)}
-          <p className="ge-muted">
-            {t('gridEditor.step.covers', { count: end - start + 1, names: coveredNames })}
-          </p>
-        </div>
-      )}
-
-      <div className="ge-fields">
-        <FormField id={fid('label')} label={t('recipe.form.step.label')} code={undefined}>
-          {(p) => (
+          {sheet ? (
             <>
-              <input
-                {...p}
-                value={step.label}
-                maxLength={80}
-                required={!isColumn}
-                aria-required="true"
-                aria-invalid={errText ? true : undefined}
-                aria-describedby={errText ? `${fid('label')}-err` : undefined}
-                data-ge-field={`label:${step.key}`}
-                onChange={(e) => api.edit({ label: e.target.value }, 'label')}
-                className={input}
-              />
-              {errText && (
-                <p id={`${fid('label')}-err`} className={errorText}>
-                  {errText}
+              <p className="ge-muted">{t('gridEditor.sheet.covers', { count: end - start + 1 })}</p>
+              <ol start={start + 1} className="ge-covered" data-ge-covered>
+                {rows.slice(start, end + 1).map((r) => (
+                  <li key={r.key}>{r.name || '...'}</li>
+                ))}
+              </ol>
+              {gaps.length > 0 && (
+                <p className="ge-warnline">
+                  <span aria-hidden="true">!</span>{' '}
+                  {t('gridEditor.issue.row_uncovered', { names: gaps.join(', ') })}
                 </p>
               )}
             </>
+          ) : (
+            <p className="ge-muted">
+              {t('gridEditor.step.covers', { count: end - start + 1, names: coveredNames })}
+            </p>
           )}
-        </FormField>
-        <FormField id={fid('detail')} label={t('recipe.form.step.detail')} className="ge-wide">
-          {(p) => (
-            <textarea
-              {...p}
-              rows={2}
-              maxLength={4000}
-              value={step.detail}
-              onChange={(e) => api.edit({ detail: e.target.value }, 'detail')}
-              className={input}
-            />
-          )}
-        </FormField>
-        {num('temp_c', t('recipe.form.step.tempC'), 1000)}
-        {num('temp_f', t('recipe.form.step.tempF'), 2000)}
-        {num('minutes_min', t('recipe.form.step.minutesMin'), 100_000)}
-        {num('minutes_max', t('recipe.form.step.minutesMax'), 100_000)}
-      </div>
-      {isColumn && <p className="ge-muted">{t('gridEditor.hint.resize')}</p>}
+        </div>
+      )}
+
+      {wrapFields(
+        <div className="ge-fields">
+          <FormField id={fid('label')} label={t('recipe.form.step.label')} code={undefined}>
+            {(p) => (
+              <>
+                <input
+                  {...p}
+                  value={step.label}
+                  maxLength={80}
+                  required={!isColumn}
+                  aria-required="true"
+                  aria-invalid={errText ? true : undefined}
+                  aria-describedby={errText ? `${fid('label')}-err` : undefined}
+                  data-ge-field={`label:${step.key}`}
+                  onChange={(e) => api.edit({ label: e.target.value }, 'label')}
+                  className={input}
+                />
+                {errText && (
+                  <p id={`${fid('label')}-err`} className={errorText}>
+                    {errText}
+                  </p>
+                )}
+              </>
+            )}
+          </FormField>
+          <FormField id={fid('detail')} label={t('recipe.form.step.detail')} className="ge-wide">
+            {(p) => (
+              <textarea
+                {...p}
+                rows={2}
+                maxLength={4000}
+                value={step.detail}
+                onChange={(e) => api.edit({ detail: e.target.value }, 'detail')}
+                className={input}
+              />
+            )}
+          </FormField>
+          {num('temp_c', t('recipe.form.step.tempC'), 1000)}
+          {num('temp_f', t('recipe.form.step.tempF'), 2000)}
+          {num('minutes_min', t('recipe.form.step.minutesMin'), 100_000)}
+          {num('minutes_max', t('recipe.form.step.minutesMax'), 100_000)}
+        </div>,
+      )}
+      {isColumn && !sheet && <p className="ge-muted">{t('gridEditor.hint.resize')}</p>}
     </section>
   );
 }

@@ -5,7 +5,11 @@ import { useTranslations } from 'next-intl';
 import { doc, type EditorAction, type EditorIssue, type EditorState } from '@/lib/grid/editor';
 import type { GridEditorTableProps, TableTarget } from './GridEditorTable';
 import { StepHandles } from './StepHandles';
+import { PHONE_QUERY, useMediaQuery } from '../useViewPreference';
 import { StepPanel } from './StepPanel';
+import { StepSheet } from './StepSheet';
+import { byTarget } from './useFocusLater';
+import { stepId } from './roving';
 import { StepsToolbar } from './StepsToolbar';
 import { useSpanDrag } from './useSpanDrag';
 import { useStepEditing } from './useStepEditing';
@@ -38,6 +42,7 @@ export function useStepWiring({
 }: Params) {
   const t = useTranslations();
   const d = doc(editor);
+  const isPhone = useMediaQuery(PHONE_QUERY);
   const steps = useStepEditing({ editor, dispatch, say: announce, focusLater, root, showToast });
   const drag = useSpanDrag({
     onSelect: (stepKey) => dispatch({ type: 'select', stepKey }),
@@ -94,18 +99,28 @@ export function useStepWiring({
     if (idx < 0) return null;
     const step = section.steps[idx];
     const group = section.steps.filter((s) => s.kind === step.kind);
-    return (
-      <StepPanel
-        key={step.key}
-        section={section}
-        step={step}
-        position={group.indexOf(step)}
-        groupSize={group.length}
-        issues={issues}
-        doc={d}
-        api={steps.panelApi(si, idx)}
-      />
-    );
+    const props = {
+      section,
+      step,
+      position: group.indexOf(step),
+      groupSize: group.length,
+      issues,
+      doc: d,
+      api: steps.panelApi(si, idx),
+    };
+    // Phone: the same panel as a bottom sheet (T8). Closing hands focus back to the step cell.
+    if (isPhone)
+      return (
+        <StepSheet
+          key={step.key}
+          {...props}
+          onClose={() => {
+            dispatch({ type: 'select', stepKey: null });
+            focusLater(byTarget(root, stepId(step.key)));
+          }}
+        />
+      );
+    return <StepPanel key={step.key} {...props} />;
   };
 
   const tooltip =

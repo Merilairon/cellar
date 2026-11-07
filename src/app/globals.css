@@ -714,3 +714,84 @@ dialog.rg-sheet::backdrop {
     transition: opacity 0.1s;
   }
 }
+
+/* Editor bottom sheets (T8): lighter backdrop so the grid and its live highlight stay visible. */
+dialog.rg-sheet.ge-sheet {
+  max-height: 55dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+dialog.rg-sheet.ge-sheet::backdrop {
+  background: rgba(0, 0, 0, 0.18);
+}
+@media (max-height: 479px) {
+  dialog.rg-sheet.ge-sheet {
+    max-height: 70dvh;
+  }
+}
+.ge-sheetbody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ge-sheetbody .ge-panel {
+  border: 0;
+  padding: 0;
+}
+.ge-panelhead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--rg-surface);
+}
+dialog.ge-sheet .ge-stepper,
+dialog.ge-sheet .ge-panelbar .btn,
+.ge-rowsheetbtn {
+  min-width: 44px;
+  min-height: 44px;
+}
+dialog.ge-sheet .ge-stepperlabel {
+  flex-basis: 100%;
+}
+dialog.ge-sheet .ge-steppervalue {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+}
+.ge-covered {
+  max-height: 12rem;
+  margin: 0;
+  padding-inline-start: 1.75rem;
+  overflow-y: auto;
+  list-style: decimal;
+}
+.ge-details {
+  border-top: 1px solid var(--rg-line);
+  padding-top: 8px;
+}
+.ge-summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 600;
+}
+.ge-rowsheet {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ge-rowsheetbtn {
+  width: 100%;
+  justify-content: flex-start;
+}
+.ge-rowsheetbtn[aria-disabled='true'] {
+  opacity: 0.5;
+}

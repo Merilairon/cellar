@@ -666,6 +666,11 @@
       "deleted": "Deleted section {title}.",
       "last": "A recipe needs at least one section.",
       "actionsFor": "Actions for {title}"
+    },
+    "sheet": {
+      "close": "Close",
+      "details": "Step details (label, text, time)",
+      "covers": "{count, plural, one {Covers # row} other {Covers # rows}}"
     }
   }
 }
