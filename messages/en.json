@@ -414,6 +414,40 @@
       "banner_has_span": "Banner steps do not take a row range.",
       "split_group_cross_section": "A split ingredient must stay in one section.",
       "saveFailed": "The recipe could not be saved. Check your connection and try again."
+    },
+    "scale": {
+      "label": "Scale and units",
+      "group": "Scale",
+      "half": "1/2x",
+      "one": "1x",
+      "two": "2x",
+      "custom": "Custom",
+      "servingsTarget": "Servings",
+      "multiplier": "Multiplier",
+      "toUs": "Show in US units",
+      "toMetric": "Show in metric",
+      "reset": "Reset",
+      "invalid": "Enter a number above 0 that scales the recipe by at most {max} times.",
+      "about": "about",
+      "summaryOriginal": "Showing the original amounts.",
+      "summaryFactor": "Showing amounts at {factor}x.",
+      "summaryServings": "Showing amounts at {factor}x: serves {servings}."
     }
+  },
+  "search": {
+    "landmark": "Recipe search",
+    "label": "Search recipes",
+    "placeholder": "Search recipes",
+    "count": "{count, plural, one {# recipe found} other {# recipes found}}",
+    "noResultsTitle": "No recipes found",
+    "noResultsQuery": "Nothing matched “{q}”. Try fewer or different words.",
+    "noResults": "No recipes match these filters.",
+    "clearFilters": "Clear all filters"
+  },
+  "tags": {
+    "filterLabel": "Filter by tag",
+    "chip": "{name}, {count, plural, one {# recipe} other {# recipes}}. Filter by this tag",
+    "chipActive": "{name}, {count, plural, one {# recipe} other {# recipes}}. Filter active, select to remove",
+    "clear": "Clear tag filter"
   }
 }

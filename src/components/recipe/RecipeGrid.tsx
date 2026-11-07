@@ -1,7 +1,7 @@
 import { useTranslations } from 'next-intl';
 import { buildSectionLayout } from '@/lib/grid/layout';
 import { formatStepParams, type StepT } from './formatStep';
-import { IngredientCell } from './IngredientCell';
+import { IngredientCell, type QuantityDisplay } from './IngredientCell';
 import { ScrollRegion } from './ScrollRegion';
 import { StepPanel } from './StepDetail';
 import type { ApiSection, ApiStep } from './types';
@@ -18,6 +18,8 @@ export type RecipeGridProps = {
    * `sheet`: the parent shows a bottom sheet; cells then announce a dialog popup.
    */
   detailMode?: 'inline' | 'sheet';
+  /** Unit preference, factor and toggle for the ingredient quantities. */
+  display?: QuantityDisplay;
 };
 
 /** Props in, markup out. One real <table> per section. */
@@ -27,6 +29,7 @@ export function RecipeGrid({
   expandedStepId = null,
   onSelectStep,
   detailMode = 'inline',
+  display,
 }: RecipeGridProps) {
   const t = useTranslations();
   const stepT: StepT = (key, values) => t(key, values);
@@ -85,7 +88,7 @@ export function RecipeGrid({
                   {ingredients.map((ing, r) => (
                     <tr key={ing.id}>
                       <th scope="row" className="rg-ing">
-                        <IngredientCell ingredient={ing} />
+                        <IngredientCell ingredient={ing} display={display} />
                       </th>
                       {layout.rows[r].map((cell) => {
                         if (cell.type === 'empty') {

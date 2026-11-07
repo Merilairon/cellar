@@ -2,21 +2,32 @@
 
 import { useId, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import type { UnitSystem } from '@/lib/units/units';
 import type { ViewMode } from '@/lib/recipes/schemas';
 import { effectiveViewMode, maxColumnsInSection } from '@/lib/recipes/view-mode';
 import { ConvertToGrid } from './ConvertToGrid';
+import { ScaleControls, useScale } from './ScaleControls';
 import { RecipeGrid } from './RecipeGrid';
 import { RecipeList } from './RecipeList';
 import { StepSheet } from './StepDetail';
 import type { ApiRecipe } from './types';
 import { PHONE_QUERY, useMediaQuery, useViewPreference } from './useViewPreference';
 
-export function RecipeView({ recipe, userId }: { recipe: ApiRecipe; userId: string }) {
+export function RecipeView({
+  recipe,
+  userId,
+  unitPref = 'metric',
+}: {
+  recipe: ApiRecipe;
+  userId: string;
+  unitPref?: UnitSystem;
+}) {
   const t = useTranslations();
   const root = useRef<HTMLDivElement>(null);
   const noteId = useId();
   const [stored, setStored] = useViewPreference(userId);
   const isPhone = useMediaQuery(PHONE_QUERY);
+  const scale = useScale(unitPref, recipe.servings);
   const [selected, setSelected] = useState<string | null>(null);
 
   const gridPossible = recipe.view_mode === 'grid';
@@ -59,6 +70,7 @@ export function RecipeView({ recipe, userId }: { recipe: ApiRecipe; userId: stri
 
   return (
     <div ref={root}>
+      <ScaleControls scale={scale} servings={recipe.servings} />
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div
           role="group"
@@ -89,11 +101,12 @@ export function RecipeView({ recipe, userId }: { recipe: ApiRecipe; userId: stri
             expandedStepId={selected}
             onSelectStep={setSelected}
             detailMode={isPhone ? 'sheet' : 'inline'}
+            display={scale.display}
           />
           {isPhone && <StepSheet step={selectedStep} onClose={closeStep} />}
         </>
       ) : (
-        <RecipeList sections={recipe.sections} />
+        <RecipeList sections={recipe.sections} display={scale.display} />
       )}
     </div>
   );

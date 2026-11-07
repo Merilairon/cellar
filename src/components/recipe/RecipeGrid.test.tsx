@@ -131,7 +131,7 @@ describe('ingredient ranges ("2-3 tbsp")', () => {
   };
   it('shows both bounds in the grid ingredient column', () => {
     const html = grid(ranged());
-    expect(html).toMatch(/<span class="rg-qty">2-3 tbsp(<!-- -->)? <\/span>/);
+    expect(html).toMatch(/<span class="rg-qty">2-3 tbsp/);
     expect(html).not.toMatch(/<span class="rg-qty">2 tbsp/);
   });
   it('shows both bounds in the list view', () => {

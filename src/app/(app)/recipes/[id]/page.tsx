@@ -50,7 +50,7 @@ export default async function Page({
         {recipe.can_edit && <VisibilityControl id={recipe.id} visibility={recipe.visibility} />}
         {!isOwner && <SaveCopyButton id={recipe.id} />}
       </div>
-      <RecipeView recipe={recipe} userId={user.id} />
+      <RecipeView recipe={recipe} userId={user.id} unitPref={user.unitPref} />
     </main>
   );
 }

@@ -2,7 +2,7 @@ import { useTranslations } from 'next-intl';
 import { parseIngredientLine, toIngredientFields } from '@/lib/import/ingredient-parser';
 import { ingredientLines } from '@/lib/recipes/form-model';
 import { FormField } from './FormField';
-import { formatMeasure } from './formatIngredient';
+import { formatMeasure } from '@/lib/units/display';
 import { input } from './styles';
 
 /** One ingredient per line, with a live preview of how each line is understood. */
@@ -45,7 +45,7 @@ export function IngredientTextarea({
             {lines.map((line, n) => {
               const parsed = parseIngredientLine(line);
               const f = toIngredientFields(parsed);
-              const measure = formatMeasure(f);
+              const measure = formatMeasure(f, { pref: f.display_primary });
               return (
                 <li key={n} className="flex gap-2 px-2 py-1">
                   <span className="w-12 shrink-0 text-neutral-700 dark:text-neutral-300">

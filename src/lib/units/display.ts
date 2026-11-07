@@ -100,13 +100,17 @@ export function measureParts(i: MeasureFields, opts: DisplayOptions): MeasurePar
   };
 }
 
-function partText(p: MeasurePart): string {
+/** The part's text without the approx marker (the UI renders the marker itself, with an accessible label). */
+export function partBody(p: MeasurePart): string {
   const amount =
     p.qtyMax != null
       ? `${fmtNum(p.qty, p.unit)}-${fmtNum(p.qtyMax, p.unit)}`
       : fmtNum(p.qty, p.unit);
-  const body = p.unit ? `${amount} ${p.unit}` : amount;
-  return p.approx ? `≈ ${body}` : body;
+  return p.unit ? `${amount} ${p.unit}` : amount;
+}
+
+function partText(p: MeasurePart): string {
+  return p.approx ? `≈ ${partBody(p)}` : partBody(p);
 }
 
 /** "8 oz (230 g)"; the secondary side is omitted when it does not exist. */
