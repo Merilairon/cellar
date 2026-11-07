@@ -37,3 +37,27 @@ describe('normalizeTagList', () => {
     expect(normalizeTagList(many)).toHaveLength(20);
   });
 });
+
+describe('normalizeTagName: invisible and spoofing characters (checkpoint F2)', () => {
+  it.each([
+    ['zero-width space', 'a​b'],
+    ['right-to-left override', 'a‮b'],
+    ['left-to-right mark', 'a‎b'],
+    ['bidi isolate', 'a⁦b⁩'],
+    ['word joiner', 'a⁠b'],
+    ['soft hyphen', 'a­b'],
+    ['tag character', 'a\u{E0041}b'],
+    ['lone surrogate', 'a\uD800b'],
+    ['private use', 'ab'],
+    ['unassigned', 'a͸b'],
+  ])('rejects %s', (_label, raw) => expect(normalizeTagName(raw)).toBeNull());
+
+  it('keeps ZWNJ and ZWJ (Persian, Indic scripts, emoji sequences)', () => {
+    expect(normalizeTagName('می‌خواهم')).not.toBeNull();
+    expect(normalizeTagName('\u{1F468}‍\u{1F373}')).not.toBeNull();
+  });
+
+  it('trims a leading BOM like any other whitespace', () => {
+    expect(normalizeTagName('﻿a')).toBe('a');
+  });
+});

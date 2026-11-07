@@ -1,8 +1,9 @@
-import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { ulid } from 'ulid';
 import type { Db } from './connection';
 import { readableBy } from './readable';
 import { ingredient, nowIso, recipe, section, step, user } from './schema';
+import { withDeferredFts } from './fts';
 import { deleteOrphanTags, listTagsForRecipe, setRecipeTags, tagIdsForRecipe } from './tags';
 
 export { readableBy };
@@ -105,8 +106,10 @@ export function insertRecipeTree(conn: Conn, ownerId: string, tree: RecipeTree):
     .insert(recipe)
     .values({ ...tree.fields, id, ownerId, createdAt: now, updatedAt: now })
     .run();
-  insertSections(conn, id, tree.sections);
-  if (tree.tags && tree.tags.length > 0) setRecipeTags(conn, id, tree.tags);
+  withDeferredFts(conn, id, () => {
+    insertSections(conn, id, tree.sections);
+    if (tree.tags && tree.tags.length > 0) setRecipeTags(conn, id, tree.tags);
+  });
   return id;
 }
 
@@ -168,9 +171,11 @@ export function replaceRecipe(
         .set({ ...tree.fields, viewMode, updatedAt: nowIso() })
         .where(eq(recipe.id, id))
         .run();
-      tx.delete(section).where(eq(section.recipeId, id)).run(); // cascades to ingredient and step
-      insertSections(tx, id, tree.sections);
-      if (tree.tags !== undefined) setRecipeTags(tx, id, tree.tags);
+      withDeferredFts(tx, id, () => {
+        tx.delete(section).where(eq(section.recipeId, id)).run(); // cascades to ingredient and step
+        insertSections(tx, id, tree.sections);
+        if (tree.tags !== undefined) setRecipeTags(tx, id, tree.tags);
+      });
       return true;
     },
     { behavior: 'immediate' },
@@ -254,7 +259,11 @@ export function deleteRecipe(db: Db, id: string, guard?: RecipeGuard): boolean {
       if (!row) return false;
       enforce(guard, row);
       const tagIds = tagIdsForRecipe(tx, id);
+      // The cascade would fire the per-row FTS triggers for every ingredient; the recipe's own
+      // delete trigger removes the FTS row, so skip them (F1).
+      tx.run(sql`insert or ignore into recipe_fts_defer (recipe_id) values (${id})`);
       tx.delete(recipe).where(eq(recipe.id, id)).run();
+      tx.run(sql`delete from recipe_fts_defer where recipe_id = ${id}`);
       deleteOrphanTags(tx, tagIds);
       return true;
     },
@@ -318,16 +327,18 @@ export function copyRecipe(
           updatedAt: now,
         })
         .run();
-      insertSections(
-        tx,
-        id,
-        src.sections.map((s) => ({
-          title: s.title,
-          ingredients: s.ingredients.map(stripKeys),
-          steps: s.steps.map(stripKeys),
-        })),
-      );
-      if (src.tags.length > 0) setRecipeTags(tx, id, src.tags);
+      withDeferredFts(tx, id, () => {
+        insertSections(
+          tx,
+          id,
+          src.sections.map((s) => ({
+            title: s.title,
+            ingredients: s.ingredients.map(stripKeys),
+            steps: s.steps.map(stripKeys),
+          })),
+        );
+        if (src.tags.length > 0) setRecipeTags(tx, id, src.tags);
+      });
       return id;
     },
     { behavior: 'immediate' },
