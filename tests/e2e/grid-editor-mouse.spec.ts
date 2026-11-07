@@ -13,6 +13,7 @@ import {
   saveButton,
 } from './grid-editor-support';
 import { SAMPLE_SKILLET_COOKIES } from '@/lib/recipes/samples';
+import { sourceBody } from './source-body';
 
 // T10 (1): recreate the Mocha Skillet Cookie with the MOUSE only. Start state per UX spec F1:
 // nine-row grid minus the ninth row, one column step over row 1. Clicks, real pointer drags on
@@ -37,7 +38,7 @@ test('this spec never presses a key', () => {
   const src = readFileSync(__filename, 'utf8');
   const banned = ['keyboard' + '.press', '.press' + '(', 'keyboard' + '.down', 'keyboard' + '.up'];
   // Only the test source below the marker counts (this check names the words itself).
-  const body = src.slice(src.lastIndexOf('// ----' + ' body'));
+  const body = sourceBody(src);
   for (const w of banned) expect(body.includes(w), w).toBe(false);
 });
 

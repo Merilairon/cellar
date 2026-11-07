@@ -12,6 +12,7 @@ import {
   project,
 } from './grid-editor-support';
 import { SAMPLE_SKILLET_COOKIES } from '@/lib/recipes/samples';
+import { sourceBody } from './source-body';
 
 // T10 (2): recreate the Mocha Skillet Cookie with the KEYBOARD only (UX spec 14.4 trace).
 // Allowed: Tab / Shift+Tab, arrows, Enter, Escape, the chords of spec 14.3, typed text.
@@ -34,7 +35,7 @@ test.afterAll(async () => owner?.close());
 
 test('this spec never uses a pointer', () => {
   const src = readFileSync(__filename, 'utf8');
-  const body = src.slice(src.lastIndexOf('// ----' + ' body'));
+  const body = sourceBody(src);
   const banned = [
     'page.' + 'mouse',
     '.click' + '(',
