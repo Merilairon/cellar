@@ -1,6 +1,6 @@
 'use client';
 
-import type { Dispatch, RefObject } from 'react';
+import { useState, type Dispatch, type RefObject } from 'react';
 import { LIMITS } from '@/lib/grid/editor';
 import {
   canAddSection,
@@ -27,6 +27,10 @@ export type SectionActionsDeps = {
 export function useSectionActions(deps: SectionActionsDeps) {
   const { editor, dispatch, announce, root, focusLater, showToast, t } = deps;
   const d = doc(editor);
+
+  // F5: which section opens its rename field next, and a token so the same one can ask again.
+  const [prompt, setPrompt] = useState({ index: -1, token: 0 });
+  const promptFor = (si: number) => (prompt.index === si ? prompt.token : 0);
 
   const display = (si: number) =>
     d.sections[si]?.title?.trim() || t('recipe.section', { n: si + 1 });
@@ -58,14 +62,10 @@ export function useSectionActions(deps: SectionActionsDeps) {
     if (!canAddSection(editor))
       return announce(t('gridEditor.limit.sections', { max: LIMITS.sections }));
     const n = d.sections.length + 1;
-    const title = t('recipe.section', { n });
-    dispatch({ type: 'sectionAdd', title });
-    announce(t('gridEditor.section.added', { name: title }));
-    // The reducer appends with the next client key; focus its Add row button once rendered.
-    focusLater(() => {
-      const all = Array.from(root.current?.querySelectorAll<HTMLElement>('[data-ge-addrow]') ?? []);
-      return all.length > n - 1 ? all[n - 1] : null;
-    });
+    // F5: no stored "Section N" title; the new section asks for a name at once instead.
+    dispatch({ type: 'sectionAdd', title: null });
+    announce(t('gridEditor.section.added', { name: t('recipe.section', { n }) }));
+    setPrompt((p) => ({ index: n - 1, token: p.token + 1 }));
   };
 
   /** The Add section button and its limit message, rendered below the last section. */
@@ -93,5 +93,5 @@ export function useSectionActions(deps: SectionActionsDeps) {
     );
   };
 
-  return { rename, remove, add, renderAdd };
+  return { rename, remove, add, renderAdd, promptFor };
 }

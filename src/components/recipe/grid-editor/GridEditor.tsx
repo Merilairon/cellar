@@ -26,8 +26,9 @@ import { useRowActions } from './useRowActions';
 import { useSectionActions } from './useSectionActions';
 import { useStepWiring } from './useStepWiring';
 import { useUndoToast } from './useUndoToast';
-import { ConflictPanel, ListNotice, NetworkAlert } from './SavePanels';
+import { ConflictPanel, KeptNote, ListNotice, NetworkAlert } from './SavePanels';
 import { useSaveFlow } from './useSaveFlow';
+import { useLeaveGuard } from './useLeaveGuard';
 
 export type GridEditorProps = {
   recipe: ApiRecipe;
@@ -65,6 +66,8 @@ export function GridEditor({ recipe, onClose, onRecipe }: GridEditorProps) {
   const issuesHeading = useRef<HTMLHeadingElement>(null);
   const keepButton = useRef<HTMLButtonElement>(null);
   const [confirmingLeave, setConfirmingLeave] = useState(false);
+  // F2: browser Back, Android back and the iOS edge swipe ask first while there are edits.
+  useLeaveGuard(dirty, () => setConfirmingLeave(true));
 
   // One polite region for the whole editor; messages replace each other within 400 ms.
   const [live, setLive] = useState('');
@@ -268,6 +271,8 @@ export function GridEditor({ recipe, onClose, onRecipe }: GridEditorProps) {
     .join(', ');
 
   const saveReasonId = 'ge-save-reason';
+  // F8: after a save the next step is Done, so it becomes the primary button.
+  const savedClean = !dirty && session.saved;
 
   return (
     <div ref={root} className="ge-root" onKeyDown={onKeyDown}>
@@ -310,7 +315,12 @@ export function GridEditor({ recipe, onClose, onRecipe }: GridEditorProps) {
                 <span aria-hidden="true" className="ge-dot" /> {t('gridEditor.toolbar.dirty')}
               </>
             ) : session.saved ? (
-              t('gridEditor.toolbar.clean')
+              <>
+                <span aria-hidden="true" className="ge-check">
+                  &#10003;
+                </span>{' '}
+                {t('gridEditor.toolbar.clean')}
+              </>
             ) : null}
           </span>
         </div>
@@ -354,14 +364,14 @@ export function GridEditor({ recipe, onClose, onRecipe }: GridEditorProps) {
               {/* Done when clean, Cancel when dirty: one slot (UX spec F2, section 13). */}
               <button
                 type="button"
-                className={btn}
+                className={savedClean ? btnPrimary : btn}
                 onClick={() => (dirty ? setConfirmingLeave(true) : onClose())}
               >
                 {dirty ? t('gridEditor.toolbar.cancel') : t('gridEditor.toolbar.done')}
               </button>
               <button
                 type="button"
-                className={`${btnPrimary} aria-disabled:opacity-60`}
+                className={`${savedClean ? btn : btnPrimary} aria-disabled:opacity-60`}
                 aria-disabled={saveReason !== null || flow.saving}
                 aria-busy={flow.saving || undefined}
                 aria-describedby={saveReason ? saveReasonId : undefined}
@@ -382,6 +392,7 @@ export function GridEditor({ recipe, onClose, onRecipe }: GridEditorProps) {
       {flow.phase === 'network' && (
         <NetworkAlert focusKey={flow.focusTick.n} onRetry={() => void flow.save()} />
       )}
+      {flow.kept && flow.phase === 'idle' && <KeptNote />}
       {toastNode}
       {stepUi.tooltip}
 
@@ -406,6 +417,7 @@ export function GridEditor({ recipe, onClose, onRecipe }: GridEditorProps) {
                 stepCount={section.steps.length}
                 atRowCap={rows.capMessage(si) !== null}
                 capMessage={rows.capMessage(si)}
+                promptRename={sections.promptFor(si)}
                 onRename={(v) => sections.rename(si, v)}
                 onDelete={() => sections.remove(si)}
                 onAddRow={() => rows.addRow(si)}
@@ -438,24 +450,25 @@ export function GridEditor({ recipe, onClose, onRecipe }: GridEditorProps) {
       </div>
 
       {!hasColumn && <ListNotice onAddStep={addStepSection >= 0 ? addFirstStep : null} />}
-      {flow.phase === 'conflict' ? (
+      {flow.phase === 'conflict' && (
         <ConflictPanel
           confirm={flow.confirm}
+          stamp={flow.conflictStamp}
           focusKey={flow.focusTick.n}
           onConfirm={flow.setConfirm}
           onKeep={flow.keepEditing}
           onLoad={() => void flow.loadLatest()}
           onSaveMine={() => void flow.saveMine()}
         />
-      ) : (
-        <IssuesPanel
-          doc={d}
-          errors={shownErrors}
-          warnings={issues.warnings}
-          headingRef={issuesHeading}
-          onGoTo={goTo}
-        />
       )}
+      {/* F17: also shown during a conflict, so the toolbar's problem count has a target. */}
+      <IssuesPanel
+        doc={d}
+        errors={shownErrors}
+        warnings={issues.warnings}
+        headingRef={issuesHeading}
+        onGoTo={goTo}
+      />
     </div>
   );
 }

@@ -93,8 +93,12 @@ test('two sections: add and rename a section, split sugar, undo/redo, leave guar
   // Add section, rename it, give it a row and a step.
   await page.getByRole('button', { name: 'Add section' }).click();
   await expect(headings).toHaveCount(2);
-  await page.getByRole('button', { name: 'Rename' }).nth(1).click();
-  await page.getByRole('textbox', { name: 'Section name' }).fill('Frosting');
+  // F5: the new section asks for its name at once (empty field, hint placeholder), and no
+  // literal "Section 2" title is stored.
+  const nameField = page.getByRole('textbox', { name: 'Section name' });
+  await expect(nameField).toBeFocused();
+  await expect(nameField).toHaveAttribute('placeholder', 'Name this part, for example Frosting');
+  await nameField.fill('Frosting');
   await page.keyboard.press('Enter');
   await expect(headings.nth(1)).toHaveText('Frosting');
   await page.locator('[data-ge-addrow]').nth(1).click();

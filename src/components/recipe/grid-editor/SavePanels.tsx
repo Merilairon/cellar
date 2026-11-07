@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { useTranslations } from 'next-intl';
+import { useFormatter, useTranslations } from 'next-intl';
 import { btn, btnDanger, btnPrimary } from '../styles';
 import type { ConflictConfirm } from './useSaveFlow';
 
 /** UX spec 12.4: replaces the issues zone. Focus moves to the heading. */
 export function ConflictPanel({
   confirm,
+  stamp,
   focusKey,
   onConfirm,
   onKeep,
@@ -15,6 +16,8 @@ export function ConflictPanel({
   onSaveMine,
 }: {
   confirm: ConflictConfirm;
+  /** The other save's `updated_at`, shown as a time when it parses (F3). */
+  stamp: string | null;
   focusKey: number;
   onConfirm: (c: ConflictConfirm) => void;
   onKeep: () => void;
@@ -22,6 +25,12 @@ export function ConflictPanel({
   onSaveMine: () => void;
 }) {
   const t = useTranslations();
+  const format = useFormatter();
+  const when = stamp ? new Date(stamp) : null;
+  const savedAt =
+    when && !Number.isNaN(when.getTime())
+      ? format.dateTime(when, { hour: '2-digit', minute: '2-digit' })
+      : null;
   const heading = useRef<HTMLHeadingElement>(null);
   const keep = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -37,7 +46,10 @@ export function ConflictPanel({
       <h3 id="ge-conflict-h" ref={heading} tabIndex={-1} className="ge-h3">
         {t('gridEditor.conflict.title')}
       </h3>
-      <p>{t('gridEditor.conflict.body')}</p>
+      <p>
+        {t('gridEditor.conflict.body')}
+        {savedAt && ` ${t('gridEditor.conflict.savedAt', { time: savedAt })}`}
+      </p>
       {confirming ? (
         <div
           role="group"
@@ -90,6 +102,16 @@ export function ConflictPanel({
         </div>
       )}
     </section>
+  );
+}
+
+/** F3: shown after "Keep editing", because the next Save asks again until the base is fresh. */
+export function KeptNote() {
+  const t = useTranslations();
+  return (
+    <p className="ge-muted" data-testid="ge-conflict-kept">
+      {t('gridEditor.conflict.keptNote')}
+    </p>
   );
 }
 

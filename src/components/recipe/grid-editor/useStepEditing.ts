@@ -184,6 +184,10 @@ export function useStepEditing({ editor, dispatch, say, focusLater, root, showTo
 
   const labelFinder = (key: string) => () => {
     const el = byAttr(root, 'data-ge-field', `label:${key}`)();
+    // F4: on the phone the label sits in the closed "Step details" disclosure; open it so the
+    // field can take focus.
+    const details = el?.closest('details');
+    if (details && !details.open) details.open = true;
     if (el) queueMicrotask(() => (el as HTMLInputElement).select?.());
     return el;
   };

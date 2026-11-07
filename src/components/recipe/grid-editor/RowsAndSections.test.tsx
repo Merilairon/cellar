@@ -88,6 +88,20 @@ describe('section header', () => {
     onAddRow: () => {},
   };
 
+  it('F13: the only-section line is read out but not shown until Delete section is pressed', () => {
+    const html = wrap(<GridEditor recipe={cookie} onClose={() => {}} />);
+    expect(html).toMatch(/<p id="ge-sec-last-0" class="sr-only">A recipe needs at least one/);
+  });
+
+  it('F5: an untitled section in a multi-section recipe shows the naming hint and placeholder', () => {
+    const html = wrap(<SectionHeader {...base} title="Section 2" rawTitle={null} />);
+    expect(html).toContain('Name this part, for example Cake or Frosting.');
+    expect(wrap(<SectionHeader {...base} />)).not.toContain('for example Cake or Frosting');
+    expect(
+      wrap(<SectionHeader {...base} title="Section 2" rawTitle={null} promptRename={1} />),
+    ).toContain('placeholder="Name this part, for example Frosting"');
+  });
+
   it('keeps the heading a real h3 with the title', () => {
     const html = wrap(<SectionHeader {...base} />);
     expect(html).toMatch(/<h3[^>]*data-ge-heading="s"[^>]*>Cake<\/h3>/);

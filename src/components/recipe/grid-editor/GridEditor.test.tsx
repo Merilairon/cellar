@@ -138,7 +138,7 @@ describe('issues text', () => {
         onGoTo={() => {}}
       />,
     );
-    expect(html).toContain('Not used by any step: eggs.');
+    expect(html).toContain('No step covers: eggs.');
     expect(html).toContain('Frosting has no ingredients.');
     expect(count(html, /Go to/g)).toBe(2);
     expect(html).toContain('Warning');

@@ -140,13 +140,22 @@ test('sections: add, rename (empty rejected), delete with confirm and Undo', asy
 
   await page.getByRole('button', { name: 'Add section' }).click();
   await expect(headings).toHaveCount(3);
-  await expect(page.locator('[data-ge-addrow]').nth(2)).toBeFocused();
-
-  await page.getByRole('button', { name: 'Rename' }).nth(2).click();
+  // F5: the new section opens its rename field at once.
   const field = page.getByRole('textbox', { name: 'Section name' });
+  await expect(field).toBeFocused();
   await field.fill('');
   await page.keyboard.press('Enter');
   await expect(page.getByText('Give each section a name.')).toBeVisible();
+  await field.fill('Glaze');
+  await page.keyboard.press('Enter');
+  await expect(headings.nth(2)).toHaveText('Glaze');
+
+  // F14: emptying an existing name and leaving the field keeps it open with the message.
+  await page.getByRole('button', { name: 'Rename' }).nth(2).click();
+  await field.fill('');
+  await page.getByRole('button', { name: 'Add section' }).focus();
+  await expect(page.getByText('Give each section a name.')).toBeVisible();
+  await expect(field).toBeVisible();
   await field.fill('Glaze');
   await page.keyboard.press('Enter');
   await expect(headings.nth(2)).toHaveText('Glaze');

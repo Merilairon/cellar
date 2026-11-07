@@ -110,6 +110,9 @@ test('phone 375 x 667: recreate the sample through the bottom sheet only', async
   for (const s of [mix1, mix2, fold, bake]) {
     await page.getByRole('button', { name: 'Add step', exact: true }).tap();
     await expect(sheet(page)).toBeVisible();
+    // F4: a new step opens the details and focuses the label (text selected).
+    await expect(sheet(page).locator('details[open]')).toHaveCount(1);
+    await expect(sheet(page).getByRole('textbox', { name: 'Label', exact: true })).toBeFocused();
     await setSpan(page, s.row_start!, s.row_end!);
     await fillSheet(page, s);
     await closeSheet(page);

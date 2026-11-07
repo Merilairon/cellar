@@ -22,6 +22,8 @@ export type SectionHeaderProps = {
   onRename: (title: string) => void;
   onDelete: () => void;
   onAddRow: () => void;
+  /** F5: a token that grows each time this section should open its rename field (0 = never). */
+  promptRename?: number;
   /** SEAM T6: Add step / Add banner buttons render here, in the same toolbar group. */
   extraActions?: React.ReactNode;
 };
@@ -35,6 +37,16 @@ export function SectionHeader(p: SectionHeaderProps) {
   const [renaming, setRenaming] = useState(false);
   const [error, setError] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  // F13: the "needs at least one section" line is read out with the button but only shown once
+  // the user pressed Delete section on the only section.
+  const [lastShown, setLastShown] = useState(false);
+  // F5: open the rename field when the parent asks (a section was just added).
+  const [promptSeen, setPromptSeen] = useState(0);
+  const prompt = p.promptRename ?? 0;
+  if (prompt !== 0 && prompt !== promptSeen) {
+    setPromptSeen(prompt);
+    setRenaming(true);
+  }
   const renameBtn = useRef<HTMLButtonElement>(null);
   const keepBtn = useRef<HTMLButtonElement>(null);
   const field = useRef<HTMLInputElement>(null);
@@ -57,13 +69,17 @@ export function SectionHeader(p: SectionHeaderProps) {
   const commit = (value: string, viaBlur: boolean) => {
     if (done.current) return;
     const v = value.trim();
-    if (!v && p.multiple) {
+    if (!v && p.multiple && !(viaBlur && (p.rawTitle ?? '') === '')) {
+      // F14: an empty name is refused with the message, also on blur, so an existing name is
+      // never dropped silently. The one exception is a blur on a section that never had a
+      // name: nothing to lose, so the field just closes.
       setError(true);
-      if (viaBlur) {
-        done.current = true;
-        setRenaming(false);
-        setError(false);
-      }
+      return;
+    }
+    if (!v && p.multiple) {
+      done.current = true;
+      setRenaming(false);
+      setError(false);
       return;
     }
     done.current = true;
@@ -94,6 +110,7 @@ export function SectionHeader(p: SectionHeaderProps) {
               defaultValue={p.rawTitle ?? ''}
               maxLength={120}
               aria-label={t('gridEditor.section.renameLabel')}
+              placeholder={t('gridEditor.section.renamePlaceholder')}
               aria-invalid={error || undefined}
               aria-describedby={error ? errId : undefined}
               onBlur={(e) => commit(e.target.value, true)}
@@ -176,7 +193,10 @@ export function SectionHeader(p: SectionHeaderProps) {
             aria-disabled={onlySection ? true : undefined}
             aria-describedby={onlySection ? lastId : undefined}
             onClick={() => {
-              if (onlySection) return;
+              if (onlySection) {
+                setLastShown(true);
+                return;
+              }
               if (empty) p.onDelete();
               else setConfirming(true);
             }}
@@ -197,9 +217,12 @@ export function SectionHeader(p: SectionHeaderProps) {
         </div>
       )}
       {onlySection && (
-        <p id={lastId} className="ge-muted">
+        <p id={lastId} className={lastShown ? 'ge-muted' : 'sr-only'}>
           {t('gridEditor.section.last')}
         </p>
+      )}
+      {p.multiple && !p.rawTitle && !renaming && (
+        <p className="ge-muted">{t('gridEditor.section.untitledHint')}</p>
       )}
       {p.atRowCap && p.capMessage && (
         <p id={capId} className="ge-muted">

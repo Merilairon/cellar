@@ -101,7 +101,8 @@ describe('StepPanel', () => {
     expect(panel(2, 2, 1)).toMatch(/aria-disabled="true"[^>]*>Move right/);
     for (const f of ['Label', 'Detail', 'Temperature (°C)', 'Time, from (minutes)'])
       expect(h).toContain(f);
-    expect(h).toContain('Alt+Up or Down moves the top edge');
+    expect(h).toContain('Alt+Up or Down to move the top edge');
+    expect(h).toContain('Tap a step, then drag the green bars');
   });
 
   it('banner: its own heading, Move up / Move down, Convert to step, required label', () => {

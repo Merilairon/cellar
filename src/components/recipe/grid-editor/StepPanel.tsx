@@ -117,11 +117,11 @@ export function StepPanel({
 
   const stepper = (
     id: 'start' | 'end',
-    minus: ResizeType,
-    plus: ResizeType,
+    up: ResizeType,
+    down: ResizeType,
     row: number,
-    minusDisabled: boolean,
-    plusDisabled: boolean,
+    upDisabled: boolean,
+    downDisabled: boolean,
   ) => {
     const text = id === 'start' ? t('gridEditor.step.startRow') : t('gridEditor.step.endRow');
     const mk = (type: ResizeType, sign: string, name: string, disabled: boolean) => (
@@ -139,23 +139,23 @@ export function StepPanel({
       <div className="ge-stepperrow" role="group" aria-label={text}>
         <span className="ge-stepperlabel">{text}</span>
         {mk(
-          minus,
-          '-',
+          up,
+          '\u2191',
           id === 'start'
             ? t('gridEditor.step.startEarlier', { label })
             : t('gridEditor.step.endEarlier', { label }),
-          minusDisabled,
+          upDisabled,
         )}
         <span className="ge-steppervalue">
           {t('gridEditor.step.rowValue', { n: row + 1, total: n, name: rows[row]?.name ?? '' })}
         </span>
         {mk(
-          plus,
-          '+',
+          down,
+          '\u2193',
           id === 'start'
             ? t('gridEditor.step.startLater', { label })
             : t('gridEditor.step.endLater', { label }),
-          plusDisabled,
+          downDisabled,
         )}
       </div>
     );
@@ -375,7 +375,12 @@ export function StepPanel({
           {num('minutes_max', t('recipe.form.step.minutesMax'), 100_000)}
         </div>,
       )}
-      {isColumn && !sheet && <p className="ge-muted">{t('gridEditor.hint.resize')}</p>}
+      {isColumn && !sheet && (
+        <>
+          <p className="ge-muted ge-hint-touch">{t('gridEditor.hint.resizeTouch')}</p>
+          <p className="ge-muted ge-hint-fine">{t('gridEditor.hint.resize')}</p>
+        </>
+      )}
     </section>
   );
 }

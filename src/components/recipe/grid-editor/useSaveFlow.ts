@@ -34,11 +34,16 @@ type Say = (
  * - 409: the server's current stamp is held so "Save mine anyway" can reuse it.
  * - anything else (network, 5xx, 401/403/404): a retry alert; nothing is lost.
  *
- * O6 (in-app navigation while dirty): Next 16 has no global navigation-blocking hook
- * (no router events, no `useBlocker`; `<Link onNavigate>` is per link and does not see
- * history/back). Only `beforeunload` is registered; clicking a header link while dirty can
- * lose edits. The sticky "Unsaved changes" dot is the mitigation. Gap recorded for the
- * carryover file.
+ * O6 (in-app navigation while dirty): Next 16 has no global navigation-blocking hook (no
+ * router events, no `useBlocker`; `<Link onNavigate>` is per link and does not see history).
+ * Two guards cover what can be covered:
+ * - `beforeunload` (below): reload, tab close, address-bar navigation.
+ * - `useLeaveGuard` (called by the editor, same `dirty`): browser Back, Android back and the iOS
+ *   edge swipe. While dirty it keeps one extra history entry; Back pops it, the guard pushes it
+ *   again and opens the editor's leave confirm. The entry is removed when the document is clean
+ *   (saved, undone) or the editor closes, so Done leaves no extra entry behind.
+ * Known gap: the header links (logo, nav, user menu) are plain `<Link>`s outside the editor and
+ *   still leave without asking. The sticky "Unsaved changes" dot is the mitigation. Carryover.
  */
 export function useSaveFlow({
   recipeId,
@@ -59,6 +64,9 @@ export function useSaveFlow({
   const [phase, setPhase] = useState<SavePhase>('idle');
   const [conflictStamp, setConflictStamp] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<ConflictConfirm>(null);
+  // F3: "Keep editing" leaves the stale base in place, so the next Save asks again. True from
+  // that choice until a save or "Load the latest" succeeds; the editor shows a note meanwhile.
+  const [kept, setKept] = useState(false);
   const [rejected, setRejected] = useState<{ doc: EditorDoc; errors: EditorIssue[] } | null>(null);
   // Bumped on every outcome that needs focus; the component focuses the right element.
   const [focusTick, setFocusTick] = useState<{ n: number; what: 'issues' | 'conflict' | 'alert' }>({
@@ -106,6 +114,7 @@ export function useSaveFlow({
             setBase(r.updated_at);
             setRejected(null);
             setConflictStamp(null);
+            setKept(false);
             setPhase('idle');
             if (doc(latest.current) === doc(sent)) dispatch({ type: 'markSaved' });
             onRecipe?.(r);
@@ -158,12 +167,14 @@ export function useSaveFlow({
     setRejected(null);
     setConflictStamp(null);
     setConfirm(null);
+    setKept(false);
     setPhase('idle');
     onRecipe?.(r);
     say('', 'loaded');
   }, [dispatch, onRecipe, recipeId, say]);
 
   const keepEditing = () => {
+    setKept(true);
     setConfirm(null);
     setPhase('idle');
   };
@@ -179,6 +190,7 @@ export function useSaveFlow({
     saveMine: () => (conflictStamp ? save(conflictStamp) : undefined),
     loadLatest,
     keepEditing,
+    kept,
     /** Server errors, only while the document is the one they were mapped against. */
     rejected: rejected && rejected.doc === doc(editor) ? rejected.errors : [],
     focusTick,

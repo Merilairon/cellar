@@ -135,8 +135,14 @@ test('409: keep editing, load latest (confirm) and save mine anyway (confirm)', 
   });
   await expect(heading).toBeFocused();
   // Keep editing: panel closes, edits stay.
+  await expect(b.page.getByText('maybe in another tab or by someone else')).toBeVisible();
+  await expect(b.page.getByText(/The other version was saved at/)).toBeVisible();
+  // F17: the toolbar problem count (if any) still has a Problems panel to focus.
+  await expect(b.page.getByRole('heading', { name: 'Problems and warnings' })).toBeVisible();
   await b.page.getByRole('button', { name: 'Keep editing' }).click();
   await expect(heading).toHaveCount(0);
+  // F3: the next Save will ask again, and the page says so.
+  await expect(b.page.getByTestId('ge-conflict-kept')).toContainText('Saving will ask again');
   await expect(firstRow(b.page)).toContainText('second writer');
 
   // Load latest asks first, Cancel changes nothing.
@@ -161,8 +167,8 @@ test('409: keep editing, load latest (confirm) and save mine anyway (confirm)', 
   await expect(a.page.getByText('All changes saved')).toBeVisible();
   await rename(b.page, '9 oz mine anyway');
   await save(b.page).click();
-  await b.page.getByRole('button', { name: 'Save mine anyway' }).click();
-  await expect(b.page.getByText('This replaces what the other person saved')).toBeVisible();
+  await b.page.getByRole('button', { name: 'Replace their version with mine' }).click();
+  await expect(b.page.getByText('The other version will be replaced by yours.')).toBeVisible();
   await b.page.getByRole('button', { name: 'Save mine', exact: true }).click();
   await expect(b.page.getByText('All changes saved')).toBeVisible();
   await expect(firstRow(b.page)).toContainText('mine anyway');
@@ -195,5 +201,55 @@ test('leave guard: beforeunload only while dirty; Cancel asks once', async ({ br
     return e.defaultPrevented;
   });
   expect(cleanPrevented).toBe(false);
+  await ctx.close();
+});
+
+test('leave guard: browser Back asks while dirty, Keep and Discard behave, no history pollution', async ({
+  browser,
+}) => {
+  const { page, ctx } = await openEditor(browser);
+  const url = page.url();
+  const confirm = page.getByText('Discard your unsaved changes?');
+
+  // Clean editor: nothing is held back, Back leaves like on any page.
+  // (Dirty first, so an entry exists; then save so it is removed again.)
+  await rename(page, '3 oz history butter');
+  await save(page).click();
+  await expect(page.getByText('All changes saved')).toBeVisible();
+  // F8: after a save, Done is the primary action.
+  await expect(page.getByRole('button', { name: 'Done', exact: true })).toHaveClass(/bg-emerald/);
+
+  // Dirty again: Back is intercepted, the URL stays, the confirm shows, edits are kept.
+  await rename(page, '4 oz history butter');
+  await page.goBack().catch(() => null);
+  await expect(confirm).toBeVisible();
+  expect(page.url()).toBe(url);
+  await expect(firstRow(page)).toContainText('history butter');
+  await page.getByRole('button', { name: 'Keep editing' }).click();
+  await expect(confirm).toHaveCount(0);
+
+  // A second Back asks again (the entry was pushed back), Discard closes the editor only.
+  await page.goBack().catch(() => null);
+  await expect(confirm).toBeVisible();
+  await page.getByRole('button', { name: 'Discard changes' }).click();
+  await expect(page.getByRole('button', { name: 'Edit grid' })).toBeVisible();
+  expect(page.url()).toBe(url);
+
+  // No extra entry is left behind: one Back now leaves the recipe page.
+  await page.goBack().catch(() => null);
+  await expect.poll(() => page.url()).not.toBe(url);
+
+  // Saved then Done: Back leaves at once, without a prompt and without an extra step.
+  await page.goForward().catch(() => null);
+  await expect.poll(() => page.url()).toBe(url);
+  await hydrated(page.getByRole('button', { name: 'Edit grid' }));
+  await page.getByRole('button', { name: 'Edit grid' }).click();
+  await rename(page, '5 oz done butter');
+  await save(page).click();
+  await expect(page.getByText('All changes saved')).toBeVisible();
+  await page.getByRole('button', { name: 'Done', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Edit grid' })).toBeVisible();
+  await page.goBack().catch(() => null);
+  await expect.poll(() => page.url()).not.toBe(url);
   await ctx.close();
 });

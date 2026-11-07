@@ -383,6 +383,22 @@ dialog.rg-sheet::backdrop {
   font-size: 0.875rem;
   color: var(--rg-muted);
 }
+/* F6: the touch hint on coarse pointers, the keyboard hint otherwise. */
+.ge-hint-touch {
+  display: none;
+}
+@media (pointer: coarse) {
+  .ge-hint-touch {
+    display: block;
+  }
+  .ge-hint-fine {
+    display: none;
+  }
+}
+.ge-check {
+  font-weight: 700;
+  color: var(--rg-accent);
+}
 .ge-toolbar {
   position: sticky;
   top: 0;

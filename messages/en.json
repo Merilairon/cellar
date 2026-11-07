@@ -480,7 +480,7 @@
     "asWritten": "Showing quantities as written (1x, original units).",
     "loading": "Loading the grid editor...",
     "entry": {
-      "edit": "Edit grid",
+      "edit": "Edit grid layout",
       "fineTune": "Fine-tune in the editor",
       "savedAsGrid": "Saved as a grid."
     },
@@ -580,7 +580,8 @@
       "lastColumn": "No step is left to show as a column, so this recipe will be saved as a list."
     },
     "hint": {
-      "resize": "Resize: Alt+Up or Down moves the top edge, Shift+Up or Down moves the bottom edge. Alt+Left or Right moves a step to another column."
+      "resizeTouch": "Tap a step, then drag the green bars, or tap Adjust rows.",
+      "resize": "Drag the green bars, use Adjust rows, or press Alt+Up or Down to move the top edge and Shift+Up or Down to move the bottom edge. Alt+Left or Right moves a step to another column."
     },
     "banner": {
       "empty": "(empty banner)",
@@ -619,7 +620,7 @@
       "problem": "Problem",
       "warning": "Warning",
       "goTo": "Go to",
-      "row_uncovered": "Not used by any step: {names}.",
+      "row_uncovered": "No step covers: {names}.",
       "positions_not_contiguous": "The order of rows or steps looks wrong. Undo your last change or reload the editor.",
       "banner_has_span": "A banner cannot have a row range.",
       "span_required_for_grid": "{label} needs a first and last row.",
@@ -661,6 +662,8 @@
       "rename": "Rename",
       "renameLabel": "Section name",
       "renameEmpty": "Give each section a name.",
+      "renamePlaceholder": "Name this part, for example Frosting",
+      "untitledHint": "Name this part, for example Cake or Frosting.",
       "renamed": "Section renamed to {name}.",
       "add": "Add section",
       "added": "Section {name} added.",
@@ -682,13 +685,15 @@
     },
     "conflict": {
       "title": "This recipe changed while you were editing.",
-      "body": "Someone saved it after you opened the editor. Your changes are not saved yet.",
+      "body": "This recipe was saved again after you opened the editor, maybe in another tab or by someone else. Your changes are not saved yet.",
+      "savedAt": "The other version was saved at {time}.",
+      "keptNote": "Saving will ask again because the recipe changed. Load the latest version or replace theirs to save.",
       "keepEditing": "Keep editing",
       "loadLatest": "Load the latest version",
       "loadLatestConfirm": "This throws away your changes in the editor.",
       "loadLatestYes": "Discard and load",
-      "overwrite": "Save mine anyway",
-      "overwriteConfirm": "This replaces what the other person saved with your version.",
+      "overwrite": "Replace their version with mine",
+      "overwriteConfirm": "The other version will be replaced by yours.",
       "overwriteYes": "Save mine",
       "back": "Cancel",
       "loaded": "Loaded the latest version."
