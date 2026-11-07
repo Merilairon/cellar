@@ -429,9 +429,15 @@ test('C20: a proxy that dies mid-job fails closed with zero direct connections',
     for (const target of [`http://public.test:${pubPort}/ok`, `http://127.0.0.2:${pubPort}/ok`]) {
       await assert.rejects(page.goto(target, { timeout: 8000 }), target);
     }
-    const sub = await page.evaluate(
-      `fetch("http://public.test:${pubPort}/ok").then(function(){return "reached"},function(){return "failed"})`,
-    );
+    // A failed goto leaves the tab navigating to Chromium's error page; evaluating while that
+    // navigation commits destroys the execution context. Settle first, retry once if it still races.
+    const probe = `fetch("http://public.test:${pubPort}/ok").then(function(){return "reached"},function(){return "failed"})`;
+    await page.waitForLoadState('domcontentloaded').catch(() => {});
+    const sub = await page.evaluate(probe).catch(async (e: unknown) => {
+      if (!/Execution context was destroyed/.test(String(e))) throw e;
+      await page.waitForLoadState('domcontentloaded').catch(() => {});
+      return page.evaluate(probe);
+    });
     assert.equal(sub, 'failed');
     assert.equal(count('/ok'), before, 'nothing went direct after the proxy died');
     await ctx.close();
