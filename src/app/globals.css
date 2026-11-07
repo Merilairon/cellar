@@ -494,6 +494,12 @@ dialog.rg-sheet::backdrop {
 }
 .ge-table th.ge-ing .ge-rowbtn {
   padding: 8px 10px;
+  /* T12: with a portion chip the controls wrap under the name instead of squeezing the name to
+     one letter per line in the narrow phone column (reflow 1.4.10, target size 2.5.8). */
+  flex: 1 1 5rem;
+}
+.ge-rowcell {
+  flex-wrap: wrap;
 }
 .ge-table th.ge-ing[data-covered='true'] {
   background: var(--ge-cover);
@@ -503,8 +509,9 @@ dialog.rg-sheet::backdrop {
   font-weight: 600;
 }
 .ge-table th.ge-ing[data-covered='true'] .rg-note,
-.ge-table th.ge-ing[data-covered='true'] .rg-portion {
-  /* The muted ink is too faint on the covered tint in dark mode (axe, AA). */
+.ge-table th.ge-ing[data-covered='true'] .rg-portion,
+.ge-table th.ge-ing[data-covered='true'] .ge-muted {
+  /* The muted ink is too faint on the covered tint in dark mode (axe, AA; T12 O1: 4.21:1). */
   color: var(--rg-ink);
 }
 .ge-table th.ge-ing[data-uncovered='true'] {
@@ -810,4 +817,7 @@ dialog.ge-sheet .ge-steppervalue {
 }
 .ge-rowsheetbtn[aria-disabled='true'] {
   opacity: 0.5;
+}
+.ge-rowctl {
+  padding-inline-start: 8px;
 }
