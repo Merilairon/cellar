@@ -20,9 +20,13 @@ const state = make(9, [top('t1'), col(0, 3, 'mix'), col(2, 8, 'bake'), bottom('b
 const section = doc(state).sections[0];
 const targets = targetsFor(section);
 const stepTarget = (label: string): RovingTarget =>
-  targets.find((t) => t.kind === 'step' && t.key === section.steps.find((s) => s.label === label)!.key)!;
+  targets.find(
+    (t) => t.kind === 'step' && t.key === section.steps.find((s) => s.label === label)!.key,
+  )!;
 const bannerTarget = (label: string): RovingTarget =>
-  targets.find((t) => t.kind === 'banner' && t.key === section.steps.find((s) => s.label === label)!.key)!;
+  targets.find(
+    (t) => t.kind === 'banner' && t.key === section.steps.find((s) => s.label === label)!.key,
+  )!;
 
 const run = (key: string, m: Partial<ChordKey>, tg: RovingTarget) => {
   const r = stepChord(k(key, m), tg, section, 0);
@@ -49,8 +53,14 @@ describe('step span chords', () => {
     expect([mix.row_start, mix.row_end]).toEqual([1, 4]);
   });
   it('limits are explained no-ops, never silent and never an action', () => {
-    expect(run('ArrowDown', shift, stepTarget('bake')).r).toEqual({ handled: true, noop: 'endAtLast' });
-    expect(run('ArrowUp', alt, stepTarget('mix')).r).toEqual({ handled: true, noop: 'startAtFirst' });
+    expect(run('ArrowDown', shift, stepTarget('bake')).r).toEqual({
+      handled: true,
+      noop: 'endAtLast',
+    });
+    expect(run('ArrowUp', alt, stepTarget('mix')).r).toEqual({
+      handled: true,
+      noop: 'startAtFirst',
+    });
     expect(run('ArrowDown', { ...alt, ...shift }, stepTarget('bake')).r).toEqual({
       handled: true,
       noop: 'spanEdge',
@@ -60,8 +70,14 @@ describe('step span chords', () => {
     const one = doc(reduce(state, { type: 'stepSetSpan', section: 0, step: 1, start: 2, end: 2 }))
       .sections[0];
     const tg = targetsFor(one).find((t) => t.kind === 'step' && t.key === one.steps[1].key)!;
-    expect(stepChord(k('ArrowUp', shift), tg, one, 0)).toEqual({ handled: true, noop: 'minOneRow' });
-    expect(stepChord(k('ArrowDown', alt), tg, one, 0)).toEqual({ handled: true, noop: 'minOneRow' });
+    expect(stepChord(k('ArrowUp', shift), tg, one, 0)).toEqual({
+      handled: true,
+      noop: 'minOneRow',
+    });
+    expect(stepChord(k('ArrowDown', alt), tg, one, 0)).toEqual({
+      handled: true,
+      noop: 'minOneRow',
+    });
   });
 });
 
@@ -69,11 +85,20 @@ describe('step reorder and banner chords', () => {
   it('Alt+Right moves a step one column right and swallows the browser history shortcut', () => {
     const { r, next } = run('ArrowRight', alt, stepTarget('mix'));
     expect(r.handled).toBe(true);
-    expect(next!.steps.filter((s) => s.kind === 'column').map((s) => s.label)).toEqual(['bake', 'mix']);
+    expect(next!.steps.filter((s) => s.kind === 'column').map((s) => s.label)).toEqual([
+      'bake',
+      'mix',
+    ]);
   });
   it('Alt+Left at the first column is an explained no-op, still handled (preventDefault)', () => {
-    expect(run('ArrowLeft', alt, stepTarget('mix')).r).toEqual({ handled: true, noop: 'columnEdge' });
-    expect(run('ArrowRight', alt, stepTarget('bake')).r).toEqual({ handled: true, noop: 'columnEdge' });
+    expect(run('ArrowLeft', alt, stepTarget('mix')).r).toEqual({
+      handled: true,
+      noop: 'columnEdge',
+    });
+    expect(run('ArrowRight', alt, stepTarget('bake')).r).toEqual({
+      handled: true,
+      noop: 'columnEdge',
+    });
   });
   it('Alt+Left/Right is swallowed over ingredient rows too (O4)', () => {
     const row = targets.find((t) => t.kind === 'row')!;
@@ -86,11 +111,19 @@ describe('step reorder and banner chords', () => {
       'b2',
       'b1',
     ]);
-    expect(run('ArrowUp', alt, bannerTarget('b1')).r).toEqual({ handled: true, noop: 'bannerEdge' });
-    expect(run('ArrowDown', alt, bannerTarget('t1')).r).toEqual({ handled: true, noop: 'bannerEdge' });
+    expect(run('ArrowUp', alt, bannerTarget('b1')).r).toEqual({
+      handled: true,
+      noop: 'bannerEdge',
+    });
+    expect(run('ArrowDown', alt, bannerTarget('t1')).r).toEqual({
+      handled: true,
+      noop: 'bannerEdge',
+    });
   });
   it('ignores Ctrl/Meta chords and unrelated keys', () => {
-    expect(stepChord(k('ArrowUp', { ...alt, ctrlKey: true }), stepTarget('mix'), section, 0)).toEqual({
+    expect(
+      stepChord(k('ArrowUp', { ...alt, ctrlKey: true }), stepTarget('mix'), section, 0),
+    ).toEqual({
       handled: false,
     });
     expect(stepChord(k('a', alt), stepTarget('mix'), section, 0)).toEqual({ handled: false });

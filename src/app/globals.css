@@ -560,3 +560,157 @@ dialog.rg-sheet::backdrop {
     display: none;
   }
 }
+
+/* ---- Grid editor: steps (T6) ---- */
+.ge-table {
+  /* Room inside the scroller for the half of a top/bottom handle that sits outside the table. */
+  margin-block: calc(var(--ge-target) / 2);
+}
+.ge-table td.ge-step {
+  position: relative;
+}
+.ge-handle {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  height: var(--ge-target);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: ns-resize;
+  touch-action: none;
+  opacity: 0;
+}
+.ge-handle[data-edge='start'] {
+  top: 0;
+  transform: translateY(-50%);
+}
+.ge-handle[data-edge='end'] {
+  bottom: 0;
+  transform: translateY(50%);
+}
+.ge-grip {
+  display: block;
+  width: 28px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--ge-handle);
+  outline: 2px solid var(--ge-handle-edge);
+}
+.ge-table td.ge-step:hover .ge-handle,
+.ge-table td.ge-step:focus-within .ge-handle,
+.ge-table td.ge-step[data-selected='true'] .ge-handle,
+.ge-handle:focus-visible {
+  opacity: 1;
+}
+.ge-handle:focus-visible {
+  outline: 3px solid var(--rg-focus);
+  outline-offset: -3px;
+}
+/* Touch: only the selected step's handles take pointer events (UX spec F5), so one-finger
+   scrolling over any other cell is never captured. */
+@media (pointer: coarse) {
+  .ge-table td.ge-step .ge-handle {
+    pointer-events: none;
+  }
+  .ge-table td.ge-step[data-selected='true'] .ge-handle {
+    pointer-events: auto;
+  }
+}
+/* Phone: the step cell holds exactly one control; the sheet (T8) replaces handles. */
+@container (max-width: 639px) {
+  .ge-handle {
+    display: none;
+  }
+}
+.ge-dragtip {
+  position: fixed;
+  z-index: 40;
+  pointer-events: none;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--ge-toast-bg);
+  color: var(--ge-toast-ink);
+  font-size: 0.85rem;
+}
+.ge-steptools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.ge-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border: 2px solid var(--rg-accent);
+  border-radius: 6px;
+}
+.ge-h4 {
+  font-weight: 600;
+}
+.ge-h4:focus {
+  outline: 3px solid var(--rg-focus);
+  outline-offset: 2px;
+}
+.ge-panelbar,
+.ge-choice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.ge-choice {
+  border: 1px solid var(--rg-line);
+  border-radius: 6px;
+  padding: 8px;
+}
+.ge-choice label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: var(--ge-target);
+}
+.ge-adjust {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ge-stepperrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.ge-stepperlabel {
+  min-width: 5.5rem;
+  font-weight: 600;
+}
+.ge-steppervalue {
+  min-width: 10rem;
+}
+.ge-stepper {
+  min-width: var(--ge-target);
+  min-height: var(--ge-target);
+}
+.ge-stepper[aria-disabled='true'] {
+  opacity: 0.5;
+}
+.ge-panelbar [aria-disabled='true'] {
+  opacity: 0.5;
+}
+.ge-fields {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+}
+.ge-fields .ge-wide {
+  grid-column: 1 / -1;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .ge-handle {
+    transition: opacity 0.1s;
+  }
+}

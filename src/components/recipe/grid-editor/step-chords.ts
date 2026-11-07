@@ -6,12 +6,7 @@ import type { EditorAction, EditorSection } from '@/lib/grid/editor';
 import type { RovingTarget } from './roving';
 
 export type NoopReason =
-  | 'startAtFirst'
-  | 'endAtLast'
-  | 'minOneRow'
-  | 'columnEdge'
-  | 'bannerEdge'
-  | 'spanEdge';
+  'startAtFirst' | 'endAtLast' | 'minOneRow' | 'columnEdge' | 'bannerEdge' | 'spanEdge';
 
 export type ChordKey = {
   key: string;
@@ -22,7 +17,7 @@ export type ChordKey = {
 };
 
 export type ChordResult =
-  | { handled: false }
+  | { handled: false; action?: undefined; noop?: undefined }
   | { handled: true; action: EditorAction; noop?: undefined }
   | { handled: true; action?: undefined; noop?: NoopReason };
 

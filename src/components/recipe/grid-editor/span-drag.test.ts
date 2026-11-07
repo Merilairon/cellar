@@ -13,7 +13,10 @@ import {
 } from './span-drag';
 
 // Nine rows, 50 px each, 4 px gaps: row i spans [i*54, i*54+50).
-const rects: RowRect[] = Array.from({ length: 9 }, (_, i) => ({ top: i * 54, bottom: i * 54 + 50 }));
+const rects: RowRect[] = Array.from({ length: 9 }, (_, i) => ({
+  top: i * 54,
+  bottom: i * 54 + 50,
+}));
 
 describe('rowFromY', () => {
   it('finds the containing row and clamps outside the table', () => {
@@ -66,7 +69,13 @@ describe('sliderKey', () => {
 });
 
 describe('drag state machine (bake: row 9 to row 4)', () => {
-  const a = { sectionKey: 's', stepKey: 'bake', edge: 'end' as const, origin: { start: 0, end: 8 }, rows: 9 };
+  const a = {
+    sectionKey: 's',
+    stepKey: 'bake',
+    edge: 'end' as const,
+    origin: { start: 0, end: 8 },
+    rows: 9,
+  };
   const bottomOf = (row: number) => rects[row].bottom;
 
   it('a click without movement commits nothing', () => {
