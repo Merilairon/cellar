@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslations } from 'next-intl';
 
 export type RowActionId =
@@ -101,7 +102,7 @@ export function RowControls({
       e.preventDefault();
       e.stopPropagation();
       close(true);
-    } else if (e.key === 'Tab') setOpen(false);
+    } else if (e.key === 'Tab') close(true);
   };
 
   return (
@@ -146,33 +147,36 @@ export function RowControls({
       >
         <span aria-hidden="true">…</span>
       </button>
-      {open && pos && (
-        <div
-          ref={menu}
-          role="menu"
-          aria-label={t('gridEditor.row.actionsFor', { name })}
-          className="fixed z-40 flex min-w-48 flex-col rounded border border-neutral-500 p-1 shadow-lg"
-          style={{ top: pos.top, right: pos.right, background: 'var(--rg-surface)' }}
-          onKeyDown={onMenuKey}
-        >
-          {items.map((it) => (
-            <button
-              key={it.id}
-              type="button"
-              role="menuitem"
-              tabIndex={-1}
-              aria-disabled={it.disabled || undefined}
-              className="min-h-[var(--ge-target)] rounded px-3 text-left hover:bg-neutral-100 aria-disabled:opacity-50 dark:hover:bg-neutral-800"
-              onClick={() => {
-                setOpen(false);
-                onAction(it.id, 'menu');
-              }}
-            >
-              {it.label}
-            </button>
-          ))}
-        </div>
-      )}
+      {open &&
+        pos &&
+        createPortal(
+          <div
+            ref={menu}
+            role="menu"
+            aria-label={t('gridEditor.row.actionsFor', { name })}
+            className="fixed z-40 flex min-w-48 flex-col rounded border border-neutral-500 p-1 shadow-lg"
+            style={{ top: pos.top, right: pos.right, background: 'var(--rg-surface)' }}
+            onKeyDown={onMenuKey}
+          >
+            {items.map((it) => (
+              <button
+                key={it.id}
+                type="button"
+                role="menuitem"
+                tabIndex={-1}
+                aria-disabled={it.disabled || undefined}
+                className="min-h-[var(--ge-target)] rounded px-3 text-left hover:bg-neutral-100 aria-disabled:opacity-50 dark:hover:bg-neutral-800"
+                onClick={() => {
+                  setOpen(false);
+                  onAction(it.id, 'menu');
+                }}
+              >
+                {it.label}
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
