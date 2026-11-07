@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ImportError } from './errors';
-import type { Headless } from './headless-client';
+import { HeadlessBusyError, type Headless } from './headless-client';
 import { runImport } from './pipeline';
 import type { SafeFetchOptions, SafeFetchResult } from './safe-fetch';
 
@@ -327,6 +327,24 @@ describe('runImport: headless fallback (G4 trigger table)', () => {
         error_code: 'headless_unavailable',
         headless: 'unavailable',
       });
+    }
+  });
+
+  it('busy sidecar => static error code kept, headless busy hint, nothing else changes', async () => {
+    for (const [fetched, expected] of [
+      [ok(NO_RECIPE_PAGE), 'no_recipe'],
+      [new ImportError('blocked'), 'blocked'],
+    ] as const) {
+      const { h, render } = headlessOf(new HeadlessBusyError());
+      const r = await runImport(URL_IN, { safeFetch: fetchStub(fetched), headless: h });
+      expect(r).toMatchObject({
+        status: 'failed',
+        method: 'static',
+        error_code: expected,
+        headless: 'busy',
+      });
+      expect(r.draft).toBeNull();
+      expect(render).toHaveBeenCalledTimes(1);
     }
   });
 

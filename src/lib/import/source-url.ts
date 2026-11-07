@@ -55,3 +55,28 @@ export function storedSourceUrl(raw: unknown): string | null {
   if (!c) return null;
   return `${c.scheme}://${c.host}${c.port ? `:${c.port}` : ''}${c.rest}`;
 }
+
+/**
+ * Every stored form (`storedSourceUrl` output) that shares the comparison key of `raw`, for
+ * the duplicate lookup. The key drops 80 and 443 for either scheme, but a stored URL keeps
+ * the port that is not the default of the scheme the user entered (`http://h:443/x`,
+ * `https://h:80/x`), so those spellings are candidates too. Derived from the same
+ * `canonical()` as the other two functions so they cannot disagree. [] for invalid input.
+ */
+export function sourceUrlCandidates(raw: unknown): string[] {
+  const c = canonical(raw);
+  if (!c) return [];
+  const ports =
+    c.port === '' || c.port === '80' || c.port === '443'
+      ? [
+          { scheme: 'https', port: '' },
+          { scheme: 'http', port: '' },
+          { scheme: 'https', port: '80' },
+          { scheme: 'http', port: '443' },
+        ]
+      : [
+          { scheme: 'https', port: c.port },
+          { scheme: 'http', port: c.port },
+        ];
+  return ports.map((p) => `${p.scheme}://${c.host}${p.port ? `:${p.port}` : ''}${c.rest}`);
+}

@@ -280,3 +280,22 @@ describe('render-time builders never touch the module key counter (hydration)', 
     expect(edited.metric_qty).toBeNull();
   });
 });
+
+describe('tags in the form model (T10)', () => {
+  it('starts empty and always sends the tags array', () => {
+    expect(emptyForm().tags).toEqual([]);
+    expect(formToPayload(emptyForm()).tags).toEqual([]);
+  });
+  it('round trips stored tags and normalizes what it loads', () => {
+    const f = formFromRecipe({
+      ...apiShaped(SAMPLE_VANILLA_CAKE),
+      tags: ['Dessert', 'dessert', ' quick  bake '],
+    });
+    expect(f.tags).toEqual(['dessert', 'quick bake']);
+    expect(formToPayload(f).tags).toEqual(['dessert', 'quick bake']);
+  });
+  it('a removed tag is not in the payload', () => {
+    const f = formFromRecipe({ ...apiShaped(SAMPLE_VANILLA_CAKE), tags: ['a', 'b'] });
+    expect(formToPayload({ ...f, tags: f.tags.filter((x) => x !== 'a') }).tags).toEqual(['b']);
+  });
+});

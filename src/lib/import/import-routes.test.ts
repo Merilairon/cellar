@@ -24,6 +24,7 @@ vi.mock('@/lib/import/safe-fetch', async (orig) => ({
 import { POST } from '@/app/api/import/route';
 import { GET } from '@/app/api/import/[id]/route';
 import { POST as SAVE } from '@/app/api/import/[id]/save/route';
+import { MAX_IMPORT_URL } from './schemas';
 
 const enc = new TextEncoder();
 const page = `<html><script type="application/ld+json">${JSON.stringify({
@@ -157,6 +158,14 @@ describe('POST /api/import', () => {
 
   it('422 when text exceeds 500 KB', async () => {
     expect((await POST(post({ text: 'a'.repeat(500_001) }))).status).toBe(422);
+  });
+
+  it('URL limit: 2049 characters is a 422, 2048 is accepted (matches the sidecar cap)', async () => {
+    const mk = (n: number) =>
+      'https://example.com/' + 'a'.repeat(n - 'https://example.com/'.length);
+    expect(MAX_IMPORT_URL).toBe(2048);
+    expect((await POST(post({ url: mk(2049) }))).status).toBe(422);
+    expect((await POST(post({ url: mk(2048) }))).status).not.toBe(422);
   });
 
   it('allowLocal comes only from env, never from the request', async () => {

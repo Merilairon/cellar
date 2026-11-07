@@ -60,6 +60,7 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
                 is_owner: r.owner_id === user?.id,
                 visibility: r.visibility,
                 updated_at: r.updated_at,
+                tags: r.tags,
               }}
             />
           ))}

@@ -13,7 +13,7 @@ import {
 import { limitFetch } from './limiter';
 import { readMapping } from './mapping';
 import { runImport, type ImportDeps, type ImportInput } from './pipeline';
-import { normalizeSourceUrl } from './source-url';
+import { sourceUrlCandidates } from './source-url';
 import type { Draft } from './normalize';
 import type { ImportJobResponse } from './schemas';
 
@@ -100,11 +100,8 @@ function writeRawHtml(
 /** Serialized view of a job. Deliberately has no raw_html, and no internal error text. */
 export function toJobResponse(db: Db, job: ImportJobRow, actor: Actor): ImportJobResponse {
   const stored = parseStoredDraft(job.draftJson);
-  const normalized = job.url ? normalizeSourceUrl(job.url) : null;
-  const dup =
-    normalized && job.status !== 'saved'
-      ? findRecipeBySourceUrl(db, normalized, actor.id)
-      : undefined;
+  const candidates = job.url && job.status !== 'saved' ? sourceUrlCandidates(job.url) : [];
+  const dup = findRecipeBySourceUrl(db, candidates, actor.id);
   return {
     id: job.id,
     status: job.status,

@@ -4,7 +4,7 @@ import { IMPORT_ERROR_CODES, type ImportErrorCode } from '@/lib/import/errors';
 
 export type Tab = 'url' | 'paste';
 export type Phase = 'fetching' | 'parsing' | 'rendering';
-export type HeadlessState = 'used' | 'unavailable' | null;
+export type HeadlessState = 'used' | 'unavailable' | 'busy' | null;
 
 export type ImportFailure =
   | { kind: 'code'; code: ImportErrorCode; headless?: HeadlessState }
@@ -111,7 +111,10 @@ export function classifyResponse(
       return { ok: true, id: b.id };
     }
     if (isCode(b.error_code)) {
-      const headless = b.headless === 'used' || b.headless === 'unavailable' ? b.headless : null;
+      const headless =
+        b.headless === 'used' || b.headless === 'unavailable' || b.headless === 'busy'
+          ? b.headless
+          : null;
       return { ok: false, failure: { kind: 'code', code: b.error_code, headless } };
     }
   }

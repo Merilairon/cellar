@@ -45,7 +45,7 @@ Without `--profile headless`, `docker compose up` starts exactly the same servic
 
 **Test harness note.** The real-Chromium tests run inside the sidecar container next to the test runner; at 1 GB the 6 MB DOM case was flaky and the abuse suite OOMs, so run them with `--memory 2g --memory-swap 2g` (see `docker/browser/README.md`). The service limit is the same 2 GiB.
 
-**Variables.** App: `HEADLESS_URL`, `HEADLESS_TOKEN` (32+ characters from `A-Za-z0-9+/_=-`, same value on both sides; required whenever `HEADLESS_URL` is set), `HEADLESS_TIMEOUT_MS`. Sidecar: `BIND_ADDR` (IP literal, default `0.0.0.0`), `HEADLESS_ALLOW_NO_TOKEN`. Full table in the README. **Upgrading from v0.3.1:** rebuild and start; migration `0004` applies automatically.
+**Variables.** App: `HEADLESS_URL`, `HEADLESS_TOKEN` (32+ characters from `A-Za-z0-9+/_=-`, same value on both sides; required whenever `HEADLESS_URL` is set), `HEADLESS_TIMEOUT_MS`. Sidecar: `BIND_ADDR` (IP literal, default `0.0.0.0`), `HEADLESS_ALLOW_NO_TOKEN`. Full table in the README. **Upgrading from v0.3.1:** rebuild and start; migration `0004` applies automatically. **Upgrading the sidecar to v0.4.0:** the entry URL limit is now 2048 characters (it was 2000), matching the app, and a sidecar at capacity answers `busy`. Rebuild it: `docker compose --profile headless build`, then `up -d`. An old sidecar with a new app still works (a busy answer is just reported as unavailable).
 
 **Numbers.** Sidecar image 1.21 GB on disk, app image 437 MB (amd64). Startup time was not measured.
 

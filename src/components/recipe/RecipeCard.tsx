@@ -8,6 +8,7 @@ export type RecipeCardData = {
   is_owner: boolean;
   visibility: 'private' | 'users';
   updated_at: string;
+  tags: string[];
 };
 
 export function RecipeCard({ recipe }: { recipe: RecipeCardData }) {
@@ -22,7 +23,22 @@ export function RecipeCard({ recipe }: { recipe: RecipeCardData }) {
             {t('recipes.sharedBy', { name: recipe.owner_display_name })}
           </p>
         )}
-        <p className="mt-2 text-sm text-neutral-700 dark:text-neutral-300">{t('recipes.noTags')}</p>
+        {recipe.tags.length > 0 ? (
+          <ul aria-label={t('tags.field.listLabel')} className="mt-2 flex flex-wrap gap-1">
+            {recipe.tags.map((name) => (
+              <li
+                key={name}
+                className="rounded border border-neutral-500 px-2 py-0.5 text-sm text-neutral-700 dark:text-neutral-300"
+              >
+                {name}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-2 text-sm text-neutral-700 dark:text-neutral-300">
+            {t('recipes.noTags')}
+          </p>
+        )}
         <p className="mt-1 text-sm text-neutral-700 dark:text-neutral-300">
           {t('recipes.updated', {
             date: format.dateTime(new Date(recipe.updated_at), { dateStyle: 'medium' }),

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ImportError, type ImportErrorCode } from './errors';
 import {
   createHeadless,
+  HeadlessBusyError,
   isHeadlessEnabled,
   MAX_RENDER_HTML,
   MAX_RENDER_WIRE,
@@ -10,6 +11,7 @@ import {
   type HeadlessTransport,
   type HeadlessTransportResponse,
 } from './headless-client';
+import { MAX_IMPORT_URL } from './schemas';
 const CONFIG: HeadlessConfig = { url: 'http://browser:3001', timeoutMs: 35_000 };
 const TOKEN = 'secret-token-0123456789abcdef';
 const enc = new TextEncoder();
@@ -75,6 +77,16 @@ describe('headless client: success', () => {
   });
 });
 
+describe('headless client: URL length', () => {
+  it('forwards a MAX_IMPORT_URL (2048) character URL unchanged', async () => {
+    const url = 'https://example.com/' + 'a'.repeat(MAX_IMPORT_URL - 'https://example.com/'.length);
+    expect(url.length).toBe(2048);
+    const t = stub(resp(200, okBody()));
+    await renderPage(url, CONFIG, { transport: t, assertPublic: publicOk });
+    expect(JSON.parse(t.mock.calls[0]![0].body)).toEqual({ url });
+  });
+});
+
 describe('headless client: token', () => {
   it('sends the bearer token only when configured', async () => {
     const withTok = stub(resp(200, okBody()));
@@ -121,9 +133,19 @@ describe('headless client: sidecar error mapping', () => {
     ['too_large', 413, 'too_large'],
     ['failed', 500, 'headless_unavailable'],
     ['failed', 503, 'headless_unavailable'],
+    ['busy', 503, 'headless_unavailable'],
     ['failed', 401, 'headless_unavailable'],
   ])('sidecar %s (%i) -> %s', async (error, status, expected) => {
     expect(await code(run(stub(resp(status, { error }))))).toBe(expected);
+  });
+
+  it('sidecar 503 busy -> HeadlessBusyError; 503 failed (not ready) is not busy', async () => {
+    const busy = await run(stub(resp(503, { error: 'busy' }))).catch((e) => e);
+    expect(busy).toBeInstanceOf(HeadlessBusyError);
+    expect((busy as ImportError).code).toBe('headless_unavailable');
+    const down = await run(stub(resp(503, { error: 'failed' }))).catch((e) => e);
+    expect(down).toBeInstanceOf(ImportError);
+    expect(down).not.toBeInstanceOf(HeadlessBusyError);
   });
 
   it('does not forward sidecar text', async () => {
@@ -282,7 +304,9 @@ describe('headless client: timeout and concurrency', () => {
     };
     const first = run(slow);
     await vi.advanceTimersByTimeAsync(0);
-    expect(await code(run(stub(resp(200, okBody()))))).toBe('headless_unavailable');
+    const second = await run(stub(resp(200, okBody()))).catch((e) => e);
+    expect(second).toBeInstanceOf(HeadlessBusyError);
+    expect(second.code).toBe('headless_unavailable');
     release();
     await expect(first).resolves.toMatchObject({ status: 200 });
     // slot is free again

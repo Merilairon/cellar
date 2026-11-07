@@ -13,7 +13,8 @@ import {
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import { runMigrations, MIGRATIONS_FOLDER } from './migrate';
 import { getCoverPhoto, insertCoverPhoto, listPhotoPathsByRecipe } from './photos';
-import { findReadableRecipesBySourceUrl } from './recipes';
+import { findReadableRecipesBySourceUrl, findRecipeBySourceUrl } from './recipes';
+import { sourceUrlCandidates, storedSourceUrl } from '../import/source-url';
 import { importJob, photo, recipe, user } from './schema';
 
 let db: Db;
@@ -251,5 +252,32 @@ describe('findReadableRecipesBySourceUrl', () => {
         .map((r) => r.title)
         .sort(),
     ).toEqual(['mine', 'theirs-shared']);
+  });
+});
+
+describe('findRecipeBySourceUrl (v0.3.1 m5)', () => {
+  it('finds a recipe stored as http://host:443/x when the same URL is entered again', () => {
+    const { a } = setup();
+    const entered = 'http://host.example:443/x';
+    mkRecipe(a.id, { title: 'odd port', sourceUrl: storedSourceUrl(entered)! });
+    expect(storedSourceUrl(entered)).toBe('http://host.example:443/x');
+    expect(findRecipeBySourceUrl(db, sourceUrlCandidates(entered), a.id)?.title).toBe('odd port');
+    // The https spelling of the same site resolves to the same recipe (same comparison key).
+    expect(
+      findRecipeBySourceUrl(db, sourceUrlCandidates('https://host.example/x'), a.id)?.title,
+    ).toBe('odd port');
+  });
+
+  it('still finds plain http and https rows, and never a private row of another user', () => {
+    const { a, b } = setup();
+    mkRecipe(a.id, { title: 'plain-http', sourceUrl: 'http://s.example/p' });
+    mkRecipe(b.id, { title: 'private', sourceUrl: 'https://t.example/p' });
+    expect(findRecipeBySourceUrl(db, sourceUrlCandidates('https://s.example/p'), a.id)?.title).toBe(
+      'plain-http',
+    );
+    expect(findRecipeBySourceUrl(db, sourceUrlCandidates('https://t.example/p'), a.id)).toBe(
+      undefined,
+    );
+    expect(findRecipeBySourceUrl(db, [], a.id)).toBe(undefined);
   });
 });

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeSourceUrl as n, storedSourceUrl as stored } from './source-url';
+import {
+  normalizeSourceUrl as n,
+  sourceUrlCandidates as candidates,
+  storedSourceUrl as stored,
+} from './source-url';
 
 describe('normalizeSourceUrl', () => {
   it.each([
@@ -61,5 +65,50 @@ describe('storedSourceUrl (entered scheme kept, Q3)', () => {
     expect(n(stored('http://example.com/pie/?utm_source=a'))).toBe(
       n(stored('https://example.com/pie')),
     );
+  });
+});
+
+describe('sourceUrlCandidates (every stored form that shares the comparison key)', () => {
+  it('covers both schemes for a plain URL', () => {
+    expect(candidates('https://site.example/pie')).toEqual([
+      'https://site.example/pie',
+      'http://site.example/pie',
+      'https://site.example:80/pie',
+      'http://site.example:443/pie',
+    ]);
+    expect(candidates('http://site.example/pie/')).toEqual(candidates('https://site.example/pie'));
+  });
+
+  it('includes a stored non-default port of the other scheme (:443 on http, :80 on https)', () => {
+    for (const input of [
+      'http://h.example:443/x',
+      'https://h.example/x',
+      'https://h.example:80/x',
+    ]) {
+      const c = candidates(input);
+      expect(c).toContain('http://h.example:443/x');
+      expect(c).toContain('https://h.example:80/x');
+      expect(c).toContain('https://h.example/x');
+      expect(c).toContain('http://h.example/x');
+    }
+  });
+
+  it('a stored form always yields a candidate list that contains it', () => {
+    for (const input of [
+      'http://h.example:443/x',
+      'https://h.example:80/x',
+      'http://a.test:8080/p?b=1&a=2',
+    ]) {
+      expect(candidates(input)).toContain(stored(input));
+    }
+  });
+
+  it('keeps other ports on both schemes and returns [] for invalid input', () => {
+    expect(candidates('https://h.example:8443/x')).toEqual([
+      'https://h.example:8443/x',
+      'http://h.example:8443/x',
+    ]);
+    expect(candidates('ftp://h.example/x')).toEqual([]);
+    expect(candidates(42)).toEqual([]);
   });
 });

@@ -77,7 +77,7 @@ const okSchema = z.object({
   warnings: z.number().int().nonnegative().optional(),
 });
 const errSchema = z.object({
-  error: z.enum(['blocked', 'timeout', 'private_address', 'too_large', 'failed']),
+  error: z.enum(['blocked', 'timeout', 'private_address', 'too_large', 'failed', 'busy']),
 });
 
 const defaultTransport: HeadlessTransport = ({ url, headers, body, signal }) =>
@@ -108,6 +108,18 @@ const defaultTransport: HeadlessTransport = ({ url, headers, body, signal }) =>
     req.on('error', reject);
     req.end(body);
   });
+
+/**
+ * The sidecar (or this process) is at capacity: a retry in a moment would work. Still the
+ * `headless_unavailable` code for anything that only checks `code`; the pipeline turns it into
+ * the non-persisted `headless: 'busy'` hint (v0.3.2 m5, owner decision Q3).
+ */
+export class HeadlessBusyError extends ImportError {
+  constructor(cause?: unknown) {
+    super('headless_unavailable', cause);
+    this.name = 'HeadlessBusyError';
+  }
+}
 
 const unavailable = (cause?: unknown) => new ImportError('headless_unavailable', cause);
 
@@ -143,9 +155,10 @@ const SIDECAR_ERROR_TO_CODE = {
   too_large: 'too_large',
   failed: 'headless_unavailable',
 } as const;
+// `busy` is handled before this table: it is the only sidecar error that is not an ImportError code.
 
 // One render at a time across the process (G12). No queue: a second caller gets
-// headless_unavailable at once instead of waiting behind a 30 s job.
+// HeadlessBusyError at once instead of waiting behind a 30 s job.
 const registry = globalThis as unknown as {
   __headlessLimiter?: ReturnType<typeof createConcurrencyLimiter>;
 };
@@ -155,7 +168,8 @@ const limit = <T>(fn: () => Promise<T>) =>
 /**
  * Renders `url` in the sidecar. Never throws anything but ImportError:
  * blocked, timeout, private_address, too_large pass through from the sidecar;
- * everything else (down, busy, 401/5xx, malformed, oversize, slow) is headless_unavailable.
+ * busy (this process or the sidecar at capacity) is a HeadlessBusyError (code headless_unavailable);
+ * everything else (down, 401/5xx, malformed, oversize, slow) is headless_unavailable.
  */
 export async function renderPage(
   url: string,
@@ -172,7 +186,7 @@ export async function renderPage(
     return await limit(() => renderInner(url, config, transport, assertPublic, log));
   } catch (e) {
     if (e instanceof ImportError) throw e;
-    if (e instanceof LimiterBusyError) throw unavailable('busy');
+    if (e instanceof LimiterBusyError) throw new HeadlessBusyError('busy');
     throw unavailable(e);
   }
 }
@@ -244,6 +258,7 @@ async function renderInner(
       if (!ok) {
         const err = errSchema.safeParse(json);
         if (!err.success) throw unavailable('unknown error shape');
+        if (err.data.error === 'busy') throw new HeadlessBusyError('sidecar busy');
         throw new ImportError(SIDECAR_ERROR_TO_CODE[err.data.error]);
       }
       const page = okSchema.safeParse(json);

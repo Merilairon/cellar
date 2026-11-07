@@ -133,3 +133,9 @@ test('sidecar sources build no RegExp from data', () => {
     assert.doesNotMatch(readFileSync(new URL(f, dir), 'utf8'), /new RegExp\(/, f);
   }
 });
+
+test('checkEntryUrl: the length cap is 2048, the same as the app MAX_IMPORT_URL', () => {
+  const mk = (n: number) => 'https://example.com/' + 'a'.repeat(n - 'https://example.com/'.length);
+  assert.doesNotThrow(() => checkEntryUrl(mk(2048)));
+  assert.throws(() => checkEntryUrl(mk(2049)), RenderError);
+});

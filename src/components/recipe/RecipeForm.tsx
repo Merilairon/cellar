@@ -18,6 +18,7 @@ import { call } from './api';
 import { FormField, fieldId } from './FormField';
 import { IngredientTextarea } from './IngredientTextarea';
 import { StepsEditor } from './StepsEditor';
+import { TagInput } from './TagInput';
 import { btn, btnDanger, btnPrimary, input } from './styles';
 
 const TOP_LABELS: Record<string, string> = {
@@ -30,6 +31,7 @@ const TOP_LABELS: Record<string, string> = {
   source_name: 'recipe.form.sourceName',
   source_url: 'recipe.form.sourceUrl',
   visibility: 'recipe.form.visibility',
+  tags: 'recipe.form.tags',
   sections: 'recipe.form.sections',
 };
 const STEP_LABELS: Record<string, string> = {
@@ -238,6 +240,18 @@ export function RecipeForm({
             <option value="private">{t('recipe.visibility.private')}</option>
             <option value="users">{t('recipe.visibility.users')}</option>
           </select>
+        )}
+      </FormField>
+
+      <FormField id={fieldId('tags')} label={t('recipe.form.tags')} code={errs.get('tags')}>
+        {(p) => (
+          <TagInput
+            id={p.id}
+            tags={form.tags}
+            onChange={(tags) => set('tags', tags)}
+            describedBy={p['aria-describedby']}
+            invalid={p['aria-invalid']}
+          />
         )}
       </FormField>
 

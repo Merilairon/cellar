@@ -119,26 +119,21 @@ export function createRecipe(db: Db, ownerId: string, tree: RecipeTree): string 
 }
 
 /**
- * Duplicate lookup for imports: a recipe with this (already normalized) source URL among
- * those the caller may see in lists (own, or `users`-visible). Another user's private recipe
- * is never returned, so it cannot be revealed.
+ * Duplicate lookup for imports: a recipe whose stored source URL is one of `candidates`
+ * (see `sourceUrlCandidates`: every stored spelling that shares the comparison key, both
+ * schemes and stored non-default ports) among those the caller may see in lists (own, or
+ * `users`-visible). Another user's private recipe is never returned, so it cannot be revealed.
  */
 export function findRecipeBySourceUrl(
   db: Db,
-  normalizedUrl: string,
+  candidates: string[],
   userId: string,
 ): { id: string; title: string } | undefined {
+  if (candidates.length === 0) return undefined;
   return db
     .select({ id: recipe.id, title: recipe.title })
     .from(recipe)
-    .where(
-      and(
-        // The stored URL keeps the scheme the user entered (Q3); `normalizedUrl` is the
-        // https comparison key, so both schemes are candidates.
-        inArray(recipe.sourceUrl, [normalizedUrl, normalizedUrl.replace(/^https:/, 'http:')]),
-        readableBy(userId),
-      ),
-    )
+    .where(and(inArray(recipe.sourceUrl, candidates), readableBy(userId)))
     .orderBy(desc(recipe.updatedAt), desc(recipe.id))
     .limit(1)
     .get();

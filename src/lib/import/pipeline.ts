@@ -8,7 +8,7 @@ import {
   type SafeFetchOptions,
   type SafeFetchResult,
 } from './safe-fetch';
-import type { Headless, HeadlessPage } from './headless-client';
+import { HeadlessBusyError, type Headless, type HeadlessPage } from './headless-client';
 import { normalizeSourceUrl, storedSourceUrl } from './source-url';
 
 // Orchestration: static fetch -> JSON-LD -> normalize, then (URL imports only, at most once,
@@ -42,10 +42,11 @@ export type ImportResult = {
   raw_html: string | null;
   /**
    * `used`: the rendered page produced the result. `unavailable`: headless was needed but is
-   * off or failed (the UI explains and offers paste). Not persisted; `used` is derivable
+   * off or failed (the UI explains and offers paste). `busy`: the sidecar was at capacity, a retry
+   * in a moment would work (the persisted code stays the static one). Not persisted; `used` is derivable
    * from `method`.
    */
-  headless?: 'used' | 'unavailable' | null;
+  headless?: 'used' | 'unavailable' | 'busy' | null;
 };
 
 function decodeBody(body: Uint8Array, contentType: string | undefined): string {
@@ -152,6 +153,12 @@ export async function runImport(input: ImportInput, deps: ImportDeps = {}): Prom
   try {
     rendered = await headless.render(input.url.trim());
   } catch (e) {
+    // Busy: a retry in a moment would work. Keep the static failure (and its persisted code)
+    // and only add the non-persisted hint, like `unavailable` when headless is off.
+    if (e instanceof HeadlessBusyError) {
+      deps.log?.('headless busy');
+      return { ...staticFail, headless: 'busy' };
+    }
     const code = e instanceof ImportError ? e.code : 'headless_unavailable';
     deps.log?.(`headless failed: ${code}`, e instanceof Error ? e.cause : undefined);
     return failed('headless', code, {

@@ -160,6 +160,7 @@
       "fetch_failed": "The page could not be fetched.",
       "headless_unavailable": "Loading this page in a browser is not available on this server.",
       "headlessTried": "We also tried loading the page in a browser.",
+      "headlessBusy": "The browser step is busy. Try again in a moment, or paste the recipe.",
       "headlessUnavailableHint": "Loading this page in a browser is not available on this server.",
       "pasteHint": "You can paste the recipe text or the page source instead.",
       "rateLimited": "Too many imports. Try again in {seconds, plural, one {# second} other {# seconds}}.",
@@ -178,8 +179,6 @@
       "headlessNote": "Page was loaded in a browser",
       "includeCover": "Include the cover image from the source",
       "coverNote": "The image is downloaded when you save. It is not shown here.",
-      "tags": "Tags found on the page",
-      "tagsNote": "Tags are not saved yet.",
       "save": "Save imported recipe",
       "saving": "Saving",
       "discard": "Discard",
@@ -396,11 +395,14 @@
         "minutesMin": "Time, from (minutes)",
         "minutesMax": "Time, to (minutes)"
       },
+      "tags": "Tags",
       "save": "Save recipe",
       "errorSummary": "{count, plural, one {# field needs attention} other {# fields need attention}}"
     },
     "errors": {
       "generic": "This value is not valid.",
+      "invalid_tag": "One of the tags is not valid. Remove it or shorten it.",
+      "too_many_tags": "A recipe can have at most 20 tags.",
       "too_small": "This value is missing or too small.",
       "too_big": "This value is too long or too large.",
       "invalid_type": "Enter a valid value.",
@@ -448,6 +450,23 @@
     "filterLabel": "Filter by tag",
     "chip": "{name}, {count, plural, one {# recipe} other {# recipes}}. Filter by this tag",
     "chipActive": "{name}, {count, plural, one {# recipe} other {# recipes}}. Filter active, select to remove",
-    "clear": "Clear tag filter"
+    "clear": "Clear tag filter",
+    "field": {
+      "hint": "Type a tag and press Enter or comma. Use the arrow keys to pick a suggestion. {count} of {max} tags.",
+      "placeholder": "Add a tag",
+      "listLabel": "Tags on this recipe",
+      "none": "No tags yet",
+      "remove": "Remove tag {name}",
+      "suggestionsLabel": "Tag suggestions",
+      "suggestions": "{count, plural, =0 {No suggestions} one {# suggestion} other {# suggestions}}, use the arrow keys to choose",
+      "added": "Added tag {name}",
+      "alreadyAdded": "Tag {name} is already added",
+      "removed": "Removed tag {name}",
+      "errors": {
+        "too_long": "A tag can be at most 40 characters.",
+        "invalid": "This tag has characters that are not allowed.",
+        "limit": "A recipe can have at most 20 tags."
+      }
+    }
   }
 }

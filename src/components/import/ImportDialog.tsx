@@ -109,6 +109,7 @@ export function ImportDialog() {
       const out = [t(CODE_KEYS[f.code])];
       // Headless ran and the page still failed, or it was needed but is not available.
       if (f.headless === 'used') out.push(t('import.errors.headlessTried'));
+      if (f.headless === 'busy') out.push(t('import.errors.headlessBusy'));
       if (f.headless === 'unavailable' && f.code !== 'headless_unavailable')
         out.push(t('import.errors.headlessUnavailableHint'));
       if (suggestsPaste(f)) out.push(t('import.errors.pasteHint'));
