@@ -7,12 +7,15 @@ import {
   createRecipe,
   deleteRecipe,
   getRecipeFull,
+  GridConflictError,
   RecipeGuardError,
+  replaceGrid,
   replaceRecipe,
   setRecipeVisibility,
   type RecipeTree,
 } from './recipes';
 import { searchRecipes } from './search';
+import { reindexRecipe } from './fts';
 import { ingredient, recipe, section, step, user } from './schema';
 
 let db: Db;
@@ -291,5 +294,137 @@ describe('guards run inside the write transaction (no check-then-act gap)', () =
     });
     expect(seen).toBe('grid');
     expect(getRecipeFull(db, id)!.viewMode).toBe('list');
+  });
+});
+
+describe('replaceGrid', () => {
+  const snapshot = (id: string) => ({
+    full: getRecipeFull(db, id),
+    fts: db.$client.prepare('select * from recipe_fts where recipe_id = ?').all(id),
+    defer: db.$client.prepare('select count(*) n from recipe_fts_defer').get(),
+  });
+  const newSections = (): RecipeTree['sections'] => [
+    { title: 'New', ingredients: [ing('zucchini'), ing('leek')], steps: [st('chop', 0, 1)] },
+  ];
+  const opts = (id: string, over: Partial<Parameters<typeof replaceGrid>[3]> = {}) => ({
+    baseUpdatedAt: getRecipeFull(db, id)!.updatedAt,
+    viewMode: 'grid' as const,
+    ...over,
+  });
+
+  it('replaces children only, bumps updated_at, keeps fields and tags, FTS equals a rebuild', () => {
+    const u = setup();
+    const t = tree('Keep me');
+    t.tags = ['soup', 'quick'];
+    t.fields.servings = 4;
+    const id = createRecipe(db, u.id, t);
+    const before = getRecipeFull(db, id)!;
+    expect(replaceGrid(db, id, newSections(), opts(id, { viewMode: 'list' }))).toBe(true);
+    const after = getRecipeFull(db, id)!;
+    expect(after.sections.map((s) => s.ingredients.map((i) => i.name))).toEqual([
+      ['zucchini', 'leek'],
+    ]);
+    expect(after.title).toBe('Keep me');
+    expect(after.servings).toBe(4);
+    expect(after.visibility).toBe('private');
+    expect([...after.tags].sort()).toEqual(['quick', 'soup']);
+    expect(after.viewMode).toBe('list');
+    expect(after.updatedAt > before.updatedAt).toBe(true);
+    expect(after.createdAt).toBe(before.createdAt);
+    const fts = db.$client.prepare('select * from recipe_fts where recipe_id = ?').all(id);
+    expect(JSON.stringify(fts)).toContain('zucchini');
+    expect(JSON.stringify(fts)).not.toContain('"a b c');
+    reindexRecipe(db, id);
+    expect(db.$client.prepare('select * from recipe_fts where recipe_id = ?').all(id)).toEqual(fts);
+  });
+
+  it('stamps a strictly newer updated_at even within one millisecond', () => {
+    const u = setup();
+    const id = createRecipe(db, u.id, tree());
+    const stamp = getRecipeFull(db, id)!.updatedAt;
+    const future = new Date(Date.now() + 60_000).toISOString();
+    db.update(recipe).set({ updatedAt: future }).where(eq(recipe.id, id)).run();
+    replaceGrid(db, id, newSections(), { baseUpdatedAt: future, viewMode: 'grid' });
+    expect(getRecipeFull(db, id)!.updatedAt > future).toBe(true);
+    expect(stamp).toBeTruthy();
+  });
+
+  it('throws GridConflictError with the stored stamp and writes nothing on a stale base', () => {
+    const u = setup();
+    const id = createRecipe(db, u.id, tree());
+    const snap = snapshot(id);
+    const stored = snap.full!.updatedAt;
+    try {
+      replaceGrid(db, id, newSections(), {
+        baseUpdatedAt: '2000-01-01T00:00:00.000Z',
+        viewMode: 'grid',
+      });
+      expect.unreachable();
+    } catch (e) {
+      expect(e).toBeInstanceOf(GridConflictError);
+      expect((e as GridConflictError).currentUpdatedAt).toBe(stored);
+    }
+    expect(snapshot(id)).toEqual(snap);
+  });
+
+  it('rolls back completely when an insert fails mid-way (children, stamp, view_mode, FTS, defer marker)', () => {
+    const u = setup();
+    const id = createRecipe(db, u.id, tree());
+    const snap = snapshot(id);
+    const bad = newSections();
+    bad[0]!.ingredients.push(ing('third'));
+    bad[0]!.steps.push(st('oops', 3, 1)); // violates step_span_chk after ingredients are written
+    expect(() => replaceGrid(db, id, bad, opts(id, { viewMode: 'list' }))).toThrow();
+    expect(snapshot(id)).toEqual(snap);
+  });
+
+  it('runs the guard on the stored row inside the transaction and writes nothing when it refuses', () => {
+    const u = setup();
+    const id = createRecipe(db, u.id, tree());
+    const snap = snapshot(id);
+    expect(() =>
+      replaceGrid(db, id, newSections(), opts(id, { guard: () => 'forbidden' })),
+    ).toThrow(RecipeGuardError);
+    expect(() =>
+      replaceGrid(db, id, newSections(), opts(id, { guard: () => 'not_found' })),
+    ).toThrow(RecipeGuardError);
+    expect(snapshot(id)).toEqual(snap);
+  });
+
+  it('the guard wins over the conflict check (a refused caller never learns the stamp)', () => {
+    const u = setup();
+    const id = createRecipe(db, u.id, tree());
+    expect(() =>
+      replaceGrid(db, id, newSections(), {
+        baseUpdatedAt: 'stale',
+        viewMode: 'grid',
+        guard: () => 'not_found',
+      }),
+    ).toThrow(RecipeGuardError);
+  });
+
+  it('returns false for an unknown recipe', () => {
+    setup();
+    expect(replaceGrid(db, 'nope', newSections(), { baseUpdatedAt: 'x', viewMode: 'grid' })).toBe(
+      false,
+    );
+  });
+
+  it('prints timings for maximal replaces (C11, no assertion)', () => {
+    const u = setup();
+    const id = createRecipe(db, u.id, tree());
+    for (const [secs, per] of [
+      [1, 200],
+      [5, 40],
+    ] as const) {
+      const sections: RecipeTree['sections'] = Array.from({ length: secs }, (_, s) => ({
+        title: `S${s}`,
+        ingredients: Array.from({ length: per }, (_, i) => ing(`item ${s}-${i}`)),
+        steps: [st('all', 0, per - 1)],
+      }));
+      const t0 = performance.now();
+      replaceGrid(db, id, sections, opts(id));
+      console.info(`replaceGrid ${secs}x${per}: ${(performance.now() - t0).toFixed(1)} ms`);
+    }
   });
 });

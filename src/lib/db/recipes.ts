@@ -177,6 +177,48 @@ export function replaceRecipe(
   );
 }
 
+/** Thrown inside the grid-replace transaction (rolling it back) when the stored stamp moved on. */
+export class GridConflictError extends Error {
+  constructor(readonly currentUpdatedAt: string) {
+    super('grid conflict');
+  }
+}
+
+/**
+ * Replace only sections, ingredients and steps (grid editor save). One BEGIN IMMEDIATE
+ * transaction: guard on the stored row, compare `updated_at` with `baseUpdatedAt`
+ * (GridConflictError on mismatch), set `view_mode` and a strictly newer `updated_at`, then
+ * delete and re-insert children under a deferred FTS rebuild. Recipe fields and tags are
+ * untouched. Returns false when the recipe does not exist.
+ */
+export function replaceGrid(
+  db: Db,
+  id: string,
+  sections: RecipeTree['sections'],
+  opts: { baseUpdatedAt: string; viewMode: RecipeRow['viewMode']; guard?: RecipeGuard },
+): boolean {
+  return db.transaction(
+    (tx) => {
+      const row = tx.select().from(recipe).where(eq(recipe.id, id)).get();
+      if (!row) return false;
+      enforce(opts.guard, row);
+      if (row.updatedAt !== opts.baseUpdatedAt) throw new GridConflictError(row.updatedAt);
+      // Same-millisecond saves must still change the stamp, or a stale base would pass.
+      let updatedAt = nowIso();
+      if (updatedAt <= row.updatedAt) {
+        updatedAt = new Date(Date.parse(row.updatedAt) + 1).toISOString();
+      }
+      tx.update(recipe).set({ viewMode: opts.viewMode, updatedAt }).where(eq(recipe.id, id)).run();
+      withDeferredFts(tx, id, () => {
+        tx.delete(section).where(eq(section.recipeId, id)).run();
+        insertSections(tx, id, sections);
+      });
+      return true;
+    },
+    { behavior: 'immediate' },
+  );
+}
+
 export function getRecipeRow(db: Db, id: string): RecipeRow | undefined {
   return db.select().from(recipe).where(eq(recipe.id, id)).get();
 }

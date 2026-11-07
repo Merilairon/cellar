@@ -13,6 +13,12 @@ vi.mock('@/lib/env', () => ({ getEnv: () => ({ BASE_URL: 'http://localhost:3100'
 import { GET as listGet, POST as createPost } from '@/app/api/recipes/route';
 import { DELETE, GET, PUT } from '@/app/api/recipes/[id]/route';
 import { POST as copyPost } from '@/app/api/recipes/[id]/copy/route';
+import {
+  PUT as gridPut,
+  GET as gridGet,
+  DELETE as gridDelete,
+} from '@/app/api/recipes/[id]/grid/route';
+import { GET as tagsGet } from '@/app/api/tags/route';
 import { PUT as visPut } from '@/app/api/recipes/[id]/visibility/route';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -170,5 +176,192 @@ describe('copy and visibility routes', () => {
     await visPut(req('PUT', { visibility: 'private' }), ctx(json.id));
     state.current = other;
     expect((await visPut(req('PUT', { visibility: 'users' }), ctx(json.id))).status).toBe(404);
+  });
+});
+
+describe('PUT /api/recipes/:id/grid', () => {
+  const stripIds = (o: Loose): Loose =>
+    Object.fromEntries(Object.entries(o).filter(([k]) => k !== 'id' && k !== 'position'));
+  const gridBody = (r: Loose, edit?: (sections: Loose[]) => void) => {
+    const sections = (r.sections as Loose[]).map((s) => ({
+      title: s.title,
+      ingredients: (s.ingredients as Loose[]).map((x) => stripIds(x)),
+      steps: (s.steps as Loose[]).map((x) => stripIds(x)),
+    }));
+    edit?.(sections);
+    return { base_updated_at: r.updated_at, sections };
+  };
+  const created = async (over: Loose = {}) =>
+    (await create({ ...SAMPLE_SKILLET_COOKIES, ...over })).json as unknown as Loose;
+  const put = (id: string, body: unknown, headers: Record<string, string> = same, raw?: string) =>
+    gridPut(req('PUT', body, headers, raw), ctx(id));
+  const NO_STORE = 'private, no-store';
+
+  it('owner 200 returns the full recipe with a new updated_at; no-store', async () => {
+    const r = await created();
+    const res = await put(
+      r.id,
+      gridBody(r, (s) => (s[0].ingredients[0].name = 'ghee')),
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe(NO_STORE);
+    const out = (await res.json()) as Loose;
+    expect(out.sections[0].ingredients[0].name).toBe('ghee');
+    expect(out.updated_at > r.updated_at).toBe(true);
+    expect(out.title).toBe(r.title);
+  });
+
+  it('authorization matrix: admin 200, member on users recipe 403, member on private 404, unknown 404, anonymous 401', async () => {
+    const shared = await created({ visibility: 'users' });
+    const priv = await created({ visibility: 'private' });
+    state.current = other;
+    expect((await put(shared.id, gridBody(shared))).status).toBe(403);
+    expect((await put(priv.id, gridBody(priv))).status).toBe(404);
+    expect((await put('NOPE', gridBody(priv))).status).toBe(404);
+    const admin = mk('adm@x.test', 'admin');
+    state.current = admin;
+    const res = await put(priv.id, gridBody(priv));
+    expect(res.status).toBe(200);
+    state.current = null;
+    expect((await put(priv.id, gridBody(priv))).status).toBe(401);
+    state.current = owner;
+    const stored = await (await GET(req('GET', undefined, {}), ctx(priv.id))).json();
+    expect((stored as Loose).sections[0].ingredients).toHaveLength(9);
+  });
+
+  it('403 without CSRF proof before any work, 415 wrong type, 413 oversize, 400 bad JSON', async () => {
+    const r = await created();
+    const before = db.$client.prepare('select updated_at from recipe').get();
+    expect((await put(r.id, gridBody(r), { 'content-type': 'application/json' })).status).toBe(403);
+    expect((await put(r.id, gridBody(r), { ...same, 'sec-fetch-site': 'cross-site' })).status).toBe(
+      403,
+    );
+    expect(
+      (
+        await put(r.id, gridBody(r), {
+          'sec-fetch-site': 'same-origin',
+          'content-type': 'text/plain',
+        })
+      ).status,
+    ).toBe(415);
+    expect((await put(r.id, undefined, same, '{nope')).status).toBe(400);
+    const big = await put(r.id, undefined, same, JSON.stringify({ pad: 'x'.repeat(1_100_000) }));
+    expect(big.status).toBe(413);
+    expect(db.$client.prepare('select updated_at from recipe').get()).toEqual(before);
+  });
+
+  it('409 on a stale base with the current updated_at; sequential saves with one base: 200 then 409', async () => {
+    const r = await created();
+    const body = gridBody(r);
+    const first = (await (await put(r.id, body)).json()) as Loose;
+    const second = await put(r.id, body);
+    expect(second.status).toBe(409);
+    expect(await second.json()).toEqual({ error: 'conflict', updated_at: first.updated_at });
+    expect(second.headers.get('cache-control')).toBe(NO_STORE);
+  });
+
+  it('a recipe-form PUT between load and save causes 409', async () => {
+    const r = await created();
+    const body = gridBody(r);
+    expect(
+      (await PUT(req('PUT', { ...SAMPLE_SKILLET_COOKIES, title: 'Renamed' }), ctx(r.id))).status,
+    ).toBe(200);
+    expect((await put(r.id, body)).status).toBe(409);
+  });
+
+  it('422 with validator paths; an uncovered row is 200; unknown keys 422', async () => {
+    const r = await created();
+    const bad = await put(
+      r.id,
+      gridBody(r, (s) => (s[0].steps[3].row_end = 30)),
+    );
+    expect(bad.status).toBe(422);
+    expect(await bad.json()).toEqual({
+      errors: [{ path: 'sections.0.steps.3.row_end', code: 'row_out_of_range' }],
+    });
+    expect((await put(r.id, { ...gridBody(r), tags: ['x'] })).status).toBe(422);
+    expect((await put(r.id, { sections: gridBody(r).sections })).status).toBe(422);
+    const uncovered = await put(
+      r.id,
+      gridBody(r, (s) => (s[0].steps = s[0].steps.slice(0, 3))),
+    );
+    expect(uncovered.status).toBe(200);
+  });
+
+  it('every response carries Cache-Control: private, no-store (table)', async () => {
+    const r = await created({ visibility: 'users' });
+    const rows: Array<[number, () => Promise<Response>]> = [
+      [403, () => put(r.id, gridBody(r), { 'content-type': 'application/json' })],
+      [415, () => put(r.id, gridBody(r), { 'sec-fetch-site': 'same-origin' })],
+      [400, () => put(r.id, undefined, same, '{nope')],
+      [413, () => put(r.id, undefined, same, 'x'.repeat(1_100_000))],
+      [422, () => put(r.id, { base_updated_at: r.updated_at, sections: [] })],
+      [409, () => put(r.id, { ...gridBody(r), base_updated_at: '2000-01-01T00:00:00.000Z' })],
+      [404, () => put('NOPE', gridBody(r))],
+      [405, () => Promise.resolve(gridGet())],
+      [405, () => Promise.resolve(gridDelete())],
+      [200, () => put(r.id, gridBody(r))],
+    ];
+    for (const [status, call] of rows) {
+      const res = await call();
+      expect(res.status, String(status)).toBe(status);
+      expect(res.headers.get('cache-control'), String(status)).toBe(NO_STORE);
+    }
+    state.current = other;
+    const cur = (await (await GET(req('GET', undefined, {}), ctx(r.id))).json()) as Loose;
+    expect((await put(r.id, gridBody(cur))).status).toBe(403);
+    expect((await put(r.id, gridBody(cur))).headers.get('cache-control')).toBe(NO_STORE);
+    state.current = null;
+    const anon = await put(r.id, gridBody(cur));
+    expect([anon.status, anon.headers.get('cache-control')]).toEqual([401, NO_STORE]);
+  });
+
+  it('error bodies carry codes and paths only (no stack, SQL or ids)', async () => {
+    const r = await created();
+    const res = await put(
+      r.id,
+      gridBody(r, (s) => (s[0].ingredients[0].name = '')),
+    );
+    const text = await res.text();
+    expect(JSON.parse(text)).toEqual({
+      errors: [{ path: 'sections.0.ingredients.0.name', code: 'too_small' }],
+    });
+  });
+
+  it('a maximal valid payload (20 sections x 200 ingredients) fits the body cap or is a clean 413', async () => {
+    const r = await created();
+    const ingredients = Array.from({ length: 200 }, (_, i) => ({
+      name: `ingredient number ${i}`,
+      note: 'finely chopped',
+      display_primary: 'metric',
+      metric_qty: 100,
+      metric_unit: 'g',
+    }));
+    const body = {
+      base_updated_at: r.updated_at,
+      sections: Array.from({ length: 20 }, (_, i) => ({ title: `S${i}`, ingredients, steps: [] })),
+    };
+    expect([200, 413]).toContain((await put(r.id, body)).status);
+  });
+
+  it('C3: GET /api/recipes and /api/tags error responses are no-store too', async () => {
+    const hdr = (r: Response) => r.headers.get('cache-control');
+    const bad = await listGet(
+      new Request('http://localhost:3100/api/recipes?bogus=1', { headers: same }),
+    );
+    expect([bad.status, hdr(bad)]).toEqual([400, 'private, no-store']);
+    const q = await tagsGet(
+      new Request(`http://localhost:3100/api/tags?q=${'x'.repeat(50)}`, { headers: same }),
+    );
+    expect([q.status, hdr(q)]).toEqual([400, 'private, no-store']);
+    state.current = null;
+    const a = await listGet(req('GET', undefined, {}));
+    const b = await tagsGet(req('GET', undefined, {}));
+    expect([a.status, hdr(a), b.status, hdr(b)]).toEqual([
+      401,
+      'private, no-store',
+      401,
+      'private, no-store',
+    ]);
   });
 });

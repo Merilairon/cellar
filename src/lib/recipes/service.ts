@@ -5,7 +5,9 @@ import {
   deleteRecipe,
   getRecipeFull,
   getRecipeRow,
+  replaceGrid,
   replaceRecipe,
+  GridConflictError,
   setRecipeVisibility,
   RecipeGuardError,
   type RecipeFull,
@@ -21,6 +23,7 @@ import { validateRecipeGrid } from '@/lib/grid/validate';
 import { completeMeasures } from '@/lib/units/complete';
 import { canRead, canWrite } from './access';
 import {
+  gridInputSchema,
   recipeInputSchema,
   visibilityInputSchema,
   zodIssuesToErrors,
@@ -32,7 +35,9 @@ import {
 export type Actor = { id: string; role: 'admin' | 'member' };
 
 export type Failure =
-  { ok: false; status: 404 | 403 } | { ok: false; status: 422; errors: FieldError[] };
+  | { ok: false; status: 404 | 403 }
+  | { ok: false; status: 422; errors: FieldError[] }
+  | { ok: false; status: 409; currentUpdatedAt: string };
 type Result<T> = ({ ok: true } & T) | Failure;
 
 /** Default view mode: grid only when there is at least one column step and every span is valid. */
@@ -48,6 +53,41 @@ function composeRawText(i: RecipeInput['sections'][number]['ingredients'][number
       : [i.metric_qty, i.metric_qty_max, i.metric_unit];
   const amount = qty != null ? joinQtyRange(qty, max) : null;
   return [amount, unit, i.name].filter((x) => x != null && x !== '').join(' ');
+}
+
+/** Map validated sections to persistable rows (raw text, derived measures). Shared by recipe and grid saves. */
+export function sectionsToTree(sections: RecipeInput['sections']): RecipeTree['sections'] {
+  return sections.map((s) => ({
+    title: s.title ?? null,
+    ingredients: s.ingredients.map((i) =>
+      completeMeasures({
+        name: i.name,
+        note: i.note ?? null,
+        rawText: i.raw_text ?? composeRawText(i),
+        metricQty: i.metric_qty ?? null,
+        metricQtyMax: i.metric_qty_max ?? null,
+        metricUnit: i.metric_unit ?? null,
+        usQty: i.us_qty ?? null,
+        usQtyMax: i.us_qty_max ?? null,
+        usUnit: i.us_unit ?? null,
+        displayPrimary: i.display_primary,
+        splitGroupId: i.split_group_id ?? null,
+        portionLabel: i.portion_label ?? null,
+        groupLabel: i.group_label ?? null,
+      }),
+    ),
+    steps: s.steps.map((st) => ({
+      kind: st.kind,
+      label: st.label,
+      detail: st.detail,
+      rowStart: st.kind === 'column' ? (st.row_start ?? null) : null,
+      rowEnd: st.kind === 'column' ? (st.row_end ?? null) : null,
+      tempC: st.temp_c ?? null,
+      tempF: st.temp_f ?? null,
+      minutesMin: st.minutes_min ?? null,
+      minutesMax: st.minutes_max ?? null,
+    })),
+  }));
 }
 
 export function toTree(input: RecipeInput, viewMode: ViewMode): RecipeTree {
@@ -66,37 +106,7 @@ export function toTree(input: RecipeInput, viewMode: ViewMode): RecipeTree {
       viewMode,
     },
     tags: input.tags,
-    sections: input.sections.map((s) => ({
-      title: s.title ?? null,
-      ingredients: s.ingredients.map((i) =>
-        completeMeasures({
-          name: i.name,
-          note: i.note ?? null,
-          rawText: i.raw_text ?? composeRawText(i),
-          metricQty: i.metric_qty ?? null,
-          metricQtyMax: i.metric_qty_max ?? null,
-          metricUnit: i.metric_unit ?? null,
-          usQty: i.us_qty ?? null,
-          usQtyMax: i.us_qty_max ?? null,
-          usUnit: i.us_unit ?? null,
-          displayPrimary: i.display_primary,
-          splitGroupId: i.split_group_id ?? null,
-          portionLabel: i.portion_label ?? null,
-          groupLabel: i.group_label ?? null,
-        }),
-      ),
-      steps: s.steps.map((st) => ({
-        kind: st.kind,
-        label: st.label,
-        detail: st.detail,
-        rowStart: st.kind === 'column' ? (st.row_start ?? null) : null,
-        rowEnd: st.kind === 'column' ? (st.row_end ?? null) : null,
-        tempC: st.temp_c ?? null,
-        tempF: st.temp_f ?? null,
-        minutesMin: st.minutes_min ?? null,
-        minutesMax: st.minutes_max ?? null,
-      })),
-    })),
+    sections: sectionsToTree(input.sections),
   };
 }
 
@@ -114,6 +124,9 @@ function guarded<T>(fn: () => T): { ok: true; value: T } | Failure {
   try {
     return { ok: true, value: fn() };
   } catch (e) {
+    if (e instanceof GridConflictError) {
+      return { ok: false, status: 409, currentUpdatedAt: e.currentUpdatedAt };
+    }
     if (e instanceof RecipeGuardError) {
       return { ok: false, status: e.status === 'forbidden' ? 403 : 404 };
     }
@@ -250,6 +263,38 @@ export function updateRecipeFor(
     !prepared.explicitViewMode && stored === 'list' ? 'list' : prepared.tree.fields.viewMode!;
   const res = guarded(() =>
     replaceRecipe(db, id, prepared.tree, { guard: writeGuard(actor), viewMode: keepStored }),
+  );
+  if (!res.ok) return res;
+  if (!res.value) return { ok: false, status: 404 };
+  return { ok: true, recipe: toApiRecipe(getRecipeFull(db, id)!, true) };
+}
+
+/**
+ * Atomic grid-editor save: replaces sections, ingredients and steps only. Recipe fields,
+ * tags, visibility and photos are never touched. `base_updated_at` must equal the stored
+ * `updated_at` (409 otherwise). `view_mode` is recomputed server-side. Client duty (C7): when
+ * changing an ingredient's quantity or unit text, send the non-primary side as null; the
+ * server derives it (`completeMeasures`). A non-null side is stored as sent.
+ */
+export function updateGridFor(
+  db: Db,
+  actor: Actor,
+  id: string,
+  body: unknown,
+): Result<{ recipe: ApiRecipe }> {
+  const row = getRecipeRow(db, id);
+  if (!row || !canRead(actor, row)) return { ok: false, status: 404 };
+  if (!canWrite(actor, row)) return { ok: false, status: 403 };
+  const parsed = gridInputSchema.safeParse(body);
+  if (!parsed.success) return { ok: false, status: 422, errors: zodIssuesToErrors(parsed.error) };
+  const { errors } = validateRecipeGrid(parsed.data);
+  if (errors.length > 0) return { ok: false, status: 422, errors };
+  const res = guarded(() =>
+    replaceGrid(db, id, sectionsToTree(parsed.data.sections), {
+      baseUpdatedAt: parsed.data.base_updated_at,
+      viewMode: defaultViewMode(parsed.data),
+      guard: writeGuard(actor),
+    }),
   );
   if (!res.ok) return res;
   if (!res.value) return { ok: false, status: 404 };
