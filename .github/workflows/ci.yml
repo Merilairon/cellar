@@ -146,17 +146,15 @@ jobs:
       - name: Real-Chromium Docker suite at --memory 2g
         run: docker/browser/scripts/docker-tests.sh cellar-browser:ci
 
-  # arm64 under QEMU (emulated, not real hardware): app image + sharp re-encode, sidecar image,
-  # and the sandbox/syscall tests. A green run here is "verified under QEMU", nothing stronger.
+  # arm64 on a NATIVE GitHub arm64 runner (public repo): app image + sharp re-encode, sidecar image,
+  # and the sandbox/syscall tests against the real aarch64 kernel. QEMU user-mode cannot run
+  # these: it does not emulate CLONE_NEWUSER, so the sandbox cannot start there.
   # continue-on-error is deliberately off: a red job means arm64 stays documented as unverified.
   arm64:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64
       - uses: docker/setup-buildx-action@v3
       - name: Allow unprivileged user namespaces
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
@@ -171,5 +169,5 @@ jobs:
               .then((o) => { if (process.arch !== 'arm64' || o.length < 20) process.exit(1); console.log('arm64 sharp re-encode ok', process.arch, o.length); })"
       - name: Sidecar image (arm64)
         run: docker buildx build --platform linux/arm64 --load -t cellar-browser:arm64 docker/browser
-      - name: Sidecar sandbox self-check and syscall tests (arm64, QEMU)
+      - name: Sidecar sandbox self-check and syscall tests (arm64, native)
         run: docker/browser/scripts/docker-tests.sh cellar-browser:arm64 linux/arm64
