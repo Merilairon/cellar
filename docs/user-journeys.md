@@ -53,11 +53,11 @@
 1. **New recipe** → enters title, servings, times.
 2. Adds ingredients line by line (free text parsed into qty/unit/name, with live preview of parsed fields).
 3. Adds steps (label + detail; mark prep steps as banners).
-4. Opens **Grid editor**: drags span handles per step; warnings for uncovered ingredients.
+4. Opens **Edit grid layout** (the grid editor, v0.4.1; a list recipe uses **Convert to grid** first): drags span handles per step (on a phone, uses the Start and End steppers in the bottom sheet); warnings for uncovered ingredients.
 5. Uploads a photo, adds tags.
 6. Saves; recipe appears in list.
 
-**Edge cases:** a recipe with several parts uses **sections** (Cake / Frosting); an ingredient used twice is split into two rows; steps after baking go in a bottom banner; ingredient reorder updates existing spans; deleting an ingredient inside a span shrinks it; deleting a whole span range removes step or asks to confirm; unsaved changes prompt on navigation.
+**Edge cases:** a recipe with several parts uses **sections** (Cake / Frosting); an ingredient used twice is split into two rows; steps after baking go in a bottom banner; ingredient reorder updates existing spans; deleting an ingredient inside a span shrinks it; deleting a whole span range removes the step with an Undo and an announcement (v0.4.1); a row moved by the editor keeps its steps, and a step's span widens to the hull of its moved rows; unsaved changes prompt on navigation.
 
 ## Journey 4 — Share a recipe (Tom → friend)
 

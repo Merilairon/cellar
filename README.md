@@ -2,7 +2,7 @@
 
 A self-hosted recipe book for you and the people you invite. Next.js 16, SQLite, one container.
 
-This is v0.4.0 (implemented, pending the release gate). It builds on v0.2 (manual recipes with a grid view and a list view), v0.3.0 (importing a recipe from a web address or pasted text), v0.3.1 (an automatic step-to-ingredient grid mapper for imports) and v0.3.2 (an optional headless browser for JavaScript-only pages), and adds search, tags, unit conversion and scaling. Earlier versions added accounts, invites, password recovery, security hardening and Docker packaging. It runs as a single process with a single SQLite file.
+This is v0.4.1 (implemented, pending the release gate). It builds on v0.2 (manual recipes with a grid view and a list view), v0.3.0 (importing a recipe from a web address or pasted text), v0.3.1 (an automatic step-to-ingredient grid mapper for imports) and v0.3.2 (an optional headless browser for JavaScript-only pages), v0.4.0 (search, tags, unit conversion and scaling), and adds a visual grid editor. Earlier versions added accounts, invites, password recovery, security hardening and Docker packaging. It runs as a single process with a single SQLite file.
 
 ## Features
 
@@ -17,9 +17,10 @@ This is v0.4.0 (implemented, pending the release gate). It builds on v0.2 (manua
 - **Search (v0.4.0).** A search box in the header finds recipes you can read by title, description, ingredient names and notes on ingredients, and tags. See [Search and tags](#search-and-tags).
 - **Tags (v0.4.0).** Add tags on the recipe form (with suggestions from tags already in use), see them on recipe cards and pages, and filter `/recipes` by tag. Tags found on an imported page appear as editable chips on the review screen and are saved with the recipe.
 - **Units and scaling (v0.4.0).** Choose metric or US as your preferred unit on your profile. A recipe page shows your preferred unit first, with the other in parentheses when it is known, and offers 1/2x, 1x, 2x and a custom scale plus a per-recipe unit switch. See [Units and scaling](#units-and-scaling).
+- **Visual grid editor (v0.4.1).** On a grid recipe you own (or as an admin), **Edit grid layout** opens an editor on the recipe page. You can edit ingredient text in place, move, add, delete and split ingredient rows into portions, add, rename and delete sections, add, delete and reorder steps, convert a step to a top or bottom banner, and set which rows a step covers. Changes show live warnings (for example a row no step covers), support undo and redo, and are saved in one step with **Save**. See [Grid editor](#grid-editor).
 - **Sample recipes.** `npm run seed` adds two self-written samples (see [Sample data](#sample-data)).
 
-Not yet available: a photo gallery, notes and ratings (and therefore a rating filter and searching notes), public links, and the drag-and-drop grid editor.
+Not yet available: a photo gallery, notes and ratings (and therefore a rating filter and searching notes), and public links.
 
 ## Routes
 
@@ -28,12 +29,12 @@ Not yet available: a photo gallery, notes and ratings (and therefore a rating fi
 | `/recipes`          | Your recipes and recipes shared with you, newest first. Accepts `?q=`, `?tag=` and `?author=` (see [Search and tags](#search-and-tags)). Shows an empty state with calls to action when there are none. |
 | `/profile`          | Your preferred unit system (metric or US).                                                                                                                                                              |
 | `/recipes/new`      | Form to create a recipe.                                                                                                                                                                                |
-| `/recipes/:id`      | A recipe in grid or list view, with a toggle. The owner and admins see edit, delete and share controls; other users see a read-only view with **Save a copy**.                                          |
+| `/recipes/:id`      | A recipe in grid or list view, with a toggle. The owner and admins see edit, **Edit grid layout**, delete and share controls; other users see a read-only view with **Save a copy**.                    |
 | `/import`           | Import a recipe from a web address or pasted text (see [Import a recipe](#import-a-recipe)).                                                                                                            |
 | `/import/:id`       | Review screen for an import: edit the draft, then save or discard.                                                                                                                                      |
 | `/recipes/:id/edit` | Form to edit a recipe you own (admins can edit any recipe). Saving replaces the recipe's sections, ingredients and steps.                                                                               |
 
-The JSON API lives under `/api/recipes` (`/api/recipes`, `/api/recipes/:id`, `/api/recipes/:id/copy`, `/api/recipes/:id/visibility`) and `/api/tags`. See [docs/data-model.md](docs/data-model.md).
+The JSON API lives under `/api/recipes` (`/api/recipes`, `/api/recipes/:id`, `/api/recipes/:id/copy`, `/api/recipes/:id/visibility`, `/api/recipes/:id/grid`) and `/api/tags`. See [docs/data-model.md](docs/data-model.md).
 
 ## Search and tags
 
@@ -65,6 +66,46 @@ Unknown or repeated query parameters are rejected with 400 `invalid_query`. This
 - **Missing measures.** When you save or import a recipe that has only one measure for an ingredient (for example only `1 cup flour`), Cellar fills in the other measure if it can work it out: exactly within a kind (ounces to grams, tablespoons to millilitres) and, for a short list of ingredients (flour, sugar, brown sugar, powdered sugar, butter, cocoa, honey, milk, water, oil), between volume and weight using a typical density. The derived measure is stored like any other value and is not marked as derived. A measure you typed or imported is never overwritten. Recipes saved before v0.4.0 are not changed until you save them again.
 
 Limits: density values are common kitchen figures, not measurements of your ingredients (a packed cup of flour differs from a sifted one). Ingredients not on the list get no cross conversion, and names such as "coconut milk", "peanut butter" or "flour tortillas" are deliberately not matched.
+
+## Grid editor
+
+**Open it.** On a recipe whose view is a grid, the owner (and an admin) sees **Edit grid layout** next to **Edit**. **Edit** still opens the recipe form (title, times, tags, visibility). A recipe stored as a list uses **Convert to grid** first; after converting, a link offers to fine-tune it in the editor.
+
+**What you can do.**
+
+- **Rows.** Click an ingredient to edit its text (the same free-text parser as the recipe form, with a "Parsed as" preview). Move rows up or down, add or delete them, or split one into portion rows ("half", "remaining"). Steps keep covering the same ingredients when a row moves.
+- **Steps.** On a tablet or desktop, drag the green bars on the top and bottom edge of a step to change the rows it covers, or use **Adjust rows**. On a phone, tap a step to open a bottom sheet with Start row and End row steppers. Steps can also be added, deleted, moved between columns, or converted to a top or bottom banner.
+- **Sections.** Add, rename and delete sections (for example Cake and Frosting). Sections cannot be reordered yet.
+- **Undo and redo.** The toolbar and Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z or Ctrl+Y. Deleting a row, step or section can be undone, and the toolbar says what Undo does.
+- **Save.** Nothing is saved until you choose **Save** (Ctrl/Cmd+S). There is no autosave. If someone saved the recipe after you opened the editor, Save shows a conflict panel: keep editing, load the latest version (discards your changes), or replace their version with yours (asks to confirm).
+- **Leaving.** While there are unsaved changes, reload, tab close, Cancel and browser Back (including the Android back gesture and the iOS edge swipe) ask first. Links in the page header do not ask (see [Known limitations](#known-limitations)).
+
+**Keyboard.** The editor needs no pointer. Each table is one tab stop; inside it use the arrow keys, Home and End to move between rows and steps. A **Keyboard help** disclosure below the toolbar lists every key. The main ones, when a row or step has focus:
+
+| Key                              | On                            | Effect                                  |
+| -------------------------------- | ----------------------------- | --------------------------------------- |
+| `Alt+Up` / `Alt+Down`            | ingredient row                | Move the row up or down                 |
+| `F2`                             | ingredient row                | Edit the text                           |
+| `Shift+F10` or the Menu key      | ingredient row                | Open Row actions (split, move, delete)  |
+| `Alt+Up` / `Alt+Down`            | step                          | Move the top edge up or down one row    |
+| `Shift+Down` / `Shift+Up`        | step                          | Move the bottom edge down or up one row |
+| `Alt+Left` / `Alt+Right`         | step                          | Move the step one column                |
+| `Delete` or `Backspace`          | row or step                   | Delete it (Undo is offered)             |
+| `Ctrl/Cmd+Enter`                 | while editing a row           | Save the line and open a new row below  |
+| `Ctrl/Cmd+Z`, `Ctrl/Cmd+Shift+Z` | anywhere outside a text field | Undo, redo                              |
+| `Escape`                         | drag, edit, menu              | Cancel                                  |
+
+**Phone.** At widths under 640 px there is no drag. Tap a step to open a bottom sheet with Start row and End row steppers and the names of the covered ingredients, which the grid highlights. Tap an ingredient's "..." button for Row actions.
+
+**API.** `PUT /api/recipes/:id/grid` replaces the recipe's sections, ingredients and steps in one transaction.
+
+- Body: `{ "base_updated_at": "<updated_at you loaded>", "sections": [...] }`. `sections` has the same shape as in the recipe body (1 to 20 sections). Any other key (`title`, `tags`, `visibility`, `view_mode`, `id`) is rejected with 422.
+- `409` `{ "error": "conflict", "updated_at": "..." }` when `base_updated_at` no longer equals the stored value; nothing is written.
+- `422` `{ "errors": [{ "path": "...", "code": "..." }] }` for invalid spans or structure. A row that no step covers is a warning, not an error, and saves.
+- `401` signed out, `403` a recipe you can read but not write, `404` a recipe you cannot read, `415` not JSON, `413` over 1 MiB.
+- Every response, including errors, carries `Cache-Control: private, no-store`.
+- If you change a quantity or unit through the API, send the other measure as `null`; a non-null value is stored as sent and can go stale. The editor does this for you.
+- After the save the server recomputes `view_mode` (`grid` when at least one column step exists, otherwise `list`) and issues new ids for sections, ingredients and steps. Do not keep ingredient or step ids across a save.
 
 ## Import a recipe
 
@@ -403,8 +444,9 @@ Deactivated accounts are not reactivated: the command exits with an error for th
 
 ## Known limitations
 
-- **Import covers only.** Cover images are stored but not displayed in the UI until v0.4.2. The automatic grid mapping is a proposal measured only on hand-written fixtures, works for English only, and there is no drag-and-drop grid editor until v0.4.1 (correct a mapping by editing row numbers). JavaScript-only pages need the optional headless sidecar (v0.3.2, off by default). Microdata-only pages are read by a bounded reader (only the first 40,000 `<` characters of a page are parsed); a page where the recipe lies beyond that is not read. Its accuracy on real sites is untested.
+- **Import covers only.** Cover images are stored but not displayed in the UI until v0.4.2. The automatic grid mapping is a proposal measured only on hand-written fixtures, works for English only, and the review screen has no visual editor (correct a mapping by editing row numbers, or save it and use **Edit grid layout** on the recipe page). JavaScript-only pages need the optional headless sidecar (v0.3.2, off by default). Microdata-only pages are read by a bounded reader (only the first 40,000 `<` characters of a page are parsed); a page where the recipe lies beyond that is not read. Its accuracy on real sites is untested.
 - **Headless import is optional and partly unverified.** arm64 is verified on a GitHub arm64 runner only (not on Pi hardware), hosts with `max_user_namespaces=0` are unsupported, and several checks are listed in [docs/tasks/v0.3.2-carryover.md](docs/tasks/v0.3.2-carryover.md).
+- **Grid editor.** There is no autosave and concurrent edits are not merged: a conflict means choosing your version or theirs. List recipes need **Convert to grid** first. Sections cannot be reordered and ingredients cannot be reordered by dragging (use Move up and down or Alt+Up and Alt+Down). Links in the page header do not ask before discarding unsaved changes; browser Back does. Tested in Chromium with emulated touch only: real phones and tablets (including drag and the Back gesture), Firefox, Safari and screen readers are untested. Accessibility was checked with axe and scripted keyboard tests, not with assistive technology. Details: [docs/tasks/v0.4.1-carryover.md](docs/tasks/v0.4.1-carryover.md).
 - **Search is basic by design.** No stemming (plural and singular differ), no typo tolerance, no phrase or `OR` syntax (operators typed in the box are treated as plain text), results capped at 100 with a query. Result order uses ranking statistics computed over every recipe in the database, so in principle the order of two results you can read can depend on words in recipes you cannot (the documented Low finding F3 in [docs/tasks/v0.4.0-security-checkpoint.md](docs/tasks/v0.4.0-security-checkpoint.md), open for the owner's decision). Notes are not searchable until v0.4.2.
 - **Unit conversion covers a short ingredient list.** Cross conversion (cup to grams) exists only for the ingredients named under [Units and scaling](#units-and-scaling). Search and unit display are untested in Firefox, Safari and with a screen reader; see [docs/tasks/v0.4.0-carryover.md](docs/tasks/v0.4.0-carryover.md) for what is not tested.
 - **Rate limiting is in memory.** Counters reset when the app restarts and are not shared between processes.
