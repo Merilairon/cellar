@@ -322,6 +322,7 @@ dialog.rg-sheet::backdrop {
   --ge-error-ink: #a31b12;
   --ge-error-bg: #fdecea;
   --ge-cover: #d3ebc4;
+  --ge-page: #ffffff; /* the body background (bg-white): sticky bars must match it */
   --ge-handle: #2f6b1a;
   --ge-handle-edge: #ffffff;
   --ge-toast-bg: #1f2a1f;
@@ -340,6 +341,7 @@ dialog.rg-sheet::backdrop {
   --ge-error-ink: #ff9b8f;
   --ge-error-bg: #3d1714;
   --ge-cover: #385334;
+  --ge-page: #0a0a0a; /* bg-neutral-950 */
   --ge-handle: #9fd97c;
   --ge-handle-edge: #10160f;
   --ge-toast-bg: #e8efe6;
@@ -353,6 +355,7 @@ dialog.rg-sheet::backdrop {
     --ge-error-ink: #ff9b8f;
     --ge-error-bg: #3d1714;
     --ge-cover: #385334;
+    --ge-page: #0a0a0a;
     --ge-handle: #9fd97c;
     --ge-handle-edge: #10160f;
     --ge-toast-bg: #e8efe6;
@@ -409,7 +412,7 @@ dialog.rg-sheet::backdrop {
   justify-content: space-between;
   gap: 8px;
   padding: 8px 0;
-  background: var(--rg-surface);
+  background: var(--ge-page);
   color: var(--rg-ink);
   border-bottom: 1px solid var(--rg-line);
 }
@@ -812,7 +815,10 @@ dialog.rg-sheet.ge-sheet::backdrop {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  background: var(--rg-surface);
+  background: var(--ge-page);
+}
+dialog.ge-sheet .ge-panelhead {
+  background: var(--rg-surface); /* the sheet is a surface, not the page */
 }
 dialog.ge-sheet .ge-stepper,
 dialog.ge-sheet .ge-panelbar .btn,

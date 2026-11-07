@@ -17,7 +17,8 @@ export function StepSheet({ onClose, ...panel }: StepPanelProps & { onClose: () 
   const { step } = panel;
   const headingId = `ge-sheet-${step.key}`;
   const box = useRef<HTMLDivElement>(null);
-  const startRef = useRef(step.row_start);
+  // undefined: nothing seen yet, so the first run brings the span's start row above the sheet.
+  const startRef = useRef<number | null | undefined>(undefined);
   const endRef = useRef(step.row_end);
 
   const initialFocus = useCallback(
