@@ -9,8 +9,9 @@ export async function register() {
   const { runMigrations, assertFts5Available } = await import('@/lib/db/migrate');
   const { cleanupExpiredSessions } = await import('@/lib/auth/session');
   const db = getDb();
-  runMigrations(db);
+  // Before migrating: 0005 creates an FTS5 table, so fail with a clear FTS5 error first.
   assertFts5Available(db);
+  runMigrations(db);
 
   // Drop expired session rows now and hourly; unref so it never keeps the process alive.
   const sweep = () => {

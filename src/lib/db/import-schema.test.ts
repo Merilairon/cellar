@@ -92,7 +92,7 @@ describe('migration 0004 (headless_unavailable)', () => {
       const journalPath = join(dir, 'meta', '_journal.json');
       const journal = JSON.parse(readFileSync(journalPath, 'utf8'));
       const full = journal.entries;
-      expect(full).toHaveLength(5);
+      expect(full.length).toBeGreaterThanOrEqual(5);
       journal.entries = full.slice(0, 4); // v0.3.1 shape
       writeFileSync(journalPath, JSON.stringify(journal));
       migrate(db, { migrationsFolder: dir });

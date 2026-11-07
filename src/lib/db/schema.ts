@@ -3,6 +3,7 @@ import {
   check,
   index,
   integer,
+  primaryKey,
   real,
   sqliteTable,
   text,
@@ -279,3 +280,40 @@ export const photo = sqliteTable(
     check('photo_is_cover_chk', sql`${t.isCover} IN (0, 1)`),
   ],
 );
+
+/** Max tags on one recipe (owner decision Q7); also enforced by a trigger in migration 0005. */
+export const MAX_TAGS_PER_RECIPE = 20;
+export const MAX_TAG_LENGTH = 40;
+
+/**
+ * Tag names are stored normalized by the service layer (trim, collapse whitespace, NFC,
+ * lowercase); `name` is unique on that form. The length CHECK is the DB backstop.
+ */
+export const tag = sqliteTable(
+  'tag',
+  {
+    id: id(),
+    name: text('name').notNull().unique(),
+    createdAt: createdAt(),
+  },
+  (t) => [check('tag_name_len_chk', sql`length(${t.name}) BETWEEN 1 AND 40`)],
+);
+
+export const recipeTag = sqliteTable(
+  'recipe_tag',
+  {
+    recipeId: text('recipe_id')
+      .notNull()
+      .references(() => recipe.id, { onDelete: 'cascade' }),
+    tagId: text('tag_id')
+      .notNull()
+      .references(() => tag.id, { onDelete: 'cascade' }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.recipeId, t.tagId] }),
+    index('recipe_tag_tag_id_idx').on(t.tagId),
+  ],
+);
+
+// `recipe_fts` (FTS5 virtual table) and its sync triggers exist only in the hand-written
+// migration 0005_search_tags.sql; drizzle-kit cannot model them.

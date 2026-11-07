@@ -125,7 +125,19 @@ Either measure may be null; the missing one is derived by the conversion engine 
 - Until the grid editor (M4), `PUT /api/recipes/:id` replaces all sections/ingredients/steps atomically (child ids change). Omitting `visibility` keeps the stored value. Omitting `view_mode` keeps a stored `list`; a stored `grid` stays `grid` only while the spans are still valid (otherwise the recomputed default, `list`). Mutating recipe endpoints require `Content-Type: application/json` (415 otherwise). Authorization is re-checked inside the write transaction.
 
 ### tag / recipe_tag
-`tag(id, name unique)`, `recipe_tag(recipe_id, tag_id)`.
+Added in migration `0005_search_tags` (v0.4.0).
+
+| Table | Column | Type | Notes |
+| --- | --- | --- | --- |
+| `tag` | id | text PK | ULID |
+| | name | text unique, not null | stored normalized (below); CHECK `length(name) BETWEEN 1 AND 40` |
+| | created_at | text | |
+| `recipe_tag` | recipe_id | text FK recipe | `ON DELETE CASCADE` |
+| | tag_id | text FK tag | `ON DELETE CASCADE`; index `recipe_tag_tag_id_idx` |
+
+`recipe_tag` has composite primary key `(recipe_id, tag_id)`. Tags outlive the recipes that use them (an unused tag row is harmless).
+
+**Normalization and limits (owner decision Q7).** The service layer (T4) trims, collapses inner whitespace, applies Unicode NFC and lowercases, so "Dessert" and "dessert" are one tag; capitalization is not preserved and display is lowercase. 1 to 40 characters, no control characters. At most 20 tags per recipe. The DB enforces only what SQL can do reliably: the length CHECK, `name` uniqueness and a `BEFORE INSERT` trigger on `recipe_tag` (`recipe_tag_limit_bi`) that aborts with `recipe_tag_limit` when a recipe already has 20. Case folding is not a CHECK because SQLite `lower()` is ASCII-only. Tag names are rendered as React text only.
 
 ### photo
 (migration `0003_import_photo`)
@@ -169,7 +181,40 @@ Indexes: `import_job(user_id, created_at)`, `import_job(recipe_id)`. CHECK const
 v0.3.1 added no migration, table or column. The mapping proposal lives inside `draft_json` (see §3).
 
 ### recipe_fts
-FTS5 virtual table over `title`, `description`, ingredient names, tags, notes; kept in sync by triggers.
+FTS5 virtual table, created in migration `0005_search_tags` (hand-written SQL: drizzle-kit cannot model FTS5 or triggers; `schema.ts` has a pointer comment and the `0005` snapshot covers only `tag` and `recipe_tag`).
+
+```sql
+CREATE VIRTUAL TABLE recipe_fts USING fts5(
+  recipe_id UNINDEXED, title, description, ingredients, tags, notes,
+  tokenize = 'unicode61 remove_diacritics 2', prefix = '2 3');
+```
+
+One ordinary (not contentless) row per recipe, so FTS row count equals recipe count.
+
+| Column | Content |
+| --- | --- |
+| `recipe_id` | `recipe.id`; stored, not searchable |
+| `title`, `description` | as stored (`''` when null) |
+| `ingredients` | `ingredient.name` plus `ingredient.note` per row, space-joined (ordered by ingredient id). **Not** `raw_text`, **not** section titles (Q9) |
+| `tags` | tag names of the recipe, space-joined, ordered by name |
+| `notes` | **reserved, always `''`** until 04c adds triggers on the `note` table (Q2). Private notes cannot live in a shared row; 04c decides between a per-user second index and a join check |
+
+`remove_diacritics 2` plus the unicode61 case folding make "creme" find "Crème" and "espresso" find "ESPRESSO"; `prefix = '2 3'` makes 2 and 3 character prefixes (`esp*`) cheap.
+
+**Sync triggers.** Every trigger runs the same "rebuild row for recipe X": `DELETE FROM recipe_fts WHERE recipe_id = X`, then `INSERT ... SELECT` aggregating the ingredient and tag text for X (no row is inserted if the recipe no longer exists, which makes cascaded deletes safe whatever the firing order):
+
+| Trigger | Fires on |
+| --- | --- |
+| `recipe_fts_recipe_ai` / `_au` / `_ad` | `recipe` insert / update of `title`, `description` / delete (delete only removes the row) |
+| `recipe_fts_ingredient_ai` / `_au` / `_ad` | `ingredient` insert / update of `name`, `note` / delete |
+| `recipe_fts_recipe_tag_ai` / `_ad` | `recipe_tag` insert / delete |
+| `recipe_fts_tag_au` | `tag` update of `name` (rebuilds every recipe carrying the tag) |
+
+Moving an ingredient to another recipe (`recipe_id` update) is not handled; the app never does it. Cost note: a `PUT` rewrites all ingredients, so a recipe with N ingredients fires about 2N rebuilds in one transaction; the `recipe_id` lookup in the FTS table is a scan (the column is UNINDEXED), accepted at this data size and to be measured by T6.
+
+**Backfill.** The migration ends the table setup with one `INSERT INTO recipe_fts ... SELECT` over every existing recipe, so recipes created before v0.4.0 are searchable immediately; tags are empty at that point.
+
+**Test.** `src/lib/db/search-schema.test.ts` applies `0000`-`0004` to a database with data, then `0005`, and asserts rows unchanged, backfill, `foreign_key_check` and `integrity_check` clean, re-run is a no-op, each trigger, and the invariant that after 200 seeded mixed writes the index equals an independently computed rebuild from the source tables.
 
 ## 2. Grid Model
 
