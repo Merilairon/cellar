@@ -238,6 +238,15 @@ export function useStepEditing({ editor, dispatch, say, focusLater, root, showTo
     if (f) spanTo(f.si, f.idx, f.step, span, byAttr(root, 'data-ge-handle', `${stepKey}:${edge}`));
   };
 
+  /** Enter / Space on a column step cell: focus moves to the panel heading (UX spec 14.2). */
+  const activateStep = (stepKey: string) =>
+    focusLater(
+      () =>
+        root.current?.querySelector<HTMLElement>(
+          `[data-ge-panel="${CSS.escape(stepKey)}"] .ge-h4`,
+        ) ?? null,
+    );
+
   const activateBanner = (target: RovingTarget) => {
     if (target.kind !== 'banner') return;
     dispatch({ type: 'select', stepKey: target.key });
@@ -329,6 +338,7 @@ export function useStepEditing({ editor, dispatch, say, focusLater, root, showTo
     addBanner,
     chord,
     activateBanner,
+    activateStep,
     commitSpan,
     slide,
     panelApi,

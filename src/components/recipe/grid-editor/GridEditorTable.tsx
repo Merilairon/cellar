@@ -45,6 +45,8 @@ export type GridEditorTableProps = {
   renderRowControls?: (r: number) => React.ReactNode;
   /** SEAM T6: Enter / Space / click on a banner (banner panel). */
   onActivateBanner?: (target: TableTarget) => void;
+  /** Keyboard activation (Enter / Space) of a column step cell that is not selected yet. */
+  onActivateStep?: (stepKey: string) => void;
   /** T6: span handles (and anything else) rendered inside a column step's cell. */
   renderStepExtras?: (info: {
     step: EditorSection['steps'][number];
@@ -96,6 +98,7 @@ export function GridEditorTable({
   renderRowEditor,
   renderRowControls,
   onActivateBanner,
+  onActivateStep,
   renderStepExtras,
   previewSpan,
 }: GridEditorTableProps) {
@@ -275,6 +278,10 @@ export function GridEditorTable({
                           data-step-key={step.key}
                           tabIndex={tab(sid)}
                           aria-pressed={open}
+                          onClick={(e) => {
+                            // detail 0 = keyboard activation; the cell's own onClick selects.
+                            if (e.detail === 0 && !open) onActivateStep?.(step.key);
+                          }}
                         >
                           <span className="sr-only">
                             {t('gridEditor.step.prefix', { n: c.columnIndex + 1 })}

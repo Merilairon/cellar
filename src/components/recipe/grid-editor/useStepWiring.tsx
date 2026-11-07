@@ -14,7 +14,8 @@ import { StepsToolbar } from './StepsToolbar';
 import { useSpanDrag } from './useSpanDrag';
 import { useStepEditing } from './useStepEditing';
 
-type TableKeys = 'onChord' | 'onActivateBanner' | 'renderStepExtras' | 'previewSpan';
+type TableKeys =
+  'onChord' | 'onActivateBanner' | 'onActivateStep' | 'renderStepExtras' | 'previewSpan';
 
 type Params = {
   editor: EditorState;
@@ -67,6 +68,7 @@ export function useStepWiring({
     return {
       onChord: (e, target) => chord(e, target) || rowsChord(e, target),
       onActivateBanner: steps.activateBanner,
+      onActivateStep: steps.activateStep,
       previewSpan:
         drag.preview && drag.preview.sectionKey === section.key
           ? { stepKey: drag.preview.stepKey, start: drag.preview.start, end: drag.preview.end }
