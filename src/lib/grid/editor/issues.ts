@@ -113,7 +113,3 @@ export function issuesFor(input: EditorState | EditorDoc): EditorIssues {
   });
   return { errors: errors.map(withTarget), warnings: warnings.map(withTarget) };
 }
-
-export function hasErrors(input: EditorState | EditorDoc): boolean {
-  return issuesFor(input).errors.length > 0;
-}

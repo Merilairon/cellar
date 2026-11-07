@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   clampSpan,
-  coverageNames,
   defaultSpan,
   deleteRowSpans,
   insertRowSpans,
@@ -175,16 +174,6 @@ describe('coverage helpers', () => {
     expect(rowsCovered(steps, 5)).toEqual([false, true, true, false, false]);
     expect(uncoveredRows(steps, 5)).toEqual([0, 3, 4]);
     expect(uncoveredRows([], 0)).toEqual([]);
-  });
-  it('coverageNames lists the labels of covering steps in order', () => {
-    const steps = [
-      { ...c(0, 1), label: 'mix' },
-      { ...c(1, 3), label: 'bake' },
-      { ...banner, label: 'preheat' },
-    ];
-    expect(coverageNames(steps, 1)).toEqual(['mix', 'bake']);
-    expect(coverageNames(steps, 3)).toEqual(['bake']);
-    expect(coverageNames(steps, 4)).toEqual([]);
   });
   it('defaultSpan: first uncovered row, else all rows, else null', () => {
     expect(defaultSpan([c(0, 1)], 4)).toEqual({ start: 2, end: 2 });

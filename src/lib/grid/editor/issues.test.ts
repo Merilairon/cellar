@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { bottom, col, make, top } from './fixtures';
-import {
-  hasErrors,
-  issuesFor,
-  mapServerErrors,
-  parseIssuePath,
-  resolveIssueTarget,
-} from './issues';
+import { col, make, top } from './fixtures';
+import { issuesFor, mapServerErrors, parseIssuePath, resolveIssueTarget } from './issues';
 import { reduce } from './reducer';
 import { doc } from './state';
 
@@ -149,9 +143,5 @@ describe('issuesFor', () => {
       ],
     };
     expect(issuesFor(bad).errors.map((e) => e.code)).toContain('split_group_cross_section');
-  });
-  it('hasErrors mirrors issuesFor', () => {
-    expect(hasErrors(make(1, [bottom()]))).toBe(false);
-    expect(hasErrors(reduce(make(1), { type: 'rowAdd', section: 0 }))).toBe(true);
   });
 });

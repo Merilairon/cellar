@@ -128,16 +128,6 @@ export function uncoveredRows(steps: SpanStep[], rowCount: number): number[] {
   return out;
 }
 
-/** Labels of the column steps covering `row`, in step order (for "Butter: mix, fold in"). */
-export function coverageNames(steps: (SpanStep & { label: string })[], row: number): string[] {
-  const names: string[] = [];
-  for (const st of steps) {
-    const sp = spanOf(st);
-    if (sp && sp.start <= row && row <= sp.end) names.push(st.label);
-  }
-  return names;
-}
-
 /** Default span for a new or converted column step: the first uncovered row, else all rows (G8). */
 export function defaultSpan(steps: SpanStep[], rowCount: number): Span | null {
   if (rowCount <= 0) return null;

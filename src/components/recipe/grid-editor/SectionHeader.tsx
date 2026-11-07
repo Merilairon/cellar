@@ -24,7 +24,7 @@ export type SectionHeaderProps = {
   onAddRow: () => void;
   /** F5: a token that grows each time this section should open its rename field (0 = never). */
   promptRename?: number;
-  /** SEAM T6: Add step / Add banner buttons render here, in the same toolbar group. */
+  /** Add step / Add banner buttons render here, in the same toolbar group. */
   extraActions?: React.ReactNode;
   /** A4: the rename error is spoken through the editor's polite status region. */
   announce?: (message: string) => void;

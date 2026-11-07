@@ -32,11 +32,11 @@ export type GridEditorTableProps = {
   /** PageDown / PageUp: the parent focuses the neighbouring section's table. */
   onSectionJump: (dir: 1 | -1) => void;
   /**
-   * SEAM T5 to T7: a chord (Alt or Shift or Meta held) on a roving target. Row moves,
+   * A chord (Alt or Shift or Meta held) on a roving target. Row moves,
    * span resizing, step moves and deletes plug in here. Return true when handled.
    */
   onChord?: (e: React.KeyboardEvent, target: TableTarget) => boolean;
-  /** SEAM T5: Enter / Space / click on an ingredient row (inline text edit). */
+  /** Enter / Space / click on an ingredient row (inline text edit). */
   onActivateRow?: (target: TableTarget) => void;
   /**
    * T5: the inline text editor that replaces row `r`'s button (null when not editing) and the
@@ -44,7 +44,7 @@ export type GridEditorTableProps = {
    */
   renderRowEditor?: (r: number, previewId: string) => React.ReactNode;
   renderRowControls?: (r: number) => React.ReactNode;
-  /** SEAM T6: Enter / Space / click on a banner (banner panel). */
+  /** Enter / Space / click on a banner (banner panel). */
   onActivateBanner?: (target: TableTarget) => void;
   /** Keyboard activation (Enter / Space) of a column step cell that is not selected yet. */
   onActivateStep?: (stepKey: string) => void;

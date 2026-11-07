@@ -51,6 +51,8 @@ export function RecipeView({
   // `router.refresh()` then brings the server props (meta, page chrome) in line. The local copy
   // yields as soon as the server prop carries the same or a newer `updated_at`.
   const [saved, setSaved] = useState<ApiRecipe | null>(null);
+  // Both stamps come from `stampAfter` (`toISOString()`), so equal-length ISO strings compare
+  // correctly as text; keep that true if the stamp format ever changes.
   const recipe = saved && saved.updated_at > serverRecipe.updated_at ? saved : serverRecipe;
   const onRecipe = (r: ApiRecipe) => {
     setSaved(r);
