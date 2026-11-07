@@ -26,6 +26,8 @@ export type SectionHeaderProps = {
   promptRename?: number;
   /** SEAM T6: Add step / Add banner buttons render here, in the same toolbar group. */
   extraActions?: React.ReactNode;
+  /** A4: the rename error is spoken through the editor's polite status region. */
+  announce?: (message: string) => void;
 };
 
 /**
@@ -74,6 +76,7 @@ export function SectionHeader(p: SectionHeaderProps) {
       // never dropped silently. The one exception is a blur on a section that never had a
       // name: nothing to lose, so the field just closes.
       setError(true);
+      p.announce?.(t('gridEditor.section.renameEmpty'));
       return;
     }
     if (!v && p.multiple) {
@@ -127,7 +130,7 @@ export function SectionHeader(p: SectionHeaderProps) {
               }}
             />
             {error && (
-              <span id={errId} role="alert" className={`${errorText} block font-normal`}>
+              <span id={errId} className={`${errorText} block font-normal`}>
                 {t('gridEditor.section.renameEmpty')}
               </span>
             )}

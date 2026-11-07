@@ -45,7 +45,18 @@ export function UndoToast({ toast, onDismiss }: { toast: ToastState; onDismiss: 
       <button type="button" className={`${btn} !border-current`} onClick={toast.onUndo}>
         {t('gridEditor.toast.undo')}
       </button>
-      <button type="button" className={`${btn} !border-current`} onClick={onDismiss}>
+      <button
+        type="button"
+        className={`${btn} !border-current`}
+        onClick={(e) => {
+          // The toast unmounts with focus on this button; hand focus back to the table.
+          e.currentTarget
+            .closest('.ge-root')
+            ?.querySelector<HTMLElement>('[data-ge-target][tabindex="0"]')
+            ?.focus();
+          onDismiss();
+        }}
+      >
         {t('gridEditor.toast.dismiss')}
       </button>
     </div>

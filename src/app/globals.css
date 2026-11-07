@@ -422,6 +422,39 @@ dialog.rg-sheet::backdrop {
 .ge-toolbar-end {
   margin-inline-start: auto;
 }
+.ge-help {
+  padding: 4px 0;
+}
+.ge-helpbody {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--rg-line);
+  border-radius: 6px;
+}
+.ge-helplist {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+.ge-helplist > div {
+  display: grid;
+  gap: 2px 16px;
+  grid-template-columns: minmax(0, 14rem) minmax(0, 1fr);
+}
+@media (max-width: 639px) {
+  .ge-helplist > div {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.ge-helplist dd {
+  margin: 0;
+}
+.ge-helplist kbd {
+  font-family: inherit;
+  font-weight: 600;
+}
 .ge-confirm {
   display: flex;
   flex-wrap: wrap;
@@ -646,6 +679,16 @@ dialog.rg-sheet::backdrop {
   .ge-handle {
     display: none;
   }
+}
+/* A5: the toast has an inverted surface, so the page focus colour fails 3:1 on it (2.56 light,
+   2.04 dark). The toast ink on the toast surface is 14.90:1 light, 12.72:1 dark. */
+[data-ge-toast] :focus-visible {
+  outline: 3px solid var(--ge-toast-ink);
+  outline-offset: 2px;
+}
+/* A6: while the fixed toast is shown, keep scrolled-to focus clear of it (2.4.11). */
+:root:has([data-ge-toast]) {
+  scroll-padding-bottom: 9rem;
 }
 .ge-dragtip {
   position: fixed;

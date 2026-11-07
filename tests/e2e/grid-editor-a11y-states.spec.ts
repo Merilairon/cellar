@@ -234,24 +234,224 @@ test('reduced motion: no transition on the handles; motion allowed otherwise', a
   await a.ctx.close();
 });
 
-test('tab stops: one per table, per-row controls counted (F11)', async ({ browser }) => {
-  const { page, ctx } = await open(browser, 1280, 'light');
-  const rows = await page.locator('[data-ge-target^="row:"]').count();
-  const stops = await page.evaluate(
-    () =>
-      Array.from(
-        document.querySelectorAll<HTMLElement>('.ge-table button, .ge-table [tabindex]'),
-      ).filter((e) => e.tabIndex >= 0 && e.offsetParent !== null).length,
+// The audit's counting method (docs/tasks/v0.4.1-a11y-audit.md A3): every button or element with a
+// tabindex inside a table whose tabIndex is >= 0 and that is rendered. Before the A3 fix this
+// was `tables + 3 x rows` (38 for the cake at 1280: 2 tables, 12 rows).
+const tabStops = (page: Page) =>
+  page.evaluate(() =>
+    Array.from(document.querySelectorAll<HTMLElement>('table.ge-table')).map(
+      (table) =>
+        Array.from(table.querySelectorAll<HTMLElement>('button, [tabindex]')).filter(
+          (e) => e.tabIndex >= 0 && e.offsetParent !== null,
+        ).length,
+    ),
   );
-  const tables = await page.locator('table.ge-table').count();
-  test.info().annotations.push({
-    type: 'tab-stops',
-    description: `${stops} stops for ${rows} rows in ${tables} tables`,
+
+for (const w of widths) {
+  test(`A3 tab stops: exactly one per table at ${w}`, async ({ browser }) => {
+    const { page, ctx } = await open(browser, w, 'light');
+    const rows = await page.locator('[data-ge-target^="row:"]').count();
+    const perTable = await tabStops(page);
+    test.info().annotations.push({
+      type: 'tab-stops',
+      description: `${perTable.reduce((a, b) => a + b, 0)} stops for ${rows} rows in ${perTable.length} tables (was ${perTable.length + 3 * rows} at 1280)`,
+    });
+    expect(perTable.length).toBeGreaterThan(1);
+    expect(perTable).toEqual(perTable.map(() => 1));
+    // The real thing: Tab from the first table's stop lands outside that table's rows' buttons.
+    await firstRow(page).focus();
+    await page.keyboard.press('Tab');
+    const inRowControls = await page.evaluate(
+      () => !!document.activeElement?.closest('.ge-rowctl'),
+    );
+    expect(inRowControls).toBe(false);
+    await ctx.close();
   });
-  // Roving targets contribute `tables` stops; the rest are the per-row buttons.
-  expect(stops).toBeLessThanOrEqual(tables + rows * 3);
+}
+
+test('A3 chords: Shift+F10 and ContextMenu open Row actions for the focused row', async ({
+  browser,
+}) => {
+  const { page, ctx } = await open(browser, 1280, 'light');
+  const row = page.locator('[data-ge-target^="row:"]').nth(1);
+  for (const chord of ['Shift+F10', 'ContextMenu']) {
+    await row.focus();
+    await page.keyboard.press(chord);
+    const menu = page.getByRole('menu');
+    await expect(menu).toBeVisible();
+    await expect(menu.getByRole('menuitem').first()).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(menu).toBeHidden();
+    // Focus returns to the row target, so the arrow keys keep working.
+    await expect(row).toBeFocused();
+  }
+  // Pick Move down from the menu with the keyboard only: the row moves, focus stays on it.
+  const name = ((await row.innerText()).trim().split(/\s+/).pop() ?? '').trim();
+  await row.focus();
+  await page.keyboard.press('Shift+F10');
+  await page.getByRole('menuitem', { name: /^Move .* down$/ }).press('Enter');
+  await expect(page.getByRole('menu')).toBeHidden();
+  await expect(page.locator('[data-ge-target^="row:"]').nth(2)).toContainText(name);
+  await expect(page.locator('[data-ge-target^="row:"]').nth(2)).toBeFocused();
   await ctx.close();
 });
+
+test('A3 chords: Shift+F10 opens the row sheet on the phone and the step panel on a step', async ({
+  browser,
+}) => {
+  const { page, ctx } = await open(browser, 375, 'light');
+  await firstRow(page).focus();
+  await page.keyboard.press('Shift+F10');
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toBeHidden();
+  await ctx.close();
+
+  const d = await open(browser, 1280, 'light');
+  await d.page.locator('[data-ge-target^="step:"]').first().focus();
+  await d.page.keyboard.press('Shift+F10');
+  await expect(d.page.getByRole('heading', { name: /^Step/ }).first()).toBeFocused();
+  await d.ctx.close();
+});
+
+for (const scheme of ['light', 'dark'] as const) {
+  test(`Keyboard help disclosure lists the chords, axe clean (${scheme})`, async ({ browser }) => {
+    const { page, ctx } = await open(browser, 1280, scheme);
+    const toggle = page.getByRole('button', { name: 'Keyboard help' });
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    // It is a tab stop, straight after the toolbar and before the first section's controls.
+    await page.getByRole('button', { name: /^Save changes/ }).focus();
+    await page.keyboard.press('Tab');
+    await expect(toggle).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.getByText('Shift+F10 or the Menu key')).toBeVisible();
+    await expect(page.getByText('Alt+Up or Alt+Down')).toBeVisible();
+    await axe(page, 'keyboard help open');
+    await page.keyboard.press('Enter');
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await ctx.close();
+  });
+}
+
+test('A4: the rename error is described and spoken politely, never role=alert', async ({
+  browser,
+}) => {
+  const { page, ctx } = await open(browser, 1280, 'light');
+  await page
+    .getByRole('button', { name: /^Rename/ })
+    .first()
+    .click();
+  const field = page.getByRole('textbox', { name: /Section name|Rename/i }).first();
+  await field.fill('');
+  await field.press('Enter');
+  const err = page.getByText('Give each section a name.');
+  await expect(err).toBeVisible();
+  await expect(err).not.toHaveAttribute('role', 'alert');
+  const id = await err.getAttribute('id');
+  await expect(field).toHaveAttribute('aria-describedby', id!);
+  await expect(page.locator('.ge-root [role="status"]')).toHaveText('Give each section a name.');
+  await expect(page.locator('.ge-root [role="alert"]')).toHaveCount(0);
+  await ctx.close();
+});
+
+// WCAG 2.x relative luminance contrast of two computed `rgb(...)` strings.
+const ratio = (a: string, b: string) => {
+  const lum = (c: string) => {
+    const [r, g, bl] = (c.match(/[\d.]+/g) ?? []).slice(0, 3).map((v) => {
+      const x = Number(v) / 255;
+      return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * bl;
+  };
+  const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+};
+
+for (const scheme of ['light', 'dark'] as const) {
+  test(`A5: toast focus ring is >= 3:1 against the toast surface (${scheme})`, async ({
+    browser,
+  }) => {
+    const { page, ctx } = await open(browser, 1280, scheme);
+    await firstRow(page).focus();
+    await page.keyboard.press('Delete');
+    const toast = page.locator('[data-ge-toast]');
+    await expect(toast).toBeVisible();
+    for (const name of ['Undo', 'Dismiss']) {
+      const btn = toast.getByRole('button', { name });
+      await btn.focus();
+      await page.keyboard.press('Shift+Tab'); // make :focus-visible certain on re-entry
+      await page.keyboard.press('Tab');
+      const m = await btn.evaluate((el) => ({
+        outline: getComputedStyle(el).outlineColor,
+        width: getComputedStyle(el).outlineWidth,
+        bg: getComputedStyle(el.closest('[data-ge-toast]')!).backgroundColor,
+      }));
+      const r = ratio(m.outline, m.bg);
+      test.info().annotations.push({
+        type: 'toast-ring',
+        description: `${scheme} ${name} ${r.toFixed(2)}:1`,
+      });
+      expect(parseFloat(m.width)).toBeGreaterThanOrEqual(2);
+      expect(r).toBeGreaterThanOrEqual(3);
+    }
+    await ctx.close();
+  });
+}
+
+for (const [w, h] of [
+  [1280, 420],
+  [375, 500],
+] as const) {
+  test(`A6: a toast never hides or traps the focused control (${w} x ${h})`, async ({
+    browser,
+  }) => {
+    const { page, ctx } = await open(browser, w, 'light', h);
+    await firstRow(page).focus();
+    await page.keyboard.press('Delete');
+    const toast = page.locator('[data-ge-toast]');
+    await expect(toast).toBeVisible();
+    // Walk every row of the last table bottom to top with the toast showing.
+    const rows = page.locator('table.ge-table').last().locator('[data-ge-target^="row:"]');
+    const n = await rows.count();
+    await rows.last().focus();
+    for (let i = 0; i < n; i++) {
+      const overlap = await page.evaluate(() => {
+        const f = document.activeElement as HTMLElement;
+        const a = f.getBoundingClientRect();
+        const b = document.querySelector('[data-ge-toast]')!.getBoundingClientRect();
+        const w = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+        const h = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+        return w > 0 && h > 0;
+      });
+      expect(overlap, `row ${n - i} of ${n}`).toBe(false);
+      await page.keyboard.press('ArrowUp');
+    }
+    // Not a trap: Tab and Shift+Tab pass through the toast buttons in both directions.
+    await toast.getByRole('button', { name: 'Undo' }).focus();
+    await page.keyboard.press('Tab');
+    await expect(toast.getByRole('button', { name: 'Dismiss' })).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(toast.getByRole('button')).toHaveCount(2);
+    expect(await page.evaluate(() => !!document.activeElement?.closest('[data-ge-toast]'))).toBe(
+      false,
+    );
+    await page.keyboard.press('Shift+Tab');
+    await page.keyboard.press('Shift+Tab');
+    await page.keyboard.press('Shift+Tab');
+    expect(await page.evaluate(() => !!document.activeElement?.closest('[data-ge-toast]'))).toBe(
+      false,
+    );
+    // Dismissing from the keyboard keeps focus in the editor.
+    await toast.getByRole('button', { name: 'Dismiss' }).focus();
+    await page.keyboard.press('Enter');
+    await expect(toast).toBeHidden();
+    expect(await page.evaluate(() => document.activeElement?.matches('[data-ge-target]'))).toBe(
+      true,
+    );
+    await ctx.close();
+  });
+}
 
 test('2.4.11 focus not obscured: walking the rows never leaves the focused target under the sticky toolbar', async ({
   browser,
