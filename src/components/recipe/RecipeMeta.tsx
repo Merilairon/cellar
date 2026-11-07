@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { safeHttpUrl } from './api';
 import type { ApiRecipe } from './types';
@@ -37,6 +38,20 @@ export function RecipeMeta({ recipe }: { recipe: ApiRecipe }) {
             sourceText
           )}
         </p>
+      )}
+      {recipe.tags.length > 0 && (
+        <ul aria-label={t('tags.view.label')} className="mt-2 flex flex-wrap gap-2">
+          {recipe.tags.map((name) => (
+            <li key={name}>
+              <Link
+                href={`/recipes?tag=${encodeURIComponent(name)}`}
+                className="inline-flex min-h-11 items-center rounded-full border border-neutral-500 px-3 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+              >
+                {name}
+              </Link>
+            </li>
+          ))}
+        </ul>
       )}
       {recipe.description && <p className="mt-2 whitespace-pre-line">{recipe.description}</p>}
     </div>

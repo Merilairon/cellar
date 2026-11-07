@@ -451,6 +451,9 @@
     "chip": "{name}, {count, plural, one {# recipe} other {# recipes}}. Filter by this tag",
     "chipActive": "{name}, {count, plural, one {# recipe} other {# recipes}}. Filter active, select to remove",
     "clear": "Clear tag filter",
+    "view": {
+      "label": "Tags"
+    },
     "field": {
       "hint": "Type a tag and press Enter or comma. Use the arrow keys to pick a suggestion. {count} of {max} tags.",
       "placeholder": "Add a tag",
