@@ -175,3 +175,64 @@ it('list endpoint is unchanged', async () => {
   const res = await listGet(req('GET'));
   expect(res.status).toBe(200);
 });
+
+describe('GET /api/recipes search params (T6)', () => {
+  const list = async (qs: string, as: User = owner) => {
+    state.current = as;
+    const res = await listGet(
+      new Request(`http://localhost:3100/api/recipes${qs}`, {
+        headers: { 'sec-fetch-site': 'same-origin' },
+      }),
+    );
+    return { res, json: (await res.json()) as Loose };
+  };
+  it('q=espresso finds the sample; private hidden from another user; no-store', async () => {
+    const { json: made } = await create({ visibility: 'private', tags: ['dessert'] });
+    const mine = await list('?q=espresso');
+    expect(mine.res.status).toBe(200);
+    expect(mine.res.headers.get('cache-control')).toBe('private, no-store');
+    expect(mine.json.recipes.map((r: Loose) => r.id)).toEqual([made.id]);
+    expect(mine.json.recipes[0].tags).toEqual(['dessert']);
+    for (const qs of [
+      '?q=espresso',
+      '?tag=dessert',
+      `?author=${owner.id}`,
+      '?q=espresso&tag=dessert',
+    ]) {
+      expect((await list(qs, other)).json.recipes).toEqual([]);
+    }
+    expect((await list(`?author=me&tag=dessert`)).json.recipes).toHaveLength(1);
+  });
+  it('rejects unknown, repeated and oversize params with 400 invalid_query', async () => {
+    for (const qs of [
+      '?min_rating=3',
+      '?foo=1',
+      '?q=a&q=b',
+      `?q=${'x'.repeat(101)}`,
+      '?tag=',
+      `?tag=${'t'.repeat(41)}`,
+      '?author=nope',
+    ]) {
+      const { res, json } = await list(qs);
+      expect([qs, res.status]).toEqual([qs, 400]);
+      expect(json).toEqual({ error: 'invalid_query' });
+    }
+  });
+  it('hostile q values answer 200, never 500', async () => {
+    await create({ visibility: 'users' });
+    for (const q of [
+      '" OR 1=1',
+      'NEAR(a b)',
+      'title:x',
+      '*',
+      '"',
+      '(((',
+      '😀',
+      '%',
+      '\u0000',
+      'x'.repeat(100),
+    ]) {
+      expect((await list(`?q=${encodeURIComponent(q)}`, other)).res.status).toBe(200);
+    }
+  });
+});
