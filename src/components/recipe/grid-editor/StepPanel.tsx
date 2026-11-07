@@ -171,13 +171,13 @@ export function StepPanel({
     covered.length > 4 ? `${covered[0]} ... ${covered[covered.length - 1]}` : covered.join(', ');
 
   const wrapFields = (node: React.ReactNode) =>
-    sheet ? (
+    !sheet ? (
+      node
+    ) : (
       <details className="ge-details">
         <summary className="ge-summary">{t('gridEditor.sheet.details')}</summary>
         {node}
       </details>
-    ) : (
-      node
     );
 
   return (
