@@ -2,7 +2,7 @@
 // kill lives in supervisor.ts; this function only owns the job's resources and closes them.
 import type { Browser, BrowserContext, Page } from 'playwright-core';
 import type { Config } from './config.ts';
-import { RenderError, type RenderRequest, type RenderResult } from './server.ts';
+import { MAX_URL_LENGTH, RenderError, type RenderRequest, type RenderResult } from './server.ts';
 import { createJobProxy, type Resolver, type TestOverrides } from './proxy.ts';
 import { decide, installPolicy } from './policy.ts';
 
@@ -19,7 +19,7 @@ export type RenderDeps = {
 
 /** Entry URL rules: http(s), no userinfo, default port, no blocked literal or name. */
 export function checkEntryUrl(raw: string, ov?: TestOverrides): URL {
-  if (raw.length > 2000) throw new RenderError('failed', 400);
+  if (raw.length > MAX_URL_LENGTH) throw new RenderError('failed', 400);
   let u: URL;
   try {
     u = new URL(raw);

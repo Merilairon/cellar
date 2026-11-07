@@ -98,6 +98,37 @@ export function stepHeadingTitle(line: string, known?: ReadonlySet<string>): str
   return null;
 }
 
+/** "Make the X" / "Prepare the X" / "To make the X" without a colon: also a common ordinary first step. */
+const AMBIGUOUS_PREFIXES = PREFIXES.filter((p) => p[0] !== 'for');
+export function isAmbiguousStepHeading(line: string): boolean {
+  const raw = String(line).trim();
+  if (raw.endsWith(':')) return false;
+  const lower = splitWords(raw).map((w) => w.toLowerCase());
+  return AMBIGUOUS_PREFIXES.some(
+    (p) => lower.length > p.length && p.every((x, i) => lower[i] === x),
+  );
+}
+
+/**
+ * Heading title per step line (null = ordinary step). An ambiguous `Make the X` line is a
+ * heading only when it ends with `:` or the recipe has another heading (a hint or a
+ * non-ambiguous heading line); otherwise it stays a step.
+ */
+export function resolveStepHeadings(
+  steps: ReadonlyArray<{ text: string; section: string | null }>,
+  known?: ReadonlySet<string>,
+): Array<string | null> {
+  const raw = steps.map((st) =>
+    st.section !== null && st.section.trim() !== '' ? null : stepHeadingTitle(st.text, known),
+  );
+  const strong =
+    steps.some((st) => st.section !== null && st.section.trim() !== '') ||
+    raw.some((t, i) => t !== null && !isAmbiguousStepHeading(steps[i]!.text));
+  return raw.map((t, i) =>
+    t !== null && isAmbiguousStepHeading(steps[i]!.text) && !strong ? null : t,
+  );
+}
+
 export const isStepHeading = (line: string, known?: ReadonlySet<string>): boolean =>
   stepHeadingTitle(line, known) !== null;
 
@@ -172,7 +203,8 @@ export function groupSteps(steps: readonly MapStepInput[]): StepGroup[] {
   const groups: StepGroup[] = [];
   let cur: StepGroup | null = null;
   let curHint: string | null = null;
-  for (const st of steps) {
+  const headings = resolveStepHeadings(steps);
+  for (const [i, st] of steps.entries()) {
     const hint =
       st.section !== null && st.section.trim() !== '' ? safeSlice(st.section.trim(), 120) : null;
     if (hint !== null) {
@@ -184,7 +216,7 @@ export function groupSteps(steps: readonly MapStepInput[]): StepGroup[] {
       cur.steps.push(st.text);
       continue;
     }
-    const title = stepHeadingTitle(st.text);
+    const title = headings[i] ?? null;
     if (title !== null) {
       cur = { title: safeSlice(title, 120), steps: [] };
       curHint = null;

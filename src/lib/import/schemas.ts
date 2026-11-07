@@ -40,8 +40,8 @@ export type ImportJobResponse = {
   /**
    * `used`: the page was rendered in the headless browser. `unavailable`: a browser render was
    * needed but is off or failed, so the UI should explain and offer paste. Not persisted:
-   * GET derives `used` from `method` and `unavailable` from the `headless_unavailable` code; the "headless off" hint exists only on the POST response.
+   * `busy`: the browser step was at capacity (retry in a moment); POST response only, the GET never reports it. GET derives `used` from `method` and `unavailable` from the `headless_unavailable` code; the "headless off" hint exists only on the POST response.
    */
-  headless: 'used' | 'unavailable' | null;
+  headless: 'used' | 'unavailable' | 'busy' | null;
   duplicate: { recipe_id: string; title: string } | null;
 };

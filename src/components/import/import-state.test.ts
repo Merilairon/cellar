@@ -72,6 +72,11 @@ describe('rendering phase and headless', () => {
     expect(s.busy).toBe('rendering');
     expect(reducer(s, { type: 'phase', phase: 'parsing' })).toBe(s);
   });
+  it('keeps the busy hint from the response', () => {
+    expect(
+      classifyResponse(200, { status: 'failed', error_code: 'no_recipe', headless: 'busy' }, null),
+    ).toEqual({ ok: false, failure: { kind: 'code', code: 'no_recipe', headless: 'busy' } });
+  });
   it('keeps the headless state from the response', () => {
     expect(
       classifyResponse(

@@ -1,10 +1,16 @@
 import { useTranslations } from 'next-intl';
 import { formatStepParams, type StepT } from './formatStep';
-import { IngredientCell } from './IngredientCell';
+import { IngredientCell, type QuantityDisplay } from './IngredientCell';
 import type { ApiSection } from './types';
 
 /** Props in, markup out: ingredients plus numbered steps per section. */
-export function RecipeList({ sections }: { sections: ApiSection[] }) {
+export function RecipeList({
+  sections,
+  display,
+}: {
+  sections: ApiSection[];
+  display?: QuantityDisplay;
+}) {
   const t = useTranslations();
   const stepT: StepT = (key, values) => t(key, values);
   const multiple = sections.length > 1;
@@ -39,7 +45,7 @@ export function RecipeList({ sections }: { sections: ApiSection[] }) {
                 return (
                   <li key={ing.id} className="my-1">
                     {heading && <p className="font-medium">{ing.group_label}</p>}
-                    <IngredientCell ingredient={ing} />
+                    <IngredientCell ingredient={ing} display={display} />
                   </li>
                 );
               })}

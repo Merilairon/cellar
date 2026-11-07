@@ -164,21 +164,6 @@ export function ReviewForm({
           </p>
         </div>
       )}
-      {draft.tags.length > 0 && (
-        <div>
-          <h2 className="font-semibold">{t('import.review.tags')}</h2>
-          <ul className="mt-1 flex flex-wrap gap-2">
-            {draft.tags.map((tag) => (
-              <li key={tag} className="rounded border border-neutral-500 px-2 py-0.5 text-sm">
-                {tag}
-              </li>
-            ))}
-          </ul>
-          <p className="text-sm text-neutral-700 dark:text-neutral-300">
-            {t('import.review.tagsNote')}
-          </p>
-        </div>
-      )}
       <p className="text-sm text-neutral-700 dark:text-neutral-300">
         {t('import.review.attribution')}
       </p>

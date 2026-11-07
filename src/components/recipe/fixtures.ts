@@ -16,6 +16,7 @@ export function apiFromInput(r: RecipeInput, id = 'r1'): ApiRecipe {
     source_name: r.source_name ?? null,
     visibility: r.visibility ?? 'private',
     view_mode: r.view_mode ?? 'grid',
+    tags: r.tags ?? [],
     copied_from_id: null,
     created_at: '2026-01-01T00:00:00.000Z',
     updated_at: '2026-01-01T00:00:00.000Z',

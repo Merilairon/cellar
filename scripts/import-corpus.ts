@@ -240,7 +240,7 @@ export type HeadlessReport = {
   on: Report;
   /** Out-of-slice fixtures that become valid drafts with the fake sidecar. */
   recovered: Row[];
-  /** Still out of slice with the sidecar on (microdata: needs the 04a extractor). */
+  /** Still out of slice with the sidecar on (none today; microdata moved to draft in 04a T13). */
   stillOut: Row[];
   /** Rendered page is still blocked, paywalled or not a recipe: correctly rejected. */
   stillRejected: Row[];

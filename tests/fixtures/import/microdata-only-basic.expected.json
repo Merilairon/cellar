@@ -1,5 +1,7 @@
 {
-  "expect": "out_of_slice",
+  "expect": "draft",
   "kind": "microdata-only: itemprop markup, no JSON-LD",
-  "carry": "3b microdata parser"
+  "title": "Simple Pancakes",
+  "min_ingredients": 3,
+  "min_steps": 2
 }

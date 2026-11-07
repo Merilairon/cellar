@@ -1,5 +1,7 @@
 {
-  "expect": "out_of_slice",
+  "expect": "draft",
   "kind": "microdata-only: HowToStep itemprops",
-  "carry": "3b microdata parser"
+  "title": "Tomato Soup",
+  "min_ingredients": 2,
+  "min_steps": 2
 }

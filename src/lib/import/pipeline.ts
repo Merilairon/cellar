@@ -1,5 +1,5 @@
 import { ImportError, type ImportErrorCode } from './errors';
-import { extractRecipeNode } from './extract-jsonld';
+import { extractRecipe } from './extract-recipe';
 import { attachMapping, type MapFn } from './mapping';
 import { normalizeRecipe, type Draft } from './normalize';
 import { MAX_PASTE_CHARS, recipeNodeFromPaste } from './paste';
@@ -8,7 +8,7 @@ import {
   type SafeFetchOptions,
   type SafeFetchResult,
 } from './safe-fetch';
-import type { Headless, HeadlessPage } from './headless-client';
+import { HeadlessBusyError, type Headless, type HeadlessPage } from './headless-client';
 import { normalizeSourceUrl, storedSourceUrl } from './source-url';
 
 // Orchestration: static fetch -> JSON-LD -> normalize, then (URL imports only, at most once,
@@ -42,10 +42,11 @@ export type ImportResult = {
   raw_html: string | null;
   /**
    * `used`: the rendered page produced the result. `unavailable`: headless was needed but is
-   * off or failed (the UI explains and offers paste). Not persisted; `used` is derivable
+   * off or failed (the UI explains and offers paste). `busy`: the sidecar was at capacity, a retry
+   * in a moment would work (the persisted code stays the static one). Not persisted; `used` is derivable
    * from `method`.
    */
-  headless?: 'used' | 'unavailable' | null;
+  headless?: 'used' | 'unavailable' | 'busy' | null;
 };
 
 function decodeBody(body: Uint8Array, contentType: string | undefined): string {
@@ -152,6 +153,12 @@ export async function runImport(input: ImportInput, deps: ImportDeps = {}): Prom
   try {
     rendered = await headless.render(input.url.trim());
   } catch (e) {
+    // Busy: a retry in a moment would work. Keep the static failure (and its persisted code)
+    // and only add the non-persisted hint, like `unavailable` when headless is off.
+    if (e instanceof HeadlessBusyError) {
+      deps.log?.('headless busy');
+      return { ...staticFail, headless: 'busy' };
+    }
     const code = e instanceof ImportError ? e.code : 'headless_unavailable';
     deps.log?.(`headless failed: ${code}`, e instanceof Error ? e.cause : undefined);
     return failed('headless', code, {
@@ -179,7 +186,7 @@ export async function runImport(input: ImportInput, deps: ImportDeps = {}): Prom
 
 /**
  * Shared by the static and headless paths so they cannot diverge:
- * extractRecipeNode -> normalizeRecipe -> attachMapping. `noRecipeNode` tells the caller
+ * extractRecipe (JSON-LD, then microdata) -> normalizeRecipe -> attachMapping. `noRecipeNode` tells the caller
  * whether the page had no Recipe at all (the headless trigger).
  */
 function processHtml(
@@ -189,10 +196,10 @@ function processHtml(
 ): { result: ImportResult; noRecipeNode: boolean } {
   const { deps } = ctx;
   const base = { source_url: ctx.sourceUrl, raw_html: html };
-  let node: ReturnType<typeof extractRecipeNode>['node'];
+  let node: ReturnType<typeof extractRecipe>['node'];
   let normalized: ReturnType<typeof normalizeRecipe> | null = null;
   try {
-    node = extractRecipeNode(html).node;
+    node = extractRecipe(html).node;
     // Relative cover URLs resolve against where the page really is (final URL after redirects).
     if (node)
       normalized = normalizeRecipe(node, { sourceUrl: ctx.storedUrl, baseUrl: ctx.baseUrl });

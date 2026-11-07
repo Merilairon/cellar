@@ -6,9 +6,12 @@ import { launchBrowser } from './browser.ts';
 import { selfCheck } from './sandbox.ts';
 import { Supervisor } from './supervisor.ts';
 
-export const MAX_BODY_BYTES = 2048;
+/** Longest entry URL; equals the app's MAX_IMPORT_URL (src/lib/import/schemas.ts). Used by parseRender and checkEntryUrl. */
+export const MAX_URL_LENGTH = 2048;
+/** A 2048-character URL in a JSON body (escapes, non-ASCII) must fit, so this is well above it. */
+export const MAX_BODY_BYTES = 8192;
 
-/** F4: tight HTTP limits; the request is a 2 KB JSON body from the app, never a slow client. */
+/** F4: tight HTTP limits; the request is a small JSON body from the app, never a slow client. */
 export const HTTP_LIMITS = {
   headersTimeout: 5000,
   requestTimeout: 15_000,
@@ -24,7 +27,7 @@ export type RenderResult = {
   /** Count of blocked sub-requests (never their targets). */
   warnings?: number;
 };
-export type ErrorCode = 'blocked' | 'timeout' | 'private_address' | 'too_large' | 'failed';
+export type ErrorCode = 'blocked' | 'timeout' | 'private_address' | 'too_large' | 'failed' | 'busy';
 
 /** Thrown by a renderer to produce a specific error response (T4 maps its outcomes here). */
 export class RenderError extends Error {
@@ -113,7 +116,7 @@ function parseRender(raw: Buffer): RenderRequest | null {
   const o = v as Record<string, unknown>;
   // Only url and waitMs exist; anything else (headers, cookies, scripts) is rejected.
   for (const k of Object.keys(o)) if (k !== 'url' && k !== 'waitMs') return null;
-  if (typeof o.url !== 'string' || o.url.length === 0 || o.url.length > 2000) return null;
+  if (typeof o.url !== 'string' || o.url.length === 0 || o.url.length > MAX_URL_LENGTH) return null;
   if (o.waitMs !== undefined) {
     if (
       typeof o.waitMs !== 'number' ||
@@ -161,8 +164,9 @@ export function createSidecar(opts: ServerOptions): Server {
       if (body === 'too_large') return send(res, 413, { error: 'too_large' });
       const parsed = parseRender(body);
       if (!parsed) return send(res, 400, { error: 'failed' });
-      if (!ready() || active >= config.maxConcurrentRenders)
-        return send(res, 503, { error: 'failed' });
+      if (!ready()) return send(res, 503, { error: 'failed' });
+      // At capacity: a distinct, non-sensitive code so the app can say "try again in a moment".
+      if (active >= config.maxConcurrentRenders) return send(res, 503, { error: 'busy' });
 
       active++;
       // If the app gave up (its timeout) the render is cancelled and the slot freed at once.

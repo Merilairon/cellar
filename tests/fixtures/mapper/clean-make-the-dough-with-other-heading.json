@@ -1,0 +1,54 @@
+{
+  "class": "clean",
+  "note": "m4: 'Make the dough' without colon is a heading when another heading exists.",
+  "ingredients": [
+    "For the dough:",
+    "2 cups flour",
+    "1 cup water",
+    "For the glaze:",
+    "1 cup sugar",
+    "1 tbsp milk"
+  ],
+  "steps": [
+    "Make the dough",
+    "Mix the flour and water.",
+    "For the glaze:",
+    "Whisk the sugar and milk."
+  ],
+  "expected": {
+    "view": "grid",
+    "sections": [
+      {
+        "title": "Dough",
+        "rows": [
+          "flour",
+          "water"
+        ],
+        "steps": [
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 1
+          }
+        ]
+      },
+      {
+        "title": "Glaze",
+        "rows": [
+          "sugar",
+          "milk"
+        ],
+        "steps": [
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 1
+          }
+        ]
+      }
+    ]
+  },
+  "confidence": {
+    "min": 0.7
+  }
+}

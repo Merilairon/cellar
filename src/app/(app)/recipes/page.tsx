@@ -4,25 +4,38 @@ import { RecipeCard } from '@/components/recipe/RecipeCard';
 import { btn, btnPrimary } from '@/components/recipe/styles';
 import { getCurrentUser } from '@/lib/auth/current-user';
 import { getDb } from '@/lib/db';
+import { listTagCounts } from '@/lib/db/tags';
 import { listRecipes } from '@/lib/recipes/service';
+import { ResultsStatus } from '@/components/search/ResultsStatus';
+import { firstParam } from '@/components/search/search-url';
+import { TagFilter } from '@/components/search/TagFilter';
 
 export const dynamic = 'force-dynamic';
 
-export default async function Page() {
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+export default async function Page({ searchParams }: { searchParams: SearchParams }) {
+  const sp = await searchParams;
+  const filters = { q: firstParam(sp.q), tag: firstParam(sp.tag), author: firstParam(sp.author) };
+  const filtered = Boolean(filters.q || filters.tag || filters.author);
   const user = await getCurrentUser();
   const t = await getTranslations();
-  const recipes = user ? listRecipes(getDb(), user) : [];
+  const db = getDb();
+  const recipes = user ? listRecipes(db, user, filters) : [];
+  const tags = user ? listTagCounts(db, user.id) : [];
   return (
     <main>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-bold">{t('recipes.title')}</h1>
-        {recipes.length > 0 && (
+        {(recipes.length > 0 || filtered) && (
           <Link href="/recipes/new" className={btnPrimary}>
             {t('recipes.create')}
           </Link>
         )}
       </div>
-      {recipes.length === 0 ? (
+      <TagFilter tags={tags} filters={filters} />
+      <ResultsStatus count={recipes.length} filters={filters} />
+      {recipes.length === 0 && filtered ? null : recipes.length === 0 ? (
         <section className="mt-6 rounded border border-dashed border-neutral-400 p-6 text-center">
           <h2 className="text-lg font-semibold">{t('recipes.emptyTitle')}</h2>
           <p className="mt-1 text-neutral-700 dark:text-neutral-300">{t('recipes.empty')}</p>
@@ -47,6 +60,7 @@ export default async function Page() {
                 is_owner: r.owner_id === user?.id,
                 visibility: r.visibility,
                 updated_at: r.updated_at,
+                tags: r.tags,
               }}
             />
           ))}

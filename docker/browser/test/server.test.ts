@@ -2,7 +2,14 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
-import { createSidecar, tokenOk, RenderError, HTTP_LIMITS, type Renderer } from '../src/server.ts';
+import {
+  createSidecar,
+  tokenOk,
+  RenderError,
+  HTTP_LIMITS,
+  MAX_URL_LENGTH,
+  type Renderer,
+} from '../src/server.ts';
 import { loadConfig } from '../src/config.ts';
 
 const TOKEN = '0123456789abcdef0123456789abcdef';
@@ -40,7 +47,9 @@ test('healthz needs no token and follows readiness', async () => {
   assert.equal((await fetch(`${base}/healthz`)).status, 200);
   ready = false;
   assert.equal((await fetch(`${base}/healthz`)).status, 503);
-  assert.equal((await post('{"url":"https://example.com/"}')).status, 503);
+  const down = await post('{"url":"https://example.com/"}');
+  assert.equal(down.status, 503);
+  assert.deepEqual(await down.json(), { error: 'failed' }); // not ready is not "busy"
   ready = true;
 });
 
@@ -99,7 +108,7 @@ test('non-JSON content type is 415, oversize body 413', async () => {
     415,
   );
   assert.equal(
-    (await post(JSON.stringify({ url: 'https://a.test/' + 'a'.repeat(3000) }))).status,
+    (await post(JSON.stringify({ url: 'https://a.test/' + 'a'.repeat(9000) }))).status,
     413,
   );
 });
@@ -115,7 +124,8 @@ test('second concurrent render gets 503 immediately', async () => {
   await new Promise((r) => setTimeout(r, 100));
   const second = await post('{"url":"https://a.test/"}');
   assert.equal(second.status, 503);
-  assert.deepEqual(await second.json(), { error: 'failed' });
+  // At capacity is reported as busy so the app can say "try again in a moment".
+  assert.deepEqual(await second.json(), { error: 'busy' });
   release?.();
   assert.equal((await first).status, 200);
 });
@@ -185,4 +195,13 @@ test('m3: a client that disconnects aborts the render signal and frees the slot'
   await new Promise((r) => setTimeout(r, 100));
   assert.equal(seen?.aborted, true);
   s.close();
+});
+
+test('URL limit matches the app MAX_IMPORT_URL: 2048 passes, 2049 is rejected (400)', async () => {
+  assert.equal(MAX_URL_LENGTH, 2048);
+  const mk = (n: number) => 'https://a.test/' + 'a'.repeat(n - 'https://a.test/'.length);
+  const ok = await post(JSON.stringify({ url: mk(2048) }));
+  assert.equal(ok.status, 200);
+  assert.equal(((await ok.json()) as { finalUrl: string }).finalUrl.length, 2048);
+  assert.equal((await post(JSON.stringify({ url: mk(2049) }))).status, 400);
 });

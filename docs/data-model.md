@@ -125,7 +125,19 @@ Either measure may be null; the missing one is derived by the conversion engine 
 - Until the grid editor (M4), `PUT /api/recipes/:id` replaces all sections/ingredients/steps atomically (child ids change). Omitting `visibility` keeps the stored value. Omitting `view_mode` keeps a stored `list`; a stored `grid` stays `grid` only while the spans are still valid (otherwise the recomputed default, `list`). Mutating recipe endpoints require `Content-Type: application/json` (415 otherwise). Authorization is re-checked inside the write transaction.
 
 ### tag / recipe_tag
-`tag(id, name unique)`, `recipe_tag(recipe_id, tag_id)`.
+Added in migration `0005_search_tags` (v0.4.0).
+
+| Table | Column | Type | Notes |
+| --- | --- | --- | --- |
+| `tag` | id | text PK | ULID |
+| | name | text unique, not null | stored normalized (below); CHECK `length(name) BETWEEN 1 AND 40` |
+| | created_at | text | |
+| `recipe_tag` | recipe_id | text FK recipe | `ON DELETE CASCADE` |
+| | tag_id | text FK tag | `ON DELETE CASCADE`; index `recipe_tag_tag_id_idx` |
+
+`recipe_tag` has composite primary key `(recipe_id, tag_id)`. A tag row whose last link goes (recipe replace or delete through `src/lib/db/recipes.ts`) is deleted in the same transaction by `deleteOrphanTags`. Known gap: deleting a user together with their recipes (`deleteUserGuarded`, `recipes: 'delete'`) does not call it, so unused tag rows can remain; they are invisible (counts and autocomplete join `recipe_tag`), see `docs/tasks/v0.4.0-carryover.md`.
+
+**Normalization and limits (owner decision Q7).** The service layer (T4) trims, collapses inner whitespace, applies Unicode NFC and lowercases, so "Dessert" and "dessert" are one tag; capitalization is not preserved and display is lowercase. 1 to 40 characters, no control characters. At most 20 tags per recipe. The DB enforces only what SQL can do reliably: the length CHECK, `name` uniqueness and a `BEFORE INSERT` trigger on `recipe_tag` (`recipe_tag_limit_bi`) that aborts with `recipe_tag_limit` when a recipe already has 20. Case folding is not a CHECK because SQLite `lower()` is ASCII-only. Tag names are rendered as React text only.
 
 ### photo
 (migration `0003_import_photo`)
@@ -158,7 +170,7 @@ Either measure may be null; the missing one is derived by the conversion engine 
 | method | text | nullable until decided: `static\|headless\|paste` (`headless` is written from v0.3.2 only) |
 | error_code | text | nullable: `blocked\|no_recipe\|timeout\|invalid_url\|private_address\|too_large\|fetch_failed` |
 | raw_html_path | text | nullable; only set when `KEEP_RAW_HTML` is on |
-| draft_json | text | nullable; the normalized draft (includes tags, which have no table until M4) |
+| draft_json | text | nullable; the normalized draft. Its `tags` (keywords, category) become `tag` / `recipe_tag` rows only when the draft is saved (v0.4.0) |
 | recipe_id | text FK recipe | nullable, `ON DELETE SET NULL`; set on save |
 | created_at / updated_at | text | |
 
@@ -169,7 +181,42 @@ Indexes: `import_job(user_id, created_at)`, `import_job(recipe_id)`. CHECK const
 v0.3.1 added no migration, table or column. The mapping proposal lives inside `draft_json` (see §3).
 
 ### recipe_fts
-FTS5 virtual table over `title`, `description`, ingredient names, tags, notes; kept in sync by triggers.
+FTS5 virtual table, created in migration `0005_search_tags` (hand-written SQL: drizzle-kit cannot model FTS5 or triggers; `schema.ts` has a pointer comment and the `0005` snapshot covers only `tag` and `recipe_tag`).
+
+```sql
+CREATE VIRTUAL TABLE recipe_fts USING fts5(
+  recipe_id UNINDEXED, title, description, ingredients, tags, notes,
+  tokenize = 'unicode61 remove_diacritics 2', prefix = '2 3');
+```
+
+One ordinary (not contentless) row per recipe, so FTS row count equals recipe count.
+
+| Column | Content |
+| --- | --- |
+| `recipe_id` | `recipe.id`; stored, not searchable |
+| `title`, `description` | as stored (`''` when null) |
+| `ingredients` | `ingredient.name` plus `ingredient.note` per row, space-joined (ordered by ingredient id). **Not** `raw_text`, **not** section titles (Q9) |
+| `tags` | tag names of the recipe, space-joined, ordered by name |
+| `notes` | **reserved, always `''`** until 04c adds triggers on the `note` table (Q2). Private notes cannot live in a shared row; 04c decides between a per-user second index and a join check |
+
+`remove_diacritics 2` plus the unicode61 case folding make "creme" find "Crème" and "espresso" find "ESPRESSO"; `prefix = '2 3'` makes 2 and 3 character prefixes (`esp*`) cheap.
+
+**Sync triggers.** Every trigger runs the same "rebuild row for recipe X": `DELETE FROM recipe_fts WHERE recipe_id = X`, then `INSERT ... SELECT` aggregating the ingredient and tag text for X (no row is inserted if the recipe no longer exists, which makes cascaded deletes safe whatever the firing order):
+
+| Trigger | Fires on |
+| --- | --- |
+| `recipe_fts_recipe_ai` / `_au` / `_ad` | `recipe` insert / update of `title`, `description` / delete (delete only removes the row) |
+| `recipe_fts_ingredient_ai` / `_au` / `_ad` | `ingredient` insert / update of `name`, `note` / delete |
+| `recipe_fts_recipe_tag_ai` / `_ad` | `recipe_tag` insert / delete |
+| `recipe_fts_tag_au` | `tag` update of `name` (rebuilds every recipe carrying the tag) |
+
+Moving an ingredient to another recipe (`recipe_id` update) is not handled; the app never does it.
+
+**Deferred reindex (migration `0006_fts_defer`).** The per-row triggers above made create, replace and delete quadratic in the number of ingredients (security checkpoint F1: 4000 ingredients took about 12 s to create and 23 s to replace, blocking the single-threaded server). Migration `0006` adds the table `recipe_fts_defer(recipe_id PRIMARY KEY)` and recreates the five `ingredient` and `recipe_tag` triggers with `WHEN NOT EXISTS (SELECT 1 FROM recipe_fts_defer WHERE recipe_id = ...)`. Without a marker row they behave exactly as in `0005`. Bulk writers (`insertRecipeTree` for create and import, `replaceRecipe`, `copyRecipe`) call `withDeferredFts` in `src/lib/db/fts.ts`: it inserts the marker, runs the writes, deletes the marker and rebuilds the recipe's FTS row once. `deleteRecipe` sets the marker around the cascade. Everything runs inside the caller's `BEGIN IMMEDIATE` transaction, so a failure rolls the marker back too; `recipe_fts_defer` is empty outside a write. The `recipe` and `tag` triggers are unchanged. Measured after the fix (4000 ingredients, 2000 recipes in the table): create 0.75 s, update 0.72 s, delete 11 ms. Writers that bypass `withDeferredFts` (for example `deleteUserGuarded` with deletion) still get the slow per-row path.
+
+**Backfill.** The migration ends the table setup with one `INSERT INTO recipe_fts ... SELECT` over every existing recipe, so recipes created before v0.4.0 are searchable immediately; tags are empty at that point.
+
+**Test.** `src/lib/db/search-schema.test.ts` applies `0000`-`0004` to a database with data, then `0005`, and asserts rows unchanged, backfill, `foreign_key_check` and `integrity_check` clean, re-run is a no-op, each trigger, and the invariant that after 200 seeded mixed writes the index equals an independently computed rebuild from the source tables.
 
 ## 2. Grid Model
 
@@ -213,7 +260,9 @@ row \ col   (banner rows span full width)
 
 ## 3. Import Pipeline
 
-> Status: v0.3.0 implemented the static path (fetch, JSON-LD, normalize, paste fallback, review, save). v0.3.1 implements the auto-mapper below (pure TypeScript in `src/lib/import/map-*.ts`, no LLM, no network, no new dependency). v0.3.2 implements the optional headless sidecar: `import_job.method = headless` is now produced, `error_code` gains `headless_unavailable` (migration `0004`), and `ImportJobResponse` carries the `headless` field. The sidecar mechanism (filtering proxy, two-network layout, limits) is described in `docs/deployment.md` and `docs/tasks/v0.3.2-threat-model.md`. Microdata (`itemprop`) extraction was not built in v0.3.1.
+> Status: v0.3.0 implemented the static path (fetch, JSON-LD, normalize, paste fallback, review, save). v0.3.1 implements the auto-mapper below (pure TypeScript in `src/lib/import/map-*.ts`, no LLM, no network, no new dependency). v0.3.2 implements the optional headless sidecar: `import_job.method = headless` is now produced, `error_code` gains `headless_unavailable` (migration `0004`), and `ImportJobResponse` carries the `headless` field. v0.4.0 adds `'busy'` to `ImportJobResponse.headless` (see below) and the microdata extractor. The sidecar mechanism (filtering proxy, two-network layout, limits) is described in `docs/deployment.md` and `docs/tasks/v0.3.2-threat-model.md`. **Microdata (v0.4.0):** `src/lib/import/extract-microdata.ts` reads `itemscope`/`itemprop` Recipe markup when the page has no JSON-LD Recipe (JSON-LD wins; `method` stays `static`). It is pure (cheerio/htmlparser2, no network), with an element budget of 20 000, depth 64, at most 20 Recipe scopes and 500 ingredients or steps, and it parses only the first 40 000 `<` characters of the document (a recipe after that point is not found). The fixtures `microdata-only-basic` and `microdata-only-howtostep` are `draft` fixtures. Not measured on real pages.
+
+**`ImportJobResponse.headless` (v0.4.0).** `'used' | 'unavailable' | 'busy' | null`. `busy` means the browser step was at capacity (this process's limiter or the sidecar answering `busy`); it is a non-persisted hint on the `POST /api/import` response only, with `error_code` still `headless_unavailable`, so no migration was needed (owner decision Q3). The GET never reports `busy`. The sidecar entry URL limit is 2048 characters, the same as the app (was 2000; owner decision Q4).
 
 ```
 URL ─► SSRF check ─► fetch (static) ─► JSON-LD Recipe found? ─┐
@@ -276,18 +325,36 @@ The instance is internet-exposed (PRD §6), so this is a hard requirement. Block
 
 ## 4. Unit Conversion & Scaling
 
-- Canonical units: weight `g`, volume `mL`; US: `oz`, `lb`, `cup`, `tbsp`, `tsp`, `fl oz`; plus counts ("2 large eggs").
-- **Within a dimension** convert exactly (4 oz → 113 g; imported metric value wins if present).
-- **Across dimensions** (cup ↔ g) only via `density` table (flour, sugar, butter, …); else keep the original and show no alternate.
-- Scaling multiplies both measures by `factor = target_servings / servings`; rounding to friendly fractions for US (¼, ⅓, ½) and to 5 g / 1 mL steps for metric.
-- Display uses the user's `unit_pref` as primary and the other in parentheses, as in the reference.
+> Status: implemented in v0.4.0 in `src/lib/units/` (pure TypeScript, no I/O, no new dependency). Unit tests cover conversion, rounding, density matching, scaling and display; browser behavior is covered by e2e specs under `tests/e2e/` that this document does not claim to have passed (see `docs/tasks/v0.4.0-carryover.md`).
+
+- Canonical units: weight `g`, volume `mL`; US: `oz`, `lb`, `cup`, `tbsp`, `tsp`, `fl oz`; plus counts ("2 large eggs"). The unit table is shared with the ingredient parser (a drift test asserts every unit the parser can produce is known).
+- **Within a dimension** convert exactly (4 oz becomes 113.398 g; the imported metric value wins if present). `convertWithin` never rounds; rounding is a display step.
+- **Across dimensions** (cup to g) only via the density table in `src/lib/units/density.ts`: granulated, brown and powdered sugar, all-purpose flour, butter, cocoa powder, honey (measured by weight), milk, water, oil (measured by volume). Values are published kitchen figures (US cup 236.588 mL; for example flour 125 g per cup, butter 227 g, granulated sugar 200 g), approved as owner decision Q10. The matcher is conservative: the name must end in the ingredient noun and an exclusion list vetoes look-alikes (coconut milk, peanut butter, flour tortillas, almond flour, milk chocolate, ...). No match means no cross conversion and no alternate is shown.
+- **Derived measure stored at save (owner decision Q6, G10).** At save and import, `completeMeasures` fills the empty side of an ingredient when exactly one side has a quantity and the other has neither quantity nor unit, and the conversion is determinable. The derived value is rounded and stored as a normal value. **There is no marker column**: a derived side is indistinguishable from an entered one, `display_primary` still records which unit system was original, and a stored side is never overwritten. In the recipe form an edited ingredient line is re-parsed (`buildIngredients`), so its derived side is recomputed from the new text; an unchanged line keeps its stored fields. Consequences: recipes saved before v0.4.0 keep no alternate until re-saved, and a later correction of the density table does not rewrite existing recipes. Display derives a missing side on the fly (unstored) for recipes that lack one.
+- **Scaling** multiplies quantities by `factor = target_servings / servings` (or a chosen multiplier when `servings` is null). Factors outside 1/100 to 100, or not finite or not above 0, are treated as 1 or clamped (`normalizeFactor`). Step text, times and temperatures are not touched. The scale and the per-recipe unit switch are client state only and reset on reload.
+- **Rounding (owner decision Q5, `src/lib/units/round.ts`).** A positive quantity is never rounded to 0.
+
+| Unit | Rule |
+| --- | --- |
+| g, mL | under 10: nearest 1 (minimum 1); 10 to under 1000: nearest 5; 1000 and up: nearest 10 |
+| kg, L | 2 decimals, minimum 0.01 |
+| tsp, tbsp | under 1: nearest 1/8 (or third); 1 and up: nearest 1/4 (or third) |
+| cup | nearest 1/4 (or third) |
+| oz, fl oz | under 1: nearest 1/4; 1 and up: nearest 1/2 |
+| lb, pt, qt, gal | nearest 1/4 |
+| counts and unknown units | nearest 1/4 (or third), minimum 1/8 |
+
+- **Approximation (`approx`).** Shown with the "about" sign (and an accessible label) when rounding moved the value by more than 2 percent, or a count became non-integer. At factor 1 a stored value is shown as stored.
+- Display uses the user's `unit_pref` as primary and the other measure in parentheses, as in the reference. `unit_pref` is edited on `/profile`.
 
 ## 5. API Surface (REST, JSON)
 
 | Method | Path | Purpose |
 | --- | --- | --- |
 | POST | /api/auth/login, /logout, /register (invite) | Auth |
-| GET/POST | /api/recipes | List/search (`?q=&tag=&min_rating=`), create |
+| GET | /api/recipes | List/search. Implemented: `?q=` (at most 100 characters; FTS prefix search over title, description, ingredient names and notes, tags; at most 8 tokens of 2 or more characters; result cap 100, bm25 ranked with weights title 10, tags 6, ingredients 4, description 2), `?tag=` (normalized tag name), `?author=` (a user id or `me`). Filters are ANDed and always restricted by the visibility predicate `readableBy` (own recipes plus `visibility = users`; no admin reach). Without `q`: newest first, uncapped. Unknown or repeated parameters, including `min_rating` (not accepted until the `rating` table exists in v0.4.2), are 400 `invalid_query`. 200 responses are `Cache-Control: private, no-store` |
+| POST | /api/recipes | Create (accepts `tags`, at most 20) |
+| GET | /api/tags | Tags on recipes the caller can read, with counts; optional `?q=` prefix (at most 40 characters, else 400 `invalid_query`) |
 | GET/PUT/DELETE | /api/recipes/:id | Read, update, delete |
 | PUT | /api/recipes/:id/grid | Replace ingredient order + step spans atomically |
 | PUT | /api/recipes/:id/visibility | Set `private` or `users` |

@@ -15,6 +15,7 @@ import {
   type StepKind,
   type Visibility,
 } from './schemas';
+import { normalizeTagList } from './tag-name';
 
 // Pure form state <-> API payload mapping (no react, no db). Spans are 1-based in the UI and
 // 0-based on the wire.
@@ -55,6 +56,8 @@ export type FormState = {
   sourceName: string;
   sourceUrl: string;
   visibility: Visibility;
+  /** Normalized tag names, in the order the user added them. */
+  tags: string[];
   sections: FormSection[];
 };
 
@@ -96,6 +99,7 @@ export const emptyForm = (): FormState => ({
   sourceName: '',
   sourceUrl: '',
   visibility: 'private',
+  tags: [],
   sections: [emptySection('s0')],
 });
 
@@ -109,6 +113,8 @@ type RecipeLike = {
   source_url: string | null;
   source_name: string | null;
   visibility: Visibility;
+  /** Absent on older callers; treated as none. */
+  tags?: readonly string[];
   sections: Array<{
     title: string | null;
     ingredients: Array<
@@ -179,6 +185,7 @@ export function formFromRecipe(r: RecipeLike): FormState {
     sourceName: r.source_name ?? '',
     sourceUrl: r.source_url ?? '',
     visibility: r.visibility,
+    tags: normalizeTagList(r.tags ?? []),
     sections: r.sections.map((s, si) => {
       const originals = byPosition(s.ingredients).map(originalFromApi);
       return {
@@ -216,6 +223,7 @@ function formFromDraftSections(d: Draft, sections: DraftSections): FormState {
     source_url: d.source_url ?? null,
     source_name: d.source_name ?? null,
     visibility: d.visibility ?? 'private',
+    tags: d.tags,
     sections: sections.map((s) => ({
       title: s.title ?? null,
       ingredients: s.ingredients.map((i, position) => ({ ...i, position })),
@@ -408,6 +416,8 @@ export function formToPayload(f: FormState): RecipePayload {
     source_name: f.sourceName,
     source_url: f.sourceUrl,
     visibility: f.visibility,
+    // Always sent (never omitted): an empty list clears the stored tags, as the user intends.
+    tags: f.tags,
     sections: f.sections.map((s) => ({
       title: s.title,
       ingredients: buildIngredients(s.ingredientsText, s.originals),
@@ -510,6 +520,8 @@ export function errorMap(errors: FieldError[]): Map<string, string> {
 const MESSAGE_KEYS: Record<string, string> = {
   too_small: 'recipe.errors.too_small',
   too_big: 'recipe.errors.too_big',
+  invalid_tag: 'recipe.errors.invalid_tag',
+  too_many_tags: 'recipe.errors.too_many_tags',
   invalid_type: 'recipe.errors.invalid_type',
   invalid_url: 'recipe.errors.invalid_url',
   minutes_order: 'recipe.errors.minutes_order',

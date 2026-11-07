@@ -268,4 +268,34 @@ describe('render-time builders never touch the module key counter (hydration)', 
     expect(indexKeys.has(a.key) || indexKeys.has(b.key)).toBe(false);
     expect(indexKeys.has('s0') && a.key.startsWith('k')).toBe(true);
   });
+
+  it('G11: an edited ingredient line is re-parsed without the old stored sides', () => {
+    const stored = {
+      ...buildIngredients('4 oz butter', [])[0]!,
+      metric_qty: 115,
+      metric_unit: 'g',
+    };
+    const edited = buildIngredients('6 oz butter', [stored])[0]!;
+    expect(edited.us_qty).toBe(6);
+    expect(edited.metric_qty).toBeNull();
+  });
+});
+
+describe('tags in the form model (T10)', () => {
+  it('starts empty and always sends the tags array', () => {
+    expect(emptyForm().tags).toEqual([]);
+    expect(formToPayload(emptyForm()).tags).toEqual([]);
+  });
+  it('round trips stored tags and normalizes what it loads', () => {
+    const f = formFromRecipe({
+      ...apiShaped(SAMPLE_VANILLA_CAKE),
+      tags: ['Dessert', 'dessert', ' quick  bake '],
+    });
+    expect(f.tags).toEqual(['dessert', 'quick bake']);
+    expect(formToPayload(f).tags).toEqual(['dessert', 'quick bake']);
+  });
+  it('a removed tag is not in the payload', () => {
+    const f = formFromRecipe({ ...apiShaped(SAMPLE_VANILLA_CAKE), tags: ['a', 'b'] });
+    expect(formToPayload({ ...f, tags: f.tags.filter((x) => x !== 'a') }).tags).toEqual(['b']);
+  });
 });

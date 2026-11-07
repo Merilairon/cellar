@@ -1,7 +1,7 @@
 import { recipeInputSchema, type RecipeInput } from '@/lib/recipes/schemas';
 import { isoDurationToMinutes } from './duration';
 import { parseIngredientLine, toIngredientFields } from './ingredient-parser';
-import { ingredientsFromLines, stepHeadingTitle, titleKey } from './map-sections';
+import { ingredientsFromLines, resolveStepHeadings, titleKey } from './map-sections';
 import type { MapInput, MappingProposal } from './map-types';
 import { sanitizeText, sanitizeUrl } from './sanitize';
 
@@ -9,7 +9,7 @@ import { sanitizeText, sanitizeUrl } from './sanitize';
 // section; the auto-mapper (3b) re-maps from the stored draft.
 
 export type Draft = RecipeInput & {
-  /** keywords + recipeCategory; no tag table until M4, kept only inside the draft. */
+  /** keywords + recipeCategory. Persisted on save as recipe tags (normalized there, see save.ts). */
   tags: string[];
   /** Absolute https URL of the cover image, or null. Downloaded on save (T8), never hotlinked. */
   cover_image_url: string | null;
@@ -169,9 +169,10 @@ function buildMapInput(lines: string[], steps: RawStep[]): MapInput | null {
   try {
     // Bare words that match a step section title ("Frosting") become ingredient group headings.
     const known = new Set<string>();
-    for (const s of steps) {
+    const headings = resolveStepHeadings(steps.map((s) => ({ text: s.text, section: s.prefix })));
+    for (const [i, s] of steps.entries()) {
       if (s.prefix) known.add(titleKey(s.prefix));
-      const heading = stepHeadingTitle(s.text);
+      const heading = headings[i];
       if (heading) known.add(titleKey(heading));
     }
     return {

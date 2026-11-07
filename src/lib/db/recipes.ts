@@ -1,7 +1,12 @@
-import { and, asc, desc, eq, inArray, or } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { ulid } from 'ulid';
 import type { Db } from './connection';
-import { ingredient, nowIso, recipe, section, step, user } from './schema';
+import { readableBy } from './readable';
+import { ingredient, nowIso, recipe, section, step } from './schema';
+import { withDeferredFts } from './fts';
+import { deleteOrphanTags, listTagsForRecipe, setRecipeTags, tagIdsForRecipe } from './tags';
+
+export { readableBy };
 
 // Data access for recipes. No business rules beyond persistence: authorization and
 // grid validation live in src/lib/recipes/.
@@ -37,9 +42,12 @@ type StepData = Omit<typeof step.$inferInsert, 'id' | 'recipeId' | 'sectionId' |
 export type RecipeTree = {
   fields: RecipeFields;
   sections: Array<{ title: string | null; ingredients: IngredientData[]; steps: StepData[] }>;
+  /** Normalized tag names. Omitted: unchanged on replace (like visibility), none on create. `[]` clears. */
+  tags?: string[];
 };
 
 export type RecipeFull = RecipeRow & {
+  tags: string[];
   sections: Array<SectionRow & { ingredients: IngredientRow[]; steps: StepRow[] }>;
 };
 
@@ -98,7 +106,10 @@ export function insertRecipeTree(conn: Conn, ownerId: string, tree: RecipeTree):
     .insert(recipe)
     .values({ ...tree.fields, id, ownerId, createdAt: now, updatedAt: now })
     .run();
-  insertSections(conn, id, tree.sections);
+  withDeferredFts(conn, id, () => {
+    insertSections(conn, id, tree.sections);
+    if (tree.tags && tree.tags.length > 0) setRecipeTags(conn, id, tree.tags);
+  });
   return id;
 }
 
@@ -108,26 +119,21 @@ export function createRecipe(db: Db, ownerId: string, tree: RecipeTree): string 
 }
 
 /**
- * Duplicate lookup for imports: a recipe with this (already normalized) source URL among
- * those the caller may see in lists (own, or `users`-visible). Another user's private recipe
- * is never returned, so it cannot be revealed.
+ * Duplicate lookup for imports: a recipe whose stored source URL is one of `candidates`
+ * (see `sourceUrlCandidates`: every stored spelling that shares the comparison key, both
+ * schemes and stored non-default ports) among those the caller may see in lists (own, or
+ * `users`-visible). Another user's private recipe is never returned, so it cannot be revealed.
  */
 export function findRecipeBySourceUrl(
   db: Db,
-  normalizedUrl: string,
+  candidates: string[],
   userId: string,
 ): { id: string; title: string } | undefined {
+  if (candidates.length === 0) return undefined;
   return db
     .select({ id: recipe.id, title: recipe.title })
     .from(recipe)
-    .where(
-      and(
-        // The stored URL keeps the scheme the user entered (Q3); `normalizedUrl` is the
-        // https comparison key, so both schemes are candidates.
-        inArray(recipe.sourceUrl, [normalizedUrl, normalizedUrl.replace(/^https:/, 'http:')]),
-        or(eq(recipe.ownerId, userId), eq(recipe.visibility, 'users')),
-      ),
-    )
+    .where(and(inArray(recipe.sourceUrl, candidates), readableBy(userId)))
     .orderBy(desc(recipe.updatedAt), desc(recipe.id))
     .limit(1)
     .get();
@@ -160,8 +166,11 @@ export function replaceRecipe(
         .set({ ...tree.fields, viewMode, updatedAt: nowIso() })
         .where(eq(recipe.id, id))
         .run();
-      tx.delete(section).where(eq(section.recipeId, id)).run(); // cascades to ingredient and step
-      insertSections(tx, id, tree.sections);
+      withDeferredFts(tx, id, () => {
+        tx.delete(section).where(eq(section.recipeId, id)).run(); // cascades to ingredient and step
+        insertSections(tx, id, tree.sections);
+        if (tree.tags !== undefined) setRecipeTags(tx, id, tree.tags);
+      });
       return true;
     },
     { behavior: 'immediate' },
@@ -195,6 +204,7 @@ function loadFull(conn: Conn, id: string): RecipeFull | undefined {
     .all();
   return {
     ...r,
+    tags: listTagsForRecipe(conn, id),
     sections: sections.map((s) => ({
       ...s,
       ingredients: ings.filter((i) => i.sectionId === s.id),
@@ -207,35 +217,6 @@ export function getRecipeFull(db: Db, id: string): RecipeFull | undefined {
   return loadFull(db, id);
 }
 
-export type RecipeListItem = {
-  id: string;
-  title: string;
-  ownerId: string;
-  ownerDisplayName: string;
-  visibility: RecipeRow['visibility'];
-  viewMode: RecipeRow['viewMode'];
-  updatedAt: string;
-};
-
-/** The caller's own recipes plus other users' `users`-visible recipes, newest first. */
-export function listRecipesForUser(db: Db, userId: string): RecipeListItem[] {
-  return db
-    .select({
-      id: recipe.id,
-      title: recipe.title,
-      ownerId: recipe.ownerId,
-      ownerDisplayName: user.displayName,
-      visibility: recipe.visibility,
-      viewMode: recipe.viewMode,
-      updatedAt: recipe.updatedAt,
-    })
-    .from(recipe)
-    .innerJoin(user, eq(user.id, recipe.ownerId))
-    .where(or(eq(recipe.ownerId, userId), eq(recipe.visibility, 'users')))
-    .orderBy(desc(recipe.updatedAt), desc(recipe.id))
-    .all();
-}
-
 /** Delete a recipe; sections, ingredients and steps cascade, copies get `copied_from_id = null`. */
 export function deleteRecipe(db: Db, id: string, guard?: RecipeGuard): boolean {
   return db.transaction(
@@ -243,7 +224,13 @@ export function deleteRecipe(db: Db, id: string, guard?: RecipeGuard): boolean {
       const row = tx.select().from(recipe).where(eq(recipe.id, id)).get();
       if (!row) return false;
       enforce(guard, row);
+      const tagIds = tagIdsForRecipe(tx, id);
+      // The cascade would fire the per-row FTS triggers for every ingredient; the recipe's own
+      // delete trigger removes the FTS row, so skip them (F1).
+      tx.run(sql`insert or ignore into recipe_fts_defer (recipe_id) values (${id})`);
       tx.delete(recipe).where(eq(recipe.id, id)).run();
+      tx.run(sql`delete from recipe_fts_defer where recipe_id = ${id}`);
+      deleteOrphanTags(tx, tagIds);
       return true;
     },
     { behavior: 'immediate' },
@@ -306,15 +293,18 @@ export function copyRecipe(
           updatedAt: now,
         })
         .run();
-      insertSections(
-        tx,
-        id,
-        src.sections.map((s) => ({
-          title: s.title,
-          ingredients: s.ingredients.map(stripKeys),
-          steps: s.steps.map(stripKeys),
-        })),
-      );
+      withDeferredFts(tx, id, () => {
+        insertSections(
+          tx,
+          id,
+          src.sections.map((s) => ({
+            title: s.title,
+            ingredients: s.ingredients.map(stripKeys),
+            steps: s.steps.map(stripKeys),
+          })),
+        );
+        if (src.tags.length > 0) setRecipeTags(tx, id, src.tags);
+      });
       return id;
     },
     { behavior: 'immediate' },
@@ -345,12 +335,7 @@ export function findReadableRecipesBySourceUrl(
   return db
     .select({ id: recipe.id, title: recipe.title })
     .from(recipe)
-    .where(
-      and(
-        eq(recipe.sourceUrl, sourceUrl),
-        or(eq(recipe.ownerId, userId), eq(recipe.visibility, 'users')),
-      ),
-    )
+    .where(and(eq(recipe.sourceUrl, sourceUrl), readableBy(userId)))
     .orderBy(desc(recipe.updatedAt))
     .all();
 }

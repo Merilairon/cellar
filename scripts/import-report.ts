@@ -14,8 +14,8 @@ async function main(): Promise<void> {
   console.log('Import fixture report (offline: runImport with a fake safeFetch, no network)');
   console.log(
     'Success rate definition: valid drafts / fixtures expected to produce a draft (static-handleable\n' +
-      'pages with a Recipe in JSON-LD). JS-rendered-only and microdata-only pages are out of slice\n' +
-      '(carried to 3c / 3b) and reported separately; they do not count for or against the rate.\n',
+      'pages with a Recipe in JSON-LD or microdata). JS-rendered-only pages are out of slice\n' +
+      '(need the headless sidecar) and reported separately; they do not count for or against the rate.\n',
   );
   console.log(`${pad('fixture', 40)} ${pad('expected', 13)} ${pad('got', 10)} result  reason`);
   for (const r of report.rows) console.log(line(r));

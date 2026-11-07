@@ -7,12 +7,12 @@ import {
   createRecipe,
   deleteRecipe,
   getRecipeFull,
-  listRecipesForUser,
   RecipeGuardError,
   replaceRecipe,
   setRecipeVisibility,
   type RecipeTree,
 } from './recipes';
+import { searchRecipes } from './search';
 import { ingredient, recipe, section, step, user } from './schema';
 
 let db: Db;
@@ -172,10 +172,10 @@ describe('delete / visibility / list', () => {
     });
     await new Promise((r) => setTimeout(r, 3));
     createRecipe(db, b.id, tree('b-private'));
-    const list = listRecipesForUser(db, a.id);
+    const list = searchRecipes(db, a.id);
     expect(list.map((r) => r.id)).toEqual([sharedByB, mine]);
     expect(list[0]).toMatchObject({ ownerDisplayName: 'b@x.test', visibility: 'users' });
-    expect(listRecipesForUser(db, b.id)).toHaveLength(2); // b's own two; a's recipe is private
+    expect(searchRecipes(db, b.id)).toHaveLength(2); // b's own two; a's recipe is private
   });
 });
 

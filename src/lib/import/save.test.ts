@@ -93,6 +93,90 @@ describe('saveImport', () => {
     expect(db.select().from(importJob).get()).toMatchObject({ status: 'saved', recipeId: r.id });
   });
 
+  describe('tags (T5)', () => {
+    const tagged = {
+      '@type': 'Recipe',
+      name: 'Brownies',
+      keywords: 'Dessert, Chocolate',
+      recipeCategory: 'Baking',
+      recipeIngredient: ['2 eggs'],
+      recipeInstructions: [{ '@type': 'HowToStep', text: 'Bake.' }],
+    };
+    const taggedFetch = async (): Promise<SafeFetchResult> => ({
+      status: 200,
+      headers: { 'content-type': 'text/html' },
+      body: enc.encode(`<script type="application/ld+json">${JSON.stringify(tagged)}</script>`),
+      finalUrl: 'https://example.com/p',
+    });
+    const startTagged = async () =>
+      (await createImport(db, a, { url: 'https://example.com/p' }, { safeFetch: taggedFetch })).id;
+    const tagsOf = (r: Awaited<ReturnType<typeof saveImport>>) => {
+      if (!r.ok || !('id' in r)) throw new Error(`not saved: ${JSON.stringify(r)}`);
+      return getRecipeFull(db, r.id)!.tags;
+    };
+
+    it('persists the draft tags (keywords + category) when the body omits tags', async () => {
+      const id = await startTagged();
+      expect(tagsOf(await saveImport(db, a, id, draft(), deps()))).toEqual([
+        'baking',
+        'chocolate',
+        'dessert',
+      ]);
+    });
+
+    it('tags in the payload replace the draft tags; removed ones are not saved', async () => {
+      const id = await startTagged();
+      expect(tagsOf(await saveImport(db, a, id, draft({ tags: ['Chocolate'] }), deps()))).toEqual([
+        'chocolate',
+      ]);
+    });
+
+    it('an explicit empty list saves no tags', async () => {
+      const id = await startTagged();
+      expect(tagsOf(await saveImport(db, a, id, draft({ tags: [] }), deps()))).toEqual([]);
+      expect(db.$client.prepare('select count(*) n from tag').get()).toEqual({ n: 0 });
+    });
+
+    it('tampered tags are rejected with 422 and nothing is saved', async () => {
+      const id = await startTagged();
+      for (const tags of [
+        ['x'.repeat(41)],
+        [''],
+        ['a\u0000b'],
+        Array.from({ length: 21 }, (_, i) => `t${i}`),
+      ]) {
+        const r = await saveImport(db, a, id, draft({ tags }), deps());
+        expect(r).toMatchObject({ ok: false, status: 422 });
+      }
+      expect(db.select().from(importJob).get()).toMatchObject({ status: 'needs_review' });
+      expect(db.$client.prepare('select count(*) n from tag').get()).toEqual({ n: 0 });
+    });
+
+    it('a stored draft without tags (v0.3.x) still saves with []', async () => {
+      const id = await start();
+      const row = db.select().from(importJob).where(eq(importJob.id, id)).get()!;
+      const stored = JSON.parse(row.draftJson!);
+      delete stored.draft.tags;
+      db.update(importJob)
+        .set({ draftJson: JSON.stringify(stored) })
+        .where(eq(importJob.id, id))
+        .run();
+      expect(tagsOf(await saveImport(db, a, id, draft(), deps()))).toEqual([]);
+    });
+
+    it('unusable draft tags are dropped rather than blocking the save', async () => {
+      const id = await start();
+      const row = db.select().from(importJob).where(eq(importJob.id, id)).get()!;
+      const stored = JSON.parse(row.draftJson!);
+      stored.draft.tags = ['ok', '', 'x'.repeat(60), 'OK'];
+      db.update(importJob)
+        .set({ draftJson: JSON.stringify(stored) })
+        .where(eq(importJob.id, id))
+        .run();
+      expect(tagsOf(await saveImport(db, a, id, draft(), deps()))).toEqual(['ok']);
+    });
+  });
+
   it('re-sanitizes a draft tampered client-side', async () => {
     const id = await start();
     const r = await saveImport(
@@ -448,5 +532,30 @@ describe('saveImport cover (T8)', () => {
       ok: false,
       status: 422,
     });
+  });
+
+  it('fills the missing alternate measure at import save (4 oz butter -> 115 g)', async () => {
+    const id = await start();
+    const body = draft({
+      sections: [
+        {
+          title: null,
+          ingredients: [
+            { name: 'butter', us_qty: 4, us_unit: 'oz', display_primary: 'us' },
+            { name: 'sugar', us_qty: 1, us_unit: 'cup', metric_qty: 190, metric_unit: 'g' },
+          ],
+          steps: [{ kind: 'banner_top', label: 'Fry', detail: 'Hot pan.' }],
+        },
+      ],
+    });
+    const r = await saveImport(db, a, id, body, deps());
+    if (!r.ok) throw new Error(JSON.stringify(r));
+    const [butter, sugar] = getRecipeFull(db, r.id)!.sections[0]!.ingredients;
+    expect([butter!.metricQty, butter!.metricUnit, butter!.displayPrimary]).toEqual([
+      115,
+      'g',
+      'us',
+    ]);
+    expect(sugar!.metricQty).toBe(190);
   });
 });

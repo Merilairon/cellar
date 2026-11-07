@@ -1,0 +1,45 @@
+{
+  "class": "clean",
+  "note": "m4: an ordinary first step 'Make the dough' (no colon, no other heading) stays a step; no phantom 'Dough' section.",
+  "ingredients": [
+    "2 cups flour",
+    "1 cup water",
+    "1 tsp salt"
+  ],
+  "steps": [
+    "Make the dough",
+    "Mix the flour and water.",
+    "Add the salt and knead."
+  ],
+  "expected": {
+    "view": "grid",
+    "sections": [
+      {
+        "title": null,
+        "rows": [
+          "flour",
+          "water",
+          "salt"
+        ],
+        "steps": [
+          {
+            "kind": "banner_top"
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 1
+          },
+          {
+            "kind": "column",
+            "row_start": 0,
+            "row_end": 2
+          }
+        ]
+      }
+    ]
+  },
+  "confidence": {
+    "min": 0.7
+  }
+}

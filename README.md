@@ -2,7 +2,7 @@
 
 A self-hosted recipe book for you and the people you invite. Next.js 16, SQLite, one container.
 
-This is v0.3.1. It builds on v0.2 (manual recipes with a grid view and a list view), v0.3.0 (importing a recipe from a web address or pasted text) and adds an automatic step-to-ingredient grid mapper for imports. Earlier versions added accounts, invites, password recovery, security hardening and Docker packaging. It runs as a single process with a single SQLite file.
+This is v0.4.0 (implemented, pending the release gate). It builds on v0.2 (manual recipes with a grid view and a list view), v0.3.0 (importing a recipe from a web address or pasted text), v0.3.1 (an automatic step-to-ingredient grid mapper for imports) and v0.3.2 (an optional headless browser for JavaScript-only pages), and adds search, tags, unit conversion and scaling. Earlier versions added accounts, invites, password recovery, security hardening and Docker packaging. It runs as a single process with a single SQLite file.
 
 ## Features
 
@@ -14,22 +14,57 @@ This is v0.3.1. It builds on v0.2 (manual recipes with a grid view and a list vi
 - **Sharing and copies.** The owner (or an admin) can share a recipe read-only with all signed-in users. Another user can save an independent private copy.
 - **User deletion.** When an admin deletes a user, they choose to delete that user's recipes or reassign them to another active user.
 - **Recipe import (v0.3.0) with automatic grid mapping (v0.3.1).** Import a recipe from a web address or from pasted text, review and edit it, then save it. Cellar proposes which ingredients each step uses and shows a grid preview. See [Import a recipe](#import-a-recipe).
+- **Search (v0.4.0).** A search box in the header finds recipes you can read by title, description, ingredient names and notes on ingredients, and tags. See [Search and tags](#search-and-tags).
+- **Tags (v0.4.0).** Add tags on the recipe form (with suggestions from tags already in use), see them on recipe cards and pages, and filter `/recipes` by tag. Tags found on an imported page appear as editable chips on the review screen and are saved with the recipe.
+- **Units and scaling (v0.4.0).** Choose metric or US as your preferred unit on your profile. A recipe page shows your preferred unit first, with the other in parentheses when it is known, and offers 1/2x, 1x, 2x and a custom scale plus a per-recipe unit switch. See [Units and scaling](#units-and-scaling).
 - **Sample recipes.** `npm run seed` adds two self-written samples (see [Sample data](#sample-data)).
 
-Not yet available: pages that need JavaScript to show the recipe (planned v0.3.2), search and tags, unit conversion and scaling, a photo gallery, notes and ratings, public links, and the drag-and-drop grid editor.
+Not yet available: a photo gallery, notes and ratings (and therefore a rating filter and searching notes), public links, and the drag-and-drop grid editor.
 
 ## Routes
 
-| Route               | What it shows                                                                                                                                                  |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/recipes`          | Your recipes and recipes shared with you. Shows an empty state with calls to action when there are none.                                                       |
-| `/recipes/new`      | Form to create a recipe.                                                                                                                                       |
-| `/recipes/:id`      | A recipe in grid or list view, with a toggle. The owner and admins see edit, delete and share controls; other users see a read-only view with **Save a copy**. |
-| `/import`           | Import a recipe from a web address or pasted text (see [Import a recipe](#import-a-recipe)).                                                                   |
-| `/import/:id`       | Review screen for an import: edit the draft, then save or discard.                                                                                             |
-| `/recipes/:id/edit` | Form to edit a recipe you own (admins can edit any recipe). Saving replaces the recipe's sections, ingredients and steps.                                      |
+| Route               | What it shows                                                                                                                                                                                           |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/recipes`          | Your recipes and recipes shared with you, newest first. Accepts `?q=`, `?tag=` and `?author=` (see [Search and tags](#search-and-tags)). Shows an empty state with calls to action when there are none. |
+| `/profile`          | Your preferred unit system (metric or US).                                                                                                                                                              |
+| `/recipes/new`      | Form to create a recipe.                                                                                                                                                                                |
+| `/recipes/:id`      | A recipe in grid or list view, with a toggle. The owner and admins see edit, delete and share controls; other users see a read-only view with **Save a copy**.                                          |
+| `/import`           | Import a recipe from a web address or pasted text (see [Import a recipe](#import-a-recipe)).                                                                                                            |
+| `/import/:id`       | Review screen for an import: edit the draft, then save or discard.                                                                                                                                      |
+| `/recipes/:id/edit` | Form to edit a recipe you own (admins can edit any recipe). Saving replaces the recipe's sections, ingredients and steps.                                                                               |
 
-The JSON API lives under `/api/recipes` (`/api/recipes`, `/api/recipes/:id`, `/api/recipes/:id/copy`, `/api/recipes/:id/visibility`). See [docs/data-model.md](docs/data-model.md).
+The JSON API lives under `/api/recipes` (`/api/recipes`, `/api/recipes/:id`, `/api/recipes/:id/copy`, `/api/recipes/:id/visibility`) and `/api/tags`. See [docs/data-model.md](docs/data-model.md).
+
+## Search and tags
+
+**Search.** Type in the header search box. Typing updates the address (`/recipes?q=...`) after a 250 ms pause, Enter searches at once, and Escape clears the box, so back, forward and reload keep your search. A query needs at least 2 characters before a request is made.
+
+- **What is searched.** Title, description, ingredient names and ingredient notes (for example "melted"), and tags. The original ingredient line, section titles, step text and notes on recipes are not searched. Notes arrive with v0.4.2.
+- **Prefix matching.** Every word matches as a prefix (`espr` finds espresso) and all words must match. Letter case and accents are ignored (`creme` finds "Crème"). There is no stemming, so `brownies` does not find "brownie". A word shorter than 2 characters is ignored; a query with no usable word returns no recipes rather than all of them.
+- **Order and size.** With a query, the best matches come first (title, then tags, ingredients, description), ties newest first, at most 100 results. Without a query the list is unchanged: newest first, no cap.
+- **Who you find.** Only recipes you can already see in the list: your own and recipes shared with all signed-in users. Admins get no extra reach into other users' private recipes.
+
+**Tags.** A tag is a short lowercase label (1 to 40 characters, at most 20 per recipe). "Dessert" and "dessert" are the same tag, and capitalization is not kept. Invisible and direction-control characters are rejected. Tag chips on `/recipes` filter the list (select the active chip again to remove the filter); the counts only include recipes you can read.
+
+**API.**
+
+| Request                                             | Result                                                                                                                                                                                                                                              |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/recipes`                                  | The list, as before.                                                                                                                                                                                                                                |
+| `GET /api/recipes?q=espresso&tag=dessert&author=me` | Filters combine with AND. `q` is at most 100 characters; at most the first 8 words of 2 or more characters are used. `tag` is 1 to 40 characters. `author` is a user id or `me`; a well-formed id of a user who does not exist gives an empty list. |
+| `GET /api/tags?q=des`                               | `{ "tags": [...] }`: tags on recipes you can read, with counts. `q` is an optional prefix of at most 40 characters.                                                                                                                                 |
+
+Unknown or repeated query parameters are rejected with 400 `invalid_query`. This includes `min_rating`, which is not accepted until ratings exist (v0.4.2). Search responses carry `Cache-Control: private, no-store`.
+
+## Units and scaling
+
+- **Preferred unit.** Set it on your profile (`/profile`). It decides which measure is shown first on recipe pages. The other measure follows in parentheses when the recipe has it. It does not change what is stored.
+- **Quick switch.** On a recipe page, **Show in US units** / **Show in metric** flips the display for that recipe only. It is not remembered: the page returns to your preference on reload.
+- **Scaling.** 1/2x, 1x and 2x, or **Custom**. If the recipe states a number of servings, Custom takes a target number of servings; otherwise it takes a multiplier. Any factor must be above 0 and at most 100 times (and at least 1/100). Only ingredient quantities change: times, temperatures and step text stay as written. Scaling is not saved.
+- **Rounding.** Quantities are rounded to friendly amounts: grams and millilitres to 1 below 10, to 5 up to 1000 and to 10 above; US teaspoons and tablespoons to eighths below 1 and quarters above (thirds are also offered); cups to quarters and thirds; ounces to quarters below 1 and halves above; pounds to quarters. A positive amount never rounds to zero. When rounding moves a value by more than 2 percent, or a count becomes fractional (1.5 times 3 eggs), the amount is shown with a "about" sign, which screen readers announce as "about". An unscaled stored amount is shown as stored.
+- **Missing measures.** When you save or import a recipe that has only one measure for an ingredient (for example only `1 cup flour`), Cellar fills in the other measure if it can work it out: exactly within a kind (ounces to grams, tablespoons to millilitres) and, for a short list of ingredients (flour, sugar, brown sugar, powdered sugar, butter, cocoa, honey, milk, water, oil), between volume and weight using a typical density. The derived measure is stored like any other value and is not marked as derived. A measure you typed or imported is never overwritten. Recipes saved before v0.4.0 are not changed until you save them again.
+
+Limits: density values are common kitchen figures, not measurements of your ingredients (a packed cup of flour differs from a sifted one). Ingredients not on the list get no cross conversion, and names such as "coconut milk", "peanut butter" or "flour tortillas" are deliberately not matched.
 
 ## Import a recipe
 
@@ -44,7 +79,7 @@ Open **Import** (`/import`). There are two ways in.
 
 Pasted text is limited to 500,000 characters. A paste import makes no network request.
 
-Either way you land on a review screen. Everything is editable, tags found on the page are shown but not saved yet, and a banner appears when you already have a recipe from the same address (you can still choose **Import anyway**). Nothing is written to your recipes until you press **Save imported recipe**. A failed import never creates a recipe. If **Include the cover image** is checked, the image is downloaded when you save, re-encoded to WebP at up to 1600 px with metadata removed, and stored under the uploads directory. The cover is not displayed in the app yet (planned with the media work in v0.4.2).
+Either way you land on a review screen. Everything is editable, tags found on the page (keywords and category) appear as editable chips and are saved with the recipe (remove the ones you do not want), and a banner appears when you already have a recipe from the same address (you can still choose **Import anyway**). Nothing is written to your recipes until you press **Save imported recipe**. A failed import never creates a recipe. If **Include the cover image** is checked, the image is downloaded when you save, re-encoded to WebP at up to 1600 px with metadata removed, and stored under the uploads directory. The cover is not displayed in the app yet (planned with the media work in v0.4.2).
 
 ### Automatic grid mapping
 
@@ -80,21 +115,22 @@ Some recipe pages only exist after JavaScript runs, or refuse plain HTTP clients
 - **Unsupported hosts.** Hosts with `user.max_user_namespaces=0` (unprivileged user namespaces disabled) are unsupported. The sidecar exits with an `UNSUPPORTED HOST` message and never runs without its sandbox.
 - **arm64: verified in CI on a native GitHub arm64 runner** (sidecar sandbox and syscall tests, real Chromium render tests, app image, `sharp` re-encode). It is not verified on Raspberry Pi or Home Assistant OS hardware itself; the kernel there must allow unprivileged user namespaces. QEMU emulation cannot run the sandbox and is not used for this.
 - **Upgrade from v0.3.1.** Pull the new code and rebuild; migration `0004` runs automatically at app start and keeps existing data. To upgrade the sidecar image later, rebuild it: `docker compose --profile headless build --no-cache browser`.
+- **Upgrade to v0.4.0.** The app applies migrations `0005` and `0006` at start (search index, tags). If you use the sidecar, rebuild it too (`docker compose --profile headless build`, then `up -d`): its address limit is now 2048 characters, the same as the app, and it answers `busy` when at capacity, which the review screen reports as "try again in a moment". An old sidecar with the new app still works; a busy answer is then reported as unavailable.
 
 ### Error codes
 
 When an import fails, the API still answers 200 with `status: "failed"` and one of these codes, and the page offers the paste fallback.
 
-| Code                   | Meaning                                                                                                                            |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `invalid_url`          | Not an http or https address, contains a username or password, or uses a port other than 80 or 443.                                |
-| `private_address`      | The host resolves to a private, loopback, link-local or otherwise internal address, at the first request or at any redirect.       |
-| `blocked`              | The site answered 403 or 429, or showed a bot wall.                                                                                |
-| `timeout`              | The whole fetch, including redirects, took longer than 10 seconds.                                                                 |
-| `too_large`            | The response exceeded 5 MB.                                                                                                        |
-| `fetch_failed`         | DNS failure, connection error, a non-HTML content type, or a server error.                                                         |
-| `no_recipe`            | The page was fetched but no usable recipe (title, at least one ingredient and one step) was found.                                 |
-| `headless_unavailable` | The headless step was needed but `HEADLESS_URL` is unset, or the sidecar is down, busy or returned an invalid response. Use paste. |
+| Code                   | Meaning                                                                                                                                                                                                                                                       |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `invalid_url`          | Not an http or https address, contains a username or password, or uses a port other than 80 or 443.                                                                                                                                                           |
+| `private_address`      | The host resolves to a private, loopback, link-local or otherwise internal address, at the first request or at any redirect.                                                                                                                                  |
+| `blocked`              | The site answered 403 or 429, or showed a bot wall.                                                                                                                                                                                                           |
+| `timeout`              | The whole fetch, including redirects, took longer than 10 seconds.                                                                                                                                                                                            |
+| `too_large`            | The response exceeded 5 MB.                                                                                                                                                                                                                                   |
+| `fetch_failed`         | DNS failure, connection error, a non-HTML content type, or a server error.                                                                                                                                                                                    |
+| `no_recipe`            | The page was fetched but no usable recipe (title, at least one ingredient and one step) was found.                                                                                                                                                            |
+| `headless_unavailable` | The headless step was needed but `HEADLESS_URL` is unset, or the sidecar is down, busy or returned an invalid response. Use paste. When the cause was a busy sidecar the response also carries `headless: "busy"` and the page says to try again in a moment. |
 
 Requests that are malformed are rejected with HTTP 400 (invalid JSON), 401, 403 (origin check), 415 (not JSON) or 422 (validation). Exceeding the rate limit returns 429 with a `Retry-After` header.
 
@@ -121,17 +157,17 @@ What this has not been tested against: a real network. TLS certificate and SNI h
 - Raw HTML is **not** stored unless `KEEP_RAW_HTML=true`. When enabled, files are written to `RAW_HTML_DIR` (default `import-raw/` next to the uploads directory, which is next to the database unless you moved `UPLOADS_DIR`; this is the same place v0.3.0 and v0.3.1 used) and pruned with their job. Files left in that older location are still cleaned up if you later point `RAW_HTML_DIR` elsewhere, but they are not moved. Headless-rendered HTML can be larger.
 - Covers are stored in the uploads directory (`UPLOADS_DIR`; `/data/uploads` in Docker, inside the `app-data` volume, so the [backup](#backup) covers them).
 - `source_url` is stored in a normalized form (host lowercased, fragment, default port and tracking parameters removed, query parameters sorted, trailing slash removed) with the scheme you entered, so an `http`-only site keeps a working link. For the duplicate warning, `http` and `https` are treated as equal.
-- The mapping proposal is part of the draft in `draft_json`; no new table or column was added in v0.3.1.
+- The mapping proposal is part of the draft in `draft_json`; no new table or column was added in v0.3.1. Draft tags (keywords and category) are part of the draft too and become `tag` rows only when you save.
 
 ### Import fixture report
 
-`npm run test:import` runs the import pipeline offline (a fake fetcher, no network) over the 47 hand-written fixtures in `tests/fixtures/import/` and prints a table and a success rate. It currently reports 37 of 37 valid drafts (100 percent, target 85 percent), 5 of 5 deliberate rejections, and 5 out-of-slice pages.
+`npm run test:import` runs the import pipeline offline (a fake fetcher, no network) over the 50 hand-written fixtures in `tests/fixtures/import/` and prints a table and a success rate. The run for v0.4.0 reports 39 of 39 valid drafts (100 percent, target 85 percent; 50 fixtures in total), 7 of 7 deliberate rejections, and 4 out-of-slice pages.
 
-What the 100 percent means: every fixture that a static JSON-LD reader should handle produces a draft that passes the recipe schema, and the pages that must be rejected are rejected. What it does not mean: that 100 percent of real recipe sites import. The fixtures are small hand-written pages written for this reader, so they cannot predict real-world markup. The 5 out-of-slice pages (3 JavaScript-only, 2 microdata-only) are excluded from the rate by definition and currently produce `no_recipe`. Expect a lower rate on real sites; the report is a regression guard, not a coverage measurement.
+What the 100 percent means: every fixture that a static JSON-LD reader should handle produces a draft that passes the recipe schema, and the pages that must be rejected are rejected. What it does not mean: that 100 percent of real recipe sites import. The fixtures are small hand-written pages written for this reader, so they cannot predict real-world markup. Since v0.4.0 the two microdata-only fixtures are valid drafts (a reader for `itemprop` markup is used when a page has no JSON-LD recipe; JSON-LD wins when both exist). The 4 out-of-slice pages (3 JavaScript-only, 1 blocked) are excluded from the rate by definition and produce `no_recipe` without the sidecar. Expect a lower rate on real sites; the report is a regression guard, not a coverage measurement.
 
 ### Mapper accuracy report
 
-`npm run test:mapper` runs the mapper offline over the hand-written fixtures in `tests/fixtures/mapper/` (65 files) plus five references derived from the sample recipes, and prints a per-fixture table, calibration buckets and pass/fail gates. `npm run test:import` prints the same section. It exits 1 when a gate fails. The last run on this branch: references 5 of 5 exact, clean set 27 of 27 exact (114 of 114 step spans), hard set 23 of 25 exact (31 hard fixtures, 12 of them added after the code review as adversarial cases), 0 recipes wrong at a score of 0.70 or more, negatives 6 of 6 ended as list or no proposal. Any `hard` fixture that misses its stated expectation fails CI unless it carries a `known_miss` reason.
+`npm run test:mapper` runs the mapper offline over the hand-written fixtures in `tests/fixtures/mapper/` (69 files) plus five references derived from the sample recipes, and prints a per-fixture table, calibration buckets and pass/fail gates. `npm run test:import` prints the same section. It exits 1 when a gate fails. The last run on this branch: references 5 of 5 exact, clean set 31 of 31 exact (124 of 124 step spans), hard set 23 of 25 exact (31 hard fixtures, 12 of them added after the code review as adversarial cases), 0 recipes wrong at a score of 0.70 or more, negatives 6 of 6 ended as list or no proposal. Any `hard` fixture that misses its stated expectation fails CI unless it carries a `known_miss` reason.
 
 What the numbers mean: the fixtures were written by the same people who wrote the mapper, so the clean set at 100 percent is a regression guard, not an accuracy estimate. The hard set is the honest signal: it holds the ambiguous cases, and the two it gets wrong (a "yoghurt" versus "yogurt" spelling difference, and steps with no recognisable verbs) both score below 0.70, which is the behaviour we want; a third, `basil leaves` not matching "the basil", also scores 0.69 and is listed as a known miss. The 12 added fixtures were written from general cooking-writing shapes without tuning, and the first run exposed one confident-wrong case (a trailing step such as "Finish with the remaining butter" was treated as a banner), which was fixed in the mapper. The "no confident wrong answer" gate is only as strong as the fixtures. The mapper has not been measured on real recipe pages. Expect real pages to score lower and to need correction more often.
 
@@ -367,8 +403,10 @@ Deactivated accounts are not reactivated: the command exits with an error for th
 
 ## Known limitations
 
-- **Import covers only.** Cover images are stored but not displayed in the UI until v0.4.2. The automatic grid mapping is a proposal measured only on hand-written fixtures, works for English only, and there is no drag-and-drop grid editor until v0.4.1 (correct a mapping by editing row numbers). JavaScript-only pages need the optional headless sidecar (v0.3.2, off by default). Microdata-only pages are not read; the microdata extractor moved to v0.4.0 (04a).
+- **Import covers only.** Cover images are stored but not displayed in the UI until v0.4.2. The automatic grid mapping is a proposal measured only on hand-written fixtures, works for English only, and there is no drag-and-drop grid editor until v0.4.1 (correct a mapping by editing row numbers). JavaScript-only pages need the optional headless sidecar (v0.3.2, off by default). Microdata-only pages are read by a bounded reader (only the first 40,000 `<` characters of a page are parsed); a page where the recipe lies beyond that is not read. Its accuracy on real sites is untested.
 - **Headless import is optional and partly unverified.** arm64 is verified on a GitHub arm64 runner only (not on Pi hardware), hosts with `max_user_namespaces=0` are unsupported, and several checks are listed in [docs/tasks/v0.3.2-carryover.md](docs/tasks/v0.3.2-carryover.md).
+- **Search is basic by design.** No stemming (plural and singular differ), no typo tolerance, no phrase or `OR` syntax (operators typed in the box are treated as plain text), results capped at 100 with a query. Result order uses ranking statistics computed over every recipe in the database, so in principle the order of two results you can read can depend on words in recipes you cannot (the documented Low finding F3 in [docs/tasks/v0.4.0-security-checkpoint.md](docs/tasks/v0.4.0-security-checkpoint.md), open for the owner's decision). Notes are not searchable until v0.4.2.
+- **Unit conversion covers a short ingredient list.** Cross conversion (cup to grams) exists only for the ingredients named under [Units and scaling](#units-and-scaling). Search and unit display are untested in Firefox, Safari and with a screen reader; see [docs/tasks/v0.4.0-carryover.md](docs/tasks/v0.4.0-carryover.md) for what is not tested.
 - **Rate limiting is in memory.** Counters reset when the app restarts and are not shared between processes.
 - **Single process only.** Because of the in-memory rate limiter and the single SQLite file, run exactly one app instance.
 - **`TRUSTED_PROXIES` can be spoofed if the app port is reachable.** Any client that can connect directly from a trusted address can forge `X-Forwarded-For` and evade per-IP limits. Behind Caddy, do not publish the app port (do not add `docker-compose.direct.yml` as shown above).

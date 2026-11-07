@@ -1,4 +1,11 @@
-import { expect, type Browser, type BrowserContext, type Page } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
+import {
+  expect,
+  type Browser,
+  type BrowserContext,
+  type Locator,
+  type Page,
+} from '@playwright/test';
 import { SAMPLE_SKILLET_COOKIES, SAMPLE_VANILLA_CAKE } from '@/lib/recipes/samples';
 import type { RecipeInput } from '@/lib/recipes/schemas';
 
@@ -84,4 +91,28 @@ export function captureConsole(page: Page) {
     hydrationMessages: () => messages.filter((m) => HYDRATION.test(m)),
     clear: () => void (messages.length = 0),
   };
+}
+
+/**
+ * Waits until React has hydrated `locator`'s element (React tags hydrated DOM nodes with a
+ * __reactProps$ key). A fill or click before hydration is lost for controlled inputs, so
+ * wait on this instead of on the clock.
+ */
+export async function hydrated(locator: Locator) {
+  await expect
+    .poll(() => locator.evaluate((el) => Object.keys(el).some((k) => k.startsWith('__reactProps'))))
+    .toBe(true);
+}
+
+export async function expectNoAxeViolations(page: Page) {
+  const { violations } = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+    .analyze();
+  expect(
+    violations.map((v) => ({
+      id: v.id,
+      impact: v.impact,
+      nodes: v.nodes.map((n) => n.target.join(' ')),
+    })),
+  ).toEqual([]);
 }

@@ -5,6 +5,7 @@ import { loadConfig } from '../../../docker/browser/src/config';
 import { createSidecar, RenderError, type Renderer } from '../../../docker/browser/src/server';
 import { ImportError, type ImportErrorCode } from './errors';
 import { renderPage, type HeadlessConfig } from './headless-client';
+import { MAX_IMPORT_URL } from './schemas';
 
 // Contract test: the real app client (default http transport) against the real sidecar
 // server (docker/browser/src/server.ts) in-process, with only the Chromium renderer stubbed.
@@ -94,8 +95,16 @@ describe('app headless client against the real sidecar server', () => {
     expect(await code(run('/page', { ...cfg, token: undefined }))).toBe('headless_unavailable');
   });
 
-  it('an over-long URL is rejected by the server body cap (413 -> too_large)', async () => {
-    const long = `https://example.com/${'a'.repeat(2100)}`;
+  it('URL length: 2048 passes end to end, 2049 is refused by the sidecar (400 -> headless_unavailable)', async () => {
+    const mk = (n: number) =>
+      `https://example.com/${'a'.repeat(n - 'https://example.com/'.length)}`;
+    expect(mk(2048).length).toBe(MAX_IMPORT_URL);
+    expect((await renderPage(mk(2048), cfg, deps)).status).toBe(200);
+    expect(await code(renderPage(mk(2049), cfg, deps))).toBe('headless_unavailable');
+  });
+
+  it('a body over the sidecar cap is rejected (413 -> too_large)', async () => {
+    const long = `https://example.com/${'a'.repeat(9000)}`;
     expect(await code(renderPage(long, cfg, deps))).toBe('too_large');
   });
 

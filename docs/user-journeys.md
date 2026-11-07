@@ -43,6 +43,7 @@
 
 **Edge cases**
 - Narrow screen: horizontal scroll with sticky ingredient column; toggle to list view.
+- *As built in v0.4.0:* search results are a list of recipe cards with tags and no cover photos (photos are shown from v0.4.2). **×2** is one of 1/2x, 1x, 2x and Custom; amounts show the preferred unit first with the other in parentheses when known. The unit switch on the recipe page applies to that recipe only and resets on reload; the saved preference is set on the profile page. Scaling does not touch times or temperatures.
 - Scaling yields odd values (e.g., 1.5 eggs): show rounded value with ≈ and tooltip.
 - Ingredient has only one unit system: show only that one.
 - Screen sleeping: use Wake Lock API where available (cook mode).
@@ -74,6 +75,8 @@
 3. Adds a private note ("less sugar next time") and a 5-star rating.
 
 **Edge cases:** no results → suggest clearing filters or importing; typos → prefix match.
+
+*As built in v0.4.0 (slice 4a):* step 1 searches title, ingredient names and notes on ingredients, and tags (recipe notes arrive in v0.4.2). Step 2 is tag filtering only; there is no rating filter until v0.4.2 (`min_rating` is rejected). Step 3 is not available yet. There is no typo tolerance: only prefix matching, and no stemming.
 
 ## Journey 6 — Print and back up (Jan)
 

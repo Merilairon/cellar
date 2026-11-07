@@ -87,9 +87,18 @@ describe('migrations', () => {
       'password_reset',
       'photo',
       'recipe',
+      'recipe_fts',
+      'recipe_fts_config',
+      'recipe_fts_content',
+      'recipe_fts_data',
+      'recipe_fts_defer',
+      'recipe_fts_docsize',
+      'recipe_fts_idx',
+      'recipe_tag',
       'section',
       'session',
       'step',
+      'tag',
       'user',
     ]);
     expect(db.$client.pragma('journal_mode', { simple: true })).toBe('wal');
@@ -104,7 +113,7 @@ describe('migrations', () => {
     const n = db2.$client.prepare('SELECT count(*) AS n FROM __drizzle_migrations').get() as {
       n: number;
     };
-    expect(n.n).toBe(5);
+    expect(n.n).toBe(7);
   });
 
   it('enforces uniqueness, defaults, ULID ids and FK cascade', () => {
