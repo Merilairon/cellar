@@ -78,7 +78,7 @@ Some recipe pages only exist after JavaScript runs, or refuse plain HTTP clients
 - **Cost.** Sidecar image about 1.2 GB on disk (the app image is about 437 MB). Memory on amd64: about 106 MiB idle, about 178 MB after one small render, 195 MB peak; the compose limit is 2 GiB. Heavy real pages and arm64 are not measured. Startup time was not measured.
 - **Security.** Every request Chromium makes goes through a filtering proxy that resolves each host once and refuses private, loopback, link-local and metadata addresses. The sidecar runs as non-root with a read-only root, no volumes, no published ports and Chromium's own sandbox on. It executes untrusted JavaScript, so a Chromium zero-day is the residual risk. Details, the network layout and an optional firewall snippet: [docs/deployment.md](docs/deployment.md).
 - **Unsupported hosts.** Hosts with `user.max_user_namespaces=0` (unprivileged user namespaces disabled) are unsupported. The sidecar exits with an `UNSUPPORTED HOST` message and never runs without its sandbox.
-- **arm64: not verified.** A CI job builds and tests the sidecar and the app's `sharp` under QEMU, but it has not run green yet. Until it does, do not rely on the sidecar or on cover images on arm64 (Raspberry Pi, Home Assistant). Even a green run only proves emulation, not real hardware.
+- **arm64: verified in CI on a native GitHub arm64 runner** (sidecar sandbox and syscall tests, real Chromium render tests, app image, `sharp` re-encode). It is not verified on Raspberry Pi or Home Assistant OS hardware itself; the kernel there must allow unprivileged user namespaces. QEMU emulation cannot run the sandbox and is not used for this.
 - **Upgrade from v0.3.1.** Pull the new code and rebuild; migration `0004` runs automatically at app start and keeps existing data. To upgrade the sidecar image later, rebuild it: `docker compose --profile headless build --no-cache browser`.
 
 ### Error codes
@@ -368,7 +368,7 @@ Deactivated accounts are not reactivated: the command exits with an error for th
 ## Known limitations
 
 - **Import covers only.** Cover images are stored but not displayed in the UI until v0.4.2. The automatic grid mapping is a proposal measured only on hand-written fixtures, works for English only, and there is no drag-and-drop grid editor until v0.4.1 (correct a mapping by editing row numbers). JavaScript-only pages need the optional headless sidecar (v0.3.2, off by default). Microdata-only pages are not read; the microdata extractor moved to v0.4.0 (04a).
-- **Headless import is optional and partly unverified.** arm64 is not verified, hosts with `max_user_namespaces=0` are unsupported, and several checks are listed in [docs/tasks/v0.3.2-carryover.md](docs/tasks/v0.3.2-carryover.md).
+- **Headless import is optional and partly unverified.** arm64 is verified on a GitHub arm64 runner only (not on Pi hardware), hosts with `max_user_namespaces=0` are unsupported, and several checks are listed in [docs/tasks/v0.3.2-carryover.md](docs/tasks/v0.3.2-carryover.md).
 - **Rate limiting is in memory.** Counters reset when the app restarts and are not shared between processes.
 - **Single process only.** Because of the in-memory rate limiter and the single SQLite file, run exactly one app instance.
 - **`TRUSTED_PROXIES` can be spoofed if the app port is reachable.** Any client that can connect directly from a trusted address can forge `X-Forwarded-For` and evade per-IP limits. Behind Caddy, do not publish the app port (do not add `docker-compose.direct.yml` as shown above).
