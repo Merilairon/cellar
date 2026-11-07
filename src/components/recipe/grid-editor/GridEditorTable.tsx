@@ -6,6 +6,7 @@ import { uncoveredRows, type EditorIngredient, type EditorSection } from '@/lib/
 import { buildSectionLayout } from '@/lib/grid/layout';
 import { formatStepParams, type StepT } from '../formatStep';
 import { IngredientCell } from '../IngredientCell';
+import { OPEN_ROW_ACTIONS } from './RowControls';
 import { ScrollRegion } from '../ScrollRegion';
 import type { ApiIngredient } from '../types';
 import {
@@ -121,6 +122,21 @@ export function GridEditorTable({
     if (!el || isTextField(e.target) || e.nativeEvent.isComposing) return;
     const target = targetOf(el.dataset.geTarget ?? '');
     if (!target) return;
+    // Shift+F10 / ContextMenu: Row actions for a row; select and open the panel for a step or
+    // banner (the same as Enter). These buttons are not tab stops (A3).
+    if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey && !e.altKey && !e.ctrlKey)) {
+      e.preventDefault();
+      if (target.kind === 'row')
+        e.currentTarget
+          .querySelector(`[data-ge-rowkey="${CSS.escape(target.key)}"]`)
+          ?.dispatchEvent(new CustomEvent(OPEN_ROW_ACTIONS));
+      else if (target.kind === 'banner') onActivateBanner?.(target);
+      else {
+        if (selectedStepKey !== target.key) onSelectStep(target.key);
+        onActivateStep?.(target.key);
+      }
+      return;
+    }
     if (
       e.altKey ||
       e.shiftKey ||

@@ -6,6 +6,9 @@ import { useTranslations } from 'next-intl';
 import { PHONE_QUERY, useMediaQuery } from '../useViewPreference';
 import { RowSheet } from './RowSheet';
 
+/** Dispatched on a row's controls wrapper by Shift+F10 / ContextMenu on the row target. */
+export const OPEN_ROW_ACTIONS = 'ge-open-row-actions';
+
 export type RowActionId =
   'edit' | 'moveUp' | 'moveDown' | 'addBelow' | 'split' | 'renamePortion' | 'delete';
 
@@ -26,7 +29,9 @@ const iconBtn =
   'inline-flex min-h-[var(--ge-target)] min-w-[var(--ge-target)] items-center justify-center rounded border border-neutral-500 px-2 hover:bg-neutral-100 aria-disabled:opacity-50 dark:hover:bg-neutral-800';
 
 /**
- * Per-row controls (UX spec 3, 7). Move up / Move down are inline only from 900 px up (CSS
+ * Per-row controls (UX spec 3, 7). Move up, Move down and Row actions are `tabIndex=-1`: the
+ * table is one tab stop plus roving (A3). They stay mouse and touch operable; the keyboard
+ * reaches them through Alt+Up / Alt+Down and Shift+F10 / ContextMenu on the row. Move up / Move down are inline only from 900 px up (CSS
  * `display: none` under it removes them from the tab order and the accessibility tree); the
  * Row actions menu button is always there and lists every action, so under 900 px it is the
  * only per-row control. Below 640 px the row sheet (T8) replaces this menu.
@@ -48,10 +53,18 @@ export function RowControls({
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
   const button = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
+  const wrap = useRef<HTMLDivElement>(null);
+  // Opened with Shift+F10 / ContextMenu from the row target: closing returns to that target,
+  // because the Row actions button is not a tab stop and arrow keys only work from a target.
+  const fromKey = useRef(false);
 
   const close = (refocus: boolean) => {
     setOpen(false);
-    if (refocus) button.current?.focus();
+    if (!refocus) return;
+    const target = fromKey.current
+      ? wrap.current?.parentElement?.querySelector<HTMLElement>('[data-ge-target]')
+      : null;
+    (target ?? button.current)?.focus();
   };
 
   const openMenu = () => {
@@ -59,6 +72,18 @@ export function RowControls({
     if (r) setPos({ top: r.bottom, right: Math.max(8, window.innerWidth - r.right) });
     setOpen(true);
   };
+
+  useEffect(() => {
+    const el = wrap.current;
+    if (!el) return;
+    const onOpen = () => {
+      fromKey.current = true;
+      if (isPhone) setSheetOpen(true);
+      else openMenu();
+    };
+    el.addEventListener(OPEN_ROW_ACTIONS, onOpen);
+    return () => el.removeEventListener(OPEN_ROW_ACTIONS, onOpen);
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -110,7 +135,11 @@ export function RowControls({
   };
 
   return (
-    <div data-ge-rowkey={rowKey} className="ge-rowctl flex shrink-0 items-center gap-1 pe-1">
+    <div
+      ref={wrap}
+      data-ge-rowkey={rowKey}
+      className="ge-rowctl flex shrink-0 items-center gap-1 pe-1"
+    >
       {portion && (
         <span className="ge-chip rounded border border-current px-1.5 text-xs font-normal">
           {t('gridEditor.row.portionChip', portion)}
@@ -119,6 +148,7 @@ export function RowControls({
       <button
         type="button"
         className={`${iconBtn} max-[899px]:hidden`}
+        tabIndex={-1}
         data-ge-act="moveUp"
         aria-disabled={isFirst}
         aria-label={t('gridEditor.row.moveUp', { name })}
@@ -129,6 +159,7 @@ export function RowControls({
       <button
         type="button"
         className={`${iconBtn} max-[899px]:hidden`}
+        tabIndex={-1}
         data-ge-act="moveDown"
         aria-disabled={isLast}
         aria-label={t('gridEditor.row.moveDown', { name })}
@@ -143,11 +174,19 @@ export function RowControls({
           menuButtonRef?.(el);
         }}
         className={iconBtn}
+        tabIndex={-1}
+        data-ge-act="menu"
         aria-haspopup={isPhone ? 'dialog' : 'menu'}
         aria-expanded={isPhone ? sheetOpen : open}
         aria-label={t('gridEditor.row.actionsFor', { name })}
         title={t('gridEditor.row.actions')}
-        onClick={() => (isPhone ? setSheetOpen(true) : open ? close(false) : openMenu())}
+        onClick={(e) => {
+          // detail 0 is a keyboard or programmatic click (not the chord path, which sets this itself).
+          if (e.detail > 0) fromKey.current = false;
+          if (isPhone) setSheetOpen(true);
+          else if (open) close(false);
+          else openMenu();
+        }}
       >
         <span aria-hidden="true">…</span>
       </button>

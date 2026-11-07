@@ -16,6 +16,7 @@ import { btn, btnPrimary } from '../styles';
 import type { ApiRecipe } from '../types';
 import { createAnnouncer, type Announcer } from './announcer';
 import { GridEditorTable } from './GridEditorTable';
+import { KeyboardHelp } from './KeyboardHelp';
 import { IssuesPanel } from './IssuesPanel';
 import { initSession, reduceSession, type ActionLabel } from './session';
 import { announceText, historyText } from './text';
@@ -389,6 +390,8 @@ export function GridEditor({ recipe, onClose, onRecipe }: GridEditorProps) {
         </div>
       </div>
 
+      <KeyboardHelp />
+
       {flow.phase === 'network' && (
         <NetworkAlert focusKey={flow.focusTick.n} onRetry={() => void flow.save()} />
       )}
@@ -419,6 +422,7 @@ export function GridEditor({ recipe, onClose, onRecipe }: GridEditorProps) {
                 capMessage={rows.capMessage(si)}
                 promptRename={sections.promptFor(si)}
                 onRename={(v) => sections.rename(si, v)}
+                announce={announce}
                 onDelete={() => sections.remove(si)}
                 onAddRow={() => rows.addRow(si)}
                 extraActions={stepUi.toolbar(si)}

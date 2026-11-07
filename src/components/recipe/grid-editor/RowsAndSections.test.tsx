@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { NextIntlClientProvider } from 'next-intl';
 import { describe, expect, it } from 'vitest';
@@ -47,6 +49,30 @@ describe('ingredient row controls', () => {
     expect(up[0]).toContain('aria-disabled="true"');
     expect(up[1]).not.toContain('aria-disabled="true"');
     expect(html).not.toMatch(/<button[^>]*data-ge-act[^>]*\sdisabled(=|\s|>)/);
+  });
+
+  it('A3: Move up, Move down and Row actions are not tab stops (tabindex -1)', () => {
+    const btns = html.match(/<button[^>]*data-ge-act="(?:moveUp|moveDown|menu)"[^>]*>/g) ?? [];
+    expect(btns).toHaveLength(rowCount(cake) * 3);
+    for (const b of btns) expect(b).toContain('tabindex="-1"');
+  });
+
+  it('A3: exactly one row button per table is a tab stop (roving)', () => {
+    const stops = html.match(/<button[^>]*data-ge-target="row:[^"]*"[^>]*tabindex="0"/g) ?? [];
+    expect(stops).toHaveLength(cake.sections.length);
+  });
+
+  it('has a collapsed Keyboard help disclosure right after the toolbar', () => {
+    expect(html).toMatch(
+      /<button[^>]*aria-expanded="false"[^>]*aria-controls="[^"]+"[^>]*>Keyboard help</,
+    );
+    expect(html).not.toContain('Keyboard shortcuts');
+  });
+
+  it('A4: nothing is an alert at rest and the rename error is not role=alert', () => {
+    expect(html).not.toContain('role="alert"');
+    const src = readFileSync(join(__dirname, 'SectionHeader.tsx'), 'utf8');
+    expect(src).not.toMatch(/role="alert"/);
   });
 
   it('shows no inline edit field until a row is activated', () => {
