@@ -81,6 +81,10 @@ Hosts with `user.max_user_namespaces=0` (or unprivileged user namespaces disable
 
 The base image and `playwright-core` are pinned in `docker/browser/Dockerfile` and `package-lock.json`. To upgrade, change the pinned tag and digest, keep `playwright-core` equal to the app's `@playwright/test`, then `docker compose --profile headless build --no-cache browser`.
 
+## Upgrading to v0.4.0
+
+Rebuild and start (`docker compose ... up -d --build`). Migrations `0005_search_tags` (tags, the `recipe_fts` search index with a backfill of every existing recipe) and `0006_fts_defer` apply automatically at app start; no profile, volume or environment change is needed, and there are no new environment variables. Search needs SQLite FTS5, which is part of the `better-sqlite3` build; the app checks for it at start (`assertFts5Available` in `src/instrumentation.ts`) and refuses to run without it. If you use the headless sidecar, rebuild it as described under "Headless import". **Not verified:** a real v0.3.2 Docker volume upgraded through compose to `0006` (the migrations are tested in unit tests on a rebuilt older database only), and the rebuilt sidecar image; see `docs/tasks/v0.4.0-carryover.md`.
+
 ## Troubleshooting
 
 | Symptom | Cause and fix |
