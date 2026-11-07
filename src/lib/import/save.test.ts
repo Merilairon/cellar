@@ -533,4 +533,29 @@ describe('saveImport cover (T8)', () => {
       status: 422,
     });
   });
+
+  it('fills the missing alternate measure at import save (4 oz butter -> 115 g)', async () => {
+    const id = await start();
+    const body = draft({
+      sections: [
+        {
+          title: null,
+          ingredients: [
+            { name: 'butter', us_qty: 4, us_unit: 'oz', display_primary: 'us' },
+            { name: 'sugar', us_qty: 1, us_unit: 'cup', metric_qty: 190, metric_unit: 'g' },
+          ],
+          steps: [{ kind: 'banner_top', label: 'Fry', detail: 'Hot pan.' }],
+        },
+      ],
+    });
+    const r = await saveImport(db, a, id, body, deps());
+    if (!r.ok) throw new Error(JSON.stringify(r));
+    const [butter, sugar] = getRecipeFull(db, r.id)!.sections[0]!.ingredients;
+    expect([butter!.metricQty, butter!.metricUnit, butter!.displayPrimary]).toEqual([
+      115,
+      'g',
+      'us',
+    ]);
+    expect(sugar!.metricQty).toBe(190);
+  });
 });

@@ -268,4 +268,15 @@ describe('render-time builders never touch the module key counter (hydration)', 
     expect(indexKeys.has(a.key) || indexKeys.has(b.key)).toBe(false);
     expect(indexKeys.has('s0') && a.key.startsWith('k')).toBe(true);
   });
+
+  it('G11: an edited ingredient line is re-parsed without the old stored sides', () => {
+    const stored = {
+      ...buildIngredients('4 oz butter', [])[0]!,
+      metric_qty: 115,
+      metric_unit: 'g',
+    };
+    const edited = buildIngredients('6 oz butter', [stored])[0]!;
+    expect(edited.us_qty).toBe(6);
+    expect(edited.metric_qty).toBeNull();
+  });
 });

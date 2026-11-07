@@ -5,3 +5,4 @@ export * from './round';
 export * from './scale';
 export * from './derive';
 export * from './display';
+export * from './complete';

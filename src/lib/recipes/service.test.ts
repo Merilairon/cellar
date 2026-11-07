@@ -72,9 +72,12 @@ describe('ingredient ranges', () => {
     };
     const made = okRecipe(createRecipeFor(db, owner, body));
     const [honey, flour, salt] = made.sections[0]!.ingredients;
-    expect(honey).toMatchObject({ us_qty: 2, us_qty_max: 3, metric_qty_max: null });
-    expect(flour).toMatchObject({ metric_qty: 100, metric_qty_max: 150, us_qty_max: null });
-    expect(salt).toMatchObject({ metric_qty_max: null, us_qty_max: null });
+    // T7: the missing metric side is derived (honey is weight-measured), both bounds.
+    expect(honey).toMatchObject({ us_qty: 2, us_qty_max: 3, metric_unit: 'g' });
+    expect(honey!.metric_qty_max).toBeGreaterThan(honey!.metric_qty!);
+    expect(flour).toMatchObject({ metric_qty: 100, metric_qty_max: 150, us_unit: 'oz' });
+    // Unitless count: nothing derived.
+    expect(salt).toMatchObject({ metric_qty_max: null, us_qty: null, us_qty_max: null });
     expect(honey!.raw_text).toBe('2-3 tbsp honey');
 
     const upd = updateRecipeFor(db, owner, made.id, { ...body, title: 'Glaze 2' });
@@ -378,6 +381,86 @@ describe('deleteRecipeFor photo cleanup', () => {
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
       fs.rmSync(outside, { force: true });
+    }
+  });
+});
+
+describe('derived alternate measure (T7)', () => {
+  const withIngredients = (ings: Loose[]) => {
+    const r = clone();
+    r.sections = [{ title: null, ingredients: ings, steps: [] }];
+    return r;
+  };
+  const ing = (o: Loose) => ({ display_primary: 'us', ...o });
+
+  it('stores 115 g for 4 oz butter, keeps display_primary, round-trips through the API shape', () => {
+    const { owner } = setup();
+    const created = okRecipe(
+      createRecipeFor(
+        db,
+        owner,
+        withIngredients([ing({ name: 'unsalted butter', us_qty: 4, us_unit: 'oz' })]),
+      ),
+    );
+    const got = okRecipe(getRecipeFor(db, owner, created.id) as never);
+    const i = got.sections[0].ingredients[0];
+    expect([i.metric_qty, i.metric_unit, i.us_qty, i.us_unit, i.display_primary]).toEqual([
+      115,
+      'g',
+      4,
+      'oz',
+      'us',
+    ]);
+  });
+  it('never overwrites an imported metric value (4 oz / 115 g stays 115)', () => {
+    const { owner } = setup();
+    const r = okRecipe(
+      createRecipeFor(
+        db,
+        owner,
+        withIngredients([
+          ing({ name: 'butter', us_qty: 4, us_unit: 'oz', metric_qty: 113, metric_unit: 'g' }),
+        ]),
+      ),
+    );
+    expect(r.sections[0].ingredients[0].metric_qty).toBe(113);
+  });
+  it('replace re-derives after the primary quantity changes and is idempotent', () => {
+    const { owner } = setup();
+    const r = okRecipe(
+      createRecipeFor(
+        db,
+        owner,
+        withIngredients([ing({ name: 'butter', us_qty: 4, us_unit: 'oz' })]),
+      ),
+    );
+    const edit = (q: number) =>
+      okRecipe(
+        updateRecipeFor(
+          db,
+          owner,
+          r.id,
+          withIngredients([ing({ name: 'butter', us_qty: q, us_unit: 'oz' })]),
+        ) as never,
+      ).sections[0].ingredients[0];
+    expect(edit(6).metric_qty).toBe(170);
+    const again = edit(6);
+    expect([again.metric_qty, again.us_qty]).toEqual([170, 6]);
+  });
+  it('leaves counts and unknown units alone', () => {
+    const { owner } = setup();
+    const r = okRecipe(
+      createRecipeFor(
+        db,
+        owner,
+        withIngredients([
+          ing({ name: 'large eggs', us_qty: 2 }),
+          ing({ name: 'garlic', us_qty: 1, us_unit: 'clove' }),
+        ]),
+      ),
+    );
+    for (const i of r.sections[0].ingredients) {
+      expect([i.metric_qty, i.metric_unit]).toEqual([null, null]);
     }
   });
 });

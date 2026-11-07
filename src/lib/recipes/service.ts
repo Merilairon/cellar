@@ -5,7 +5,6 @@ import {
   deleteRecipe,
   getRecipeFull,
   getRecipeRow,
-  listRecipesForUser,
   replaceRecipe,
   setRecipeVisibility,
   RecipeGuardError,
@@ -13,11 +12,13 @@ import {
   type RecipeGuard,
   type RecipeTree,
 } from '@/lib/db/recipes';
+import { searchRecipes, type SearchOptions } from '@/lib/db/search';
 import { TagLimitError, listReadableTags } from '@/lib/db/tags';
 import { listPhotoPathsByRecipe } from '@/lib/db/photos';
 import { removeUploadFiles } from '@/lib/import/uploads';
 import { joinQtyRange } from '@/lib/import/ingredient-parser';
 import { validateRecipeGrid } from '@/lib/grid/validate';
+import { completeMeasures } from '@/lib/units/complete';
 import { canRead, canWrite } from './access';
 import {
   recipeInputSchema,
@@ -67,21 +68,23 @@ export function toTree(input: RecipeInput, viewMode: ViewMode): RecipeTree {
     tags: input.tags,
     sections: input.sections.map((s) => ({
       title: s.title ?? null,
-      ingredients: s.ingredients.map((i) => ({
-        name: i.name,
-        note: i.note ?? null,
-        rawText: i.raw_text ?? composeRawText(i),
-        metricQty: i.metric_qty ?? null,
-        metricQtyMax: i.metric_qty_max ?? null,
-        metricUnit: i.metric_unit ?? null,
-        usQty: i.us_qty ?? null,
-        usQtyMax: i.us_qty_max ?? null,
-        usUnit: i.us_unit ?? null,
-        displayPrimary: i.display_primary,
-        splitGroupId: i.split_group_id ?? null,
-        portionLabel: i.portion_label ?? null,
-        groupLabel: i.group_label ?? null,
-      })),
+      ingredients: s.ingredients.map((i) =>
+        completeMeasures({
+          name: i.name,
+          note: i.note ?? null,
+          rawText: i.raw_text ?? composeRawText(i),
+          metricQty: i.metric_qty ?? null,
+          metricQtyMax: i.metric_qty_max ?? null,
+          metricUnit: i.metric_unit ?? null,
+          usQty: i.us_qty ?? null,
+          usQtyMax: i.us_qty_max ?? null,
+          usUnit: i.us_unit ?? null,
+          displayPrimary: i.display_primary,
+          splitGroupId: i.split_group_id ?? null,
+          portionLabel: i.portion_label ?? null,
+          groupLabel: i.group_label ?? null,
+        }),
+      ),
       steps: s.steps.map((st) => ({
         kind: st.kind,
         label: st.label,
@@ -197,8 +200,8 @@ export function toApiRecipe(r: RecipeFull, canEdit: boolean) {
 }
 export type ApiRecipe = ReturnType<typeof toApiRecipe>;
 
-export function listRecipes(db: Db, actor: Actor) {
-  return listRecipesForUser(db, actor.id).map((r) => ({
+export function listRecipes(db: Db, actor: Actor, query: SearchOptions = {}) {
+  return searchRecipes(db, actor.id, query).map((r) => ({
     id: r.id,
     title: r.title,
     owner_id: r.ownerId,
@@ -206,6 +209,7 @@ export function listRecipes(db: Db, actor: Actor) {
     visibility: r.visibility,
     view_mode: r.viewMode,
     updated_at: r.updatedAt,
+    tags: r.tags,
   }));
 }
 
