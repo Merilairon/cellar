@@ -16,7 +16,7 @@
 | 1 | Clicks **Import** and pastes a URL | Validates URL, shows progress ("Fetching…") | Import dialog |
 | 2 | Waits | Fetches page, finds JSON-LD, parses ingredients/steps, auto-maps grid | Progress indicator |
 | 3 | Sees **review screen** | Editable draft: title, servings, ingredients, grid preview with confidence badge. *Built in v0.3.1 (03b).* | Review grid |
-| 4 | Fixes a span (drags a step's end handle), renames a step label | Live preview updates. *Dragging a handle is a v0.4.1 (04b) feature. In v0.3.1 you fix a span by typing the first and last ingredient row in the step; the preview updates as you type.* | Grid editor |
+| 4 | Fixes a span (drags a step's end handle), renames a step label | Live preview updates. *Dragging a handle is a v0.4.1 (04b) feature, in the grid editor (**Edit grid layout** on the saved recipe; a low-confidence import is saved as a list first, then **Convert to grid**, then fine-tune). In v0.3.1 you fix a span by typing the first and last ingredient row in the step; the preview updates as you type.* | Grid editor |
 | 5 | Adds tags, picks visibility | | Form |
 | 6 | Clicks **Save** | Recipe saved, opens grid view | Recipe page |
 
