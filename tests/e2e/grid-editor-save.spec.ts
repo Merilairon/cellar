@@ -271,14 +271,14 @@ test('m1/m2: while a save is in flight Cancel and Discard are inert; two quick B
   await expect(page.getByRole('button', { name: /^Saving/ })).toBeVisible();
   const cancel = page.getByRole('button', { name: 'Cancel', exact: true });
   await expect(cancel).toHaveAttribute('aria-disabled', 'true');
-  await cancel.click();
+  await cancel.click({ force: true });
   await expect(confirm).toHaveCount(0);
   // Back during the save asks, but Discard cannot drop the edits that are being saved.
   await page.goBack().catch(() => null);
   await expect(confirm).toBeVisible();
   const discard = page.getByRole('button', { name: 'Discard changes' });
   await expect(discard).toHaveAttribute('aria-disabled', 'true');
-  await discard.click();
+  await discard.click({ force: true });
   await expect(page.getByRole('heading', { name: 'Grid editor' })).toBeVisible();
   expect(page.url()).toBe(url);
   release();
