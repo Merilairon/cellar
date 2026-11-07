@@ -70,12 +70,15 @@ describe('completeMeasures', () => {
     ['1 tbsp sugar', us('sugar', 1, 'tbsp'), 12.5],
     ['3 tbsp sugar', us('sugar', 3, 'tbsp'), 37.5],
     ['2 tbsp honey', us('honey', 2, 'tbsp'), 42],
-  ])('%s keeps the exact derived value when the grid would move it by more than 2%%', (_n, ing, g) => {
-    const r = completeMeasures(ing);
-    expect(r.metricUnit).toBe('g');
-    expect(r.metricQty).toBeCloseTo(g, 1);
-    expect(Math.abs(r.metricQty! - g) / g).toBeLessThanOrEqual(0.005);
-  });
+  ])(
+    '%s keeps the exact derived value when the grid would move it by more than 2%%',
+    (_n, ing, g) => {
+      const r = completeMeasures(ing);
+      expect(r.metricUnit).toBe('g');
+      expect(r.metricQty).toBeCloseTo(g, 1);
+      expect(Math.abs(r.metricQty! - g) / g).toBeLessThanOrEqual(0.005);
+    },
+  );
   it('stores at most one decimal on the exact path', () => {
     const q = completeMeasures(us('sugar', 1, 'tbsp')).metricQty!;
     expect(q).toBe(Math.round(q * 10) / 10);
