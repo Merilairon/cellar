@@ -473,5 +473,96 @@
         "limit": "A recipe can have at most 20 tags."
       }
     }
+  },
+  "gridEditor": {
+    "heading": "Grid editor",
+    "scope": "Editing the grid. Title, times and tags are changed with Edit.",
+    "asWritten": "Showing quantities as written (1x, original units).",
+    "loading": "Loading the grid editor...",
+    "entry": {
+      "edit": "Edit grid",
+      "fineTune": "Fine-tune in the editor",
+      "savedAsGrid": "Saved as a grid."
+    },
+    "toolbar": {
+      "label": "Grid editor actions",
+      "undo": "Undo",
+      "redo": "Redo",
+      "undoWith": "Undo: {action}",
+      "redoWith": "Redo: {action}",
+      "save": "Save changes",
+      "saveDisabledClean": "No changes to save.",
+      "saveDisabledErrors": "{count, plural, one {Fix the # problem first.} other {Fix the # problems first.}}",
+      "cancel": "Cancel",
+      "done": "Done",
+      "dirty": "Unsaved changes",
+      "clean": "All changes saved",
+      "problems": "{count, plural, one {# problem} other {# problems}}",
+      "warnings": "{count, plural, one {# warning} other {# warnings}}"
+    },
+    "leave": {
+      "confirm": "Discard your unsaved changes?",
+      "keep": "Keep editing",
+      "discard": "Discard changes"
+    },
+    "row": {
+      "prefix": "Row {n} of {total}: ",
+      "uncovered": "Not used by any step."
+    },
+    "step": {
+      "prefix": "Step {n}: "
+    },
+    "banner": {
+      "empty": "(empty banner)"
+    },
+    "history": {
+      "rowMove": "moved a row",
+      "rowAdd": "added a row",
+      "rowDelete": "deleted a row",
+      "rowSplit": "split a row",
+      "rowEdit": "edited a row",
+      "stepAdd": "added a step",
+      "stepDelete": "deleted a step",
+      "stepMove": "moved a step",
+      "stepResize": "changed the rows of a step",
+      "stepConvert": "converted a step",
+      "stepEdit": "edited a step",
+      "bannerAdd": "added a banner",
+      "sectionAdd": "added a section",
+      "sectionRename": "renamed a section",
+      "sectionDelete": "deleted a section",
+      "sectionMove": "moved a section"
+    },
+    "issue": {
+      "title": "Problems and warnings",
+      "none": "No problems found.",
+      "problem": "Problem",
+      "warning": "Warning",
+      "goTo": "Go to",
+      "row_uncovered": "Not used by any step: {names}.",
+      "positions_not_contiguous": "The order of rows or steps looks wrong. Undo your last change or reload the editor.",
+      "banner_has_span": "A banner cannot have a row range.",
+      "span_required_for_grid": "{label} needs a first and last row.",
+      "span_incomplete": "{label} needs both a first and a last row.",
+      "row_order": "{label}: the last row cannot be before the first row.",
+      "row_out_of_range": "{label} uses a row that does not exist.",
+      "no_rows": "Add ingredients before giving {label} a row range.",
+      "split_group_cross_section": "A split ingredient must stay in one section.",
+      "empty_section": "{title} has no ingredients.",
+      "name_empty": "An ingredient needs a name.",
+      "label_empty": "A step needs a label.",
+      "banner_empty": "A banner needs text.",
+      "unknown": "The editor found a problem it cannot describe ({code})."
+    },
+    "announce": {
+      "undone": "Undone: {action}.",
+      "undoneGeneric": "Undone.",
+      "redone": "Redone: {action}.",
+      "redoneGeneric": "Redone.",
+      "nothingToUndo": "Nothing to undo.",
+      "nothingToRedo": "Nothing to redo.",
+      "uncoveredNow": "Not used by any step: {names}.",
+      "allCovered": "All ingredients are used by a step."
+    }
   }
 }

@@ -56,7 +56,10 @@ async function open(
   });
   const page = await ctx.newPage();
   await page.goto(`/recipes/${recipeId}`);
-  await expect(page.getByRole('button', { name: 'Grid' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: 'Grid', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
   await page.evaluate(() => document.fonts.ready);
   return { page, close: () => ctx.close() };
 }

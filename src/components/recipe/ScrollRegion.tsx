@@ -10,10 +10,16 @@ import { useTranslations } from 'next-intl';
 export function ScrollRegion({
   label,
   stepCount,
+  focusable = true,
   children,
 }: {
   label: string;
   stepCount: number;
+  /**
+   * The read view makes the scroller itself a tab stop. The grid editor passes false: its
+   * roving cell is the table's single tab stop (UX spec 14.2) and keeps the region operable.
+   */
+  focusable?: boolean;
   children: React.ReactNode;
 }) {
   const t = useTranslations();
@@ -56,7 +62,7 @@ export function ScrollRegion({
         ref={ref}
         className="rg-scroller"
         role="region"
-        tabIndex={0}
+        tabIndex={focusable ? 0 : undefined}
         onFocus={revealFocused}
         aria-label={label}
         aria-describedby={more ? hintId : undefined}

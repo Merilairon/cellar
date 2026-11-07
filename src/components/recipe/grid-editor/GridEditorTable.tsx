@@ -1,0 +1,266 @@
+'use client';
+
+import { useState } from 'react';
+import { useTranslations } from 'next-intl';
+import { uncoveredRows, type EditorIngredient, type EditorSection } from '@/lib/grid/editor';
+import { buildSectionLayout } from '@/lib/grid/layout';
+import { formatStepParams, type StepT } from '../formatStep';
+import { IngredientCell } from '../IngredientCell';
+import { ScrollRegion } from '../ScrollRegion';
+import type { ApiIngredient } from '../types';
+import {
+  bannerId,
+  defaultTarget,
+  navigate,
+  NAV_KEYS,
+  rowId,
+  stepId,
+  targetsFor,
+  type NavKey,
+  type RovingTarget,
+} from './roving';
+
+export type TableTarget = RovingTarget;
+
+export type GridEditorTableProps = {
+  section: EditorSection;
+  /** Visible heading text of the section, or the recipe title for a single untitled section. */
+  name: string;
+  selectedStepKey: string | null;
+  onSelectStep: (key: string | null) => void;
+  /** PageDown / PageUp: the parent focuses the neighbouring section's table. */
+  onSectionJump: (dir: 1 | -1) => void;
+  /**
+   * SEAM T5 to T7: a chord (Alt or Shift or Meta held) on a roving target. Row moves,
+   * span resizing, step moves and deletes plug in here. Return true when handled.
+   */
+  onChord?: (e: React.KeyboardEvent, target: TableTarget) => boolean;
+  /** SEAM T5: Enter / Space / click on an ingredient row (inline text edit). */
+  onActivateRow?: (target: TableTarget) => void;
+  /** SEAM T6: Enter / Space / click on a banner (banner panel). */
+  onActivateBanner?: (target: TableTarget) => void;
+};
+
+const isTextField = (el: EventTarget | null) =>
+  el instanceof HTMLElement &&
+  (el.matches('input, textarea, select') || el.isContentEditable === true);
+
+/** Display model for IngredientCell: the stored primary measure, no scaling (F3). */
+export function toCellIngredient(i: EditorIngredient, position: number): ApiIngredient {
+  return {
+    id: i.key,
+    position,
+    name: i.name,
+    note: i.note,
+    raw_text: i.raw_text ?? i.name,
+    metric_qty: i.metric_qty,
+    metric_qty_max: i.metric_qty_max,
+    metric_unit: i.metric_unit,
+    us_qty: i.us_qty,
+    us_qty_max: i.us_qty_max,
+    us_unit: i.us_unit,
+    display_primary: i.display_primary,
+    split_group_id: i.split_group,
+    portion_label: i.portion_label,
+    group_label: i.group_label,
+  };
+}
+
+/**
+ * Edit-mode table for one section: a real table with the read view's structure (same
+ * `buildSectionLayout`, classes, scope attributes and caption) plus one roving tab stop.
+ * Props in, markup out; all edits go through the parent's reducer (G10).
+ */
+export function GridEditorTable({
+  section,
+  name,
+  selectedStepKey,
+  onSelectStep,
+  onSectionJump,
+  onChord,
+  onActivateRow,
+  onActivateBanner,
+}: GridEditorTableProps) {
+  const t = useTranslations();
+  const stepT: StepT = (key, values) => t(key, values);
+  const [remembered, setRemembered] = useState<string | null>(null);
+
+  const rows = section.ingredients;
+  const layout = buildSectionLayout(rows.length, section.steps);
+  const targets = targetsFor(section);
+  const active = targets.some((x) => x.id === remembered) ? remembered : defaultTarget(targets);
+  const uncovered = new Set(uncoveredRows(section.steps, rows.length));
+  const selected = layout.columns.find((c) => c.step.key === selectedStepKey) ?? null;
+  const colSpan = layout.columns.length + 1;
+  const tab = (id: string) => (id === active ? 0 : -1);
+  const targetOf = (id: string) => targets.find((x) => x.id === id);
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLTableElement>) => {
+    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-ge-target]');
+    if (!el || isTextField(e.target) || e.nativeEvent.isComposing) return;
+    const target = targetOf(el.dataset.geTarget ?? '');
+    if (!target) return;
+    if (e.altKey || e.shiftKey || e.metaKey) {
+      onChord?.(e, target);
+      return;
+    }
+    if (!NAV_KEYS.includes(e.key)) return;
+    e.preventDefault();
+    const res = navigate(targets, target.id, e.key as NavKey, e.ctrlKey);
+    if (!res) return;
+    if (res.type === 'section') {
+      onSectionJump(res.dir);
+      return;
+    }
+    setRemembered(res.id);
+    const next = Array.from(e.currentTarget.querySelectorAll<HTMLElement>('[data-ge-target]')).find(
+      (n) => n.dataset.geTarget === res.id,
+    );
+    next?.focus();
+  };
+
+  const banner = (s: EditorSection['steps'][number]) => {
+    const params = formatStepParams(s, stepT);
+    const id = bannerId(s.key);
+    return (
+      <tr key={s.key}>
+        <td colSpan={colSpan} className="rg-banner">
+          <div className="rg-bn">
+            <button
+              type="button"
+              className="ge-target ge-bannerbtn"
+              data-ge-target={id}
+              tabIndex={tab(id)}
+              onClick={() => {
+                const tg = targetOf(id);
+                if (tg) onActivateBanner?.(tg);
+              }}
+            >
+              {s.detail || s.label || (
+                <span className="ge-placeholder">{t('gridEditor.banner.empty')}</span>
+              )}
+              {params && <span className="rg-parinline"> {params}</span>}
+            </button>
+          </div>
+        </td>
+      </tr>
+    );
+  };
+
+  return (
+    <div className="ge-region">
+      <ScrollRegion
+        label={t('recipe.grid.region', { title: name })}
+        stepCount={layout.columns.length}
+        focusable={false}
+      >
+        <table
+          className="rg-table ge-table"
+          data-ge-table={section.key}
+          onKeyDown={onKeyDown}
+          onFocus={(e) => {
+            const id = (e.target as HTMLElement).closest<HTMLElement>('[data-ge-target]')?.dataset
+              .geTarget;
+            if (id && id !== remembered) setRemembered(id);
+          }}
+        >
+          <caption className="sr-only">{t('recipe.grid.caption', { title: name })}</caption>
+          <thead>
+            <tr>
+              <th scope="col">{t('recipe.grid.ingredientsHeader')}</th>
+              {layout.columns.map((c) => (
+                <th key={c.step.key} scope="col">
+                  {t('recipe.grid.stepHeader', { n: c.columnIndex + 1, label: c.step.label })}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {layout.bannersTop.map(banner)}
+            {rows.map((ing, r) => {
+              const id = rowId(ing.key);
+              const covered = !!selected && selected.rowStart <= r && r <= selected.rowEnd;
+              const gap = uncovered.has(r);
+              return (
+                <tr key={ing.key}>
+                  <th
+                    scope="row"
+                    className="rg-ing ge-ing"
+                    data-covered={covered || undefined}
+                    data-uncovered={gap || undefined}
+                  >
+                    <button
+                      type="button"
+                      className="ge-target ge-rowbtn"
+                      data-ge-target={id}
+                      tabIndex={tab(id)}
+                      onClick={() => {
+                        const tg = targetOf(id);
+                        if (tg) onActivateRow?.(tg);
+                      }}
+                    >
+                      <span className="sr-only">
+                        {t('gridEditor.row.prefix', { n: r + 1, total: rows.length })}
+                      </span>
+                      <IngredientCell ingredient={toCellIngredient(ing, r)} />
+                      {gap && (
+                        <>
+                          <span className="ge-bang" aria-hidden="true">
+                            !
+                          </span>
+                          <span className="sr-only"> {t('gridEditor.row.uncovered')}</span>
+                        </>
+                      )}
+                    </button>
+                  </th>
+                  {layout.rows[r].map((cell) => {
+                    if (cell.type === 'empty')
+                      return <td key={`e${cell.columnIndex}`} className="rg-empty" />;
+                    const c = cell.column;
+                    const step = c.step;
+                    const sid = stepId(step.key);
+                    const open = step.key === selectedStepKey;
+                    const params = formatStepParams(step, stepT);
+                    return (
+                      <td
+                        key={step.key}
+                        rowSpan={c.rowSpan}
+                        className="rg-step ge-step"
+                        data-selected={open}
+                        onClick={() => onSelectStep(open ? null : step.key)}
+                      >
+                        <button
+                          type="button"
+                          className="rg-stepbtn ge-target"
+                          data-ge-target={sid}
+                          data-step-key={step.key}
+                          tabIndex={tab(sid)}
+                          aria-pressed={open}
+                        >
+                          <span className="sr-only">
+                            {t('gridEditor.step.prefix', { n: c.columnIndex + 1 })}
+                          </span>
+                          <span className="rg-lbl">{step.label}</span>
+                          {params && <span className="rg-par">{params}</span>}
+                          <span className="sr-only">
+                            {c.rowStart === c.rowEnd
+                              ? t('recipe.grid.stepRow', { name: rows[c.rowStart]?.name ?? '' })
+                              : t('recipe.grid.stepRows', {
+                                  from: rows[c.rowStart]?.name ?? '',
+                                  to: rows[c.rowEnd]?.name ?? '',
+                                })}
+                          </span>
+                        </button>
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+            {layout.bannersBottom.map(banner)}
+          </tbody>
+        </table>
+      </ScrollRegion>
+    </div>
+  );
+}

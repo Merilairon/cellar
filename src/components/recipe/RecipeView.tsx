@@ -1,6 +1,7 @@
 'use client';
 
 import { useId, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { useTranslations } from 'next-intl';
 import type { UnitSystem } from '@/lib/units/units';
 import type { ViewMode } from '@/lib/recipes/schemas';
@@ -11,16 +12,37 @@ import { RecipeGrid } from './RecipeGrid';
 import { RecipeList } from './RecipeList';
 import { StepSheet } from './StepDetail';
 import type { ApiRecipe } from './types';
+import { btn, btnPrimary } from './styles';
 import { PHONE_QUERY, useMediaQuery, useViewPreference } from './useViewPreference';
+
+function EditorLoading() {
+  const t = useTranslations();
+  // Keep focus on something real while the chunk loads; the editor moves it to its heading.
+  return (
+    <p ref={(el) => el?.focus()} tabIndex={-1} role="status">
+      {t('gridEditor.loading')}
+    </p>
+  );
+}
+
+// The editor is only needed after the owner asks for it, so it stays out of the page's
+// initial bundle. Client-only: it never renders on the server.
+const GridEditor = dynamic(() => import('./grid-editor/GridEditor').then((m) => m.GridEditor), {
+  ssr: false,
+  loading: () => <EditorLoading />,
+});
 
 export function RecipeView({
   recipe,
   userId,
   unitPref = 'metric',
+  actions,
 }: {
   recipe: ApiRecipe;
   userId: string;
   unitPref?: UnitSystem;
+  /** The page's action row (Edit, Delete, sharing, Save a copy); hidden while editing the grid. */
+  actions?: React.ReactNode;
 }) {
   const t = useTranslations();
   const root = useRef<HTMLDivElement>(null);
@@ -29,6 +51,9 @@ export function RecipeView({
   const isPhone = useMediaQuery(PHONE_QUERY);
   const scale = useScale(unitPref, recipe.servings);
   const [selected, setSelected] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [justConverted, setJustConverted] = useState(false);
+  const entry = useRef<HTMLButtonElement>(null);
 
   const gridPossible = recipe.view_mode === 'grid';
   const mode = effectiveViewMode({
@@ -55,6 +80,18 @@ export function RecipeView({
     );
   };
 
+  const canEditGrid = recipe.can_edit && gridPossible;
+  const openEditor = () => {
+    setSelected(null);
+    setJustConverted(false);
+    setEditing(true);
+  };
+  const closeEditor = () => {
+    setEditing(false);
+    // Back to the read view: focus returns to the button that opened the editor.
+    requestAnimationFrame(() => entry.current?.focus());
+  };
+
   const toggle = (m: ViewMode, label: string) => (
     <button
       type="button"
@@ -68,8 +105,35 @@ export function RecipeView({
     </button>
   );
 
+  // Edit mode replaces the read view and hides the scale, unit and view controls: the editor
+  // shows quantities as stored, never a scaled or converted number (UX spec F3).
+  if (editing)
+    return (
+      <div ref={root}>
+        <GridEditor recipe={recipe} onClose={closeEditor} />
+      </div>
+    );
+
   return (
     <div ref={root}>
+      {actions !== undefined && (
+        <div className="my-4 flex flex-wrap items-center gap-2">
+          {actions}
+          {canEditGrid && (
+            <button ref={entry} type="button" className={btn} onClick={openEditor}>
+              {t('gridEditor.entry.edit')}
+            </button>
+          )}
+        </div>
+      )}
+      {justConverted && canEditGrid && (
+        <p role="status" className="mb-4 flex flex-wrap items-center gap-2">
+          {t('gridEditor.entry.savedAsGrid')}
+          <button type="button" className={btnPrimary} onClick={openEditor}>
+            {t('gridEditor.entry.fineTune')}
+          </button>
+        </p>
+      )}
       <ScaleControls scale={scale} servings={recipe.servings} />
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div
@@ -90,7 +154,13 @@ export function RecipeView({
       </div>
 
       {mode === 'list' && !gridPossible && recipe.can_edit && (
-        <ConvertToGrid recipe={recipe} onConverted={() => choose('grid')} />
+        <ConvertToGrid
+          recipe={recipe}
+          onConverted={() => {
+            choose('grid');
+            setJustConverted(true);
+          }}
+        />
       )}
 
       {mode === 'grid' ? (

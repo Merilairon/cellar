@@ -313,3 +313,250 @@ dialog.rg-sheet::backdrop {
     overflow: visible;
   }
 }
+
+/* ---------- Grid editor (v0.4.1, docs/tasks/v0.4.1-ux-spec.md section 17) ---------- */
+:root {
+  --ge-warn-ink: #7a4e00;
+  --ge-warn-bg: #fff4d6;
+  --ge-warn-line: #9a6500;
+  --ge-error-ink: #a31b12;
+  --ge-error-bg: #fdecea;
+  --ge-cover: #d3ebc4;
+  --ge-handle: #2f6b1a;
+  --ge-handle-edge: #ffffff;
+  --ge-toast-bg: #1f2a1f;
+  --ge-toast-ink: #ffffff;
+  --ge-target: 36px;
+}
+@media (pointer: coarse) {
+  :root {
+    --ge-target: 44px;
+  }
+}
+:root[data-theme='dark'] {
+  --ge-warn-ink: #f2c46d;
+  --ge-warn-bg: #3a2d0e;
+  --ge-warn-line: #d9a43a;
+  --ge-error-ink: #ff9b8f;
+  --ge-error-bg: #3d1714;
+  --ge-cover: #385334;
+  --ge-handle: #9fd97c;
+  --ge-handle-edge: #10160f;
+  --ge-toast-bg: #e8efe6;
+  --ge-toast-ink: #1f2a1f;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --ge-warn-ink: #f2c46d;
+    --ge-warn-bg: #3a2d0e;
+    --ge-warn-line: #d9a43a;
+    --ge-error-ink: #ff9b8f;
+    --ge-error-bg: #3d1714;
+    --ge-cover: #385334;
+    --ge-handle: #9fd97c;
+    --ge-handle-edge: #10160f;
+    --ge-toast-bg: #e8efe6;
+    --ge-toast-ink: #1f2a1f;
+  }
+}
+
+.ge-root {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ge-h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+.ge-h2:focus,
+.ge-h3:focus {
+  outline: 3px solid var(--rg-focus);
+  outline-offset: 2px;
+}
+.ge-h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--rg-accent);
+}
+.ge-muted {
+  font-size: 0.875rem;
+  color: var(--rg-muted);
+}
+.ge-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 0;
+  background: var(--rg-surface);
+  color: var(--rg-ink);
+  border-bottom: 1px solid var(--rg-line);
+}
+.ge-toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.ge-toolbar-end {
+  margin-inline-start: auto;
+}
+.ge-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.ge-dirty {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.875rem;
+}
+.ge-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ge-warn-line);
+}
+.ge-linkbtn {
+  min-height: var(--ge-target);
+  padding: 0 8px;
+  text-decoration: underline;
+  color: inherit;
+}
+.ge-linkbtn:focus-visible,
+.ge-target:focus-visible {
+  outline: 3px solid var(--rg-focus);
+  outline-offset: 2px;
+}
+.ge-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.ge-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ge-target {
+  display: block;
+  width: 100%;
+  min-height: var(--ge-target);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.ge-target.rg-stepbtn {
+  text-align: center;
+}
+.ge-target.rg-stepbtn:focus-visible,
+.ge-rowbtn:focus-visible,
+.ge-bannerbtn:focus-visible {
+  outline-offset: -4px;
+}
+.ge-bannerbtn {
+  text-align: center;
+}
+.ge-placeholder {
+  color: var(--rg-muted);
+  font-style: italic;
+}
+.ge-table th.rg-ing {
+  padding: 0;
+}
+.ge-table th.ge-ing .ge-rowbtn {
+  padding: 8px 10px;
+}
+.ge-table th.ge-ing[data-covered='true'] {
+  background: var(--ge-cover);
+  box-shadow:
+    inset 6px 0 0 var(--rg-accent),
+    1px 0 0 var(--rg-line);
+  font-weight: 600;
+}
+.ge-table th.ge-ing[data-covered='true'] .rg-note,
+.ge-table th.ge-ing[data-covered='true'] .rg-portion {
+  /* The muted ink is too faint on the covered tint in dark mode (axe, AA). */
+  color: var(--rg-ink);
+}
+.ge-table th.ge-ing[data-uncovered='true'] {
+  outline: 2px dashed var(--ge-warn-line);
+  outline-offset: -4px;
+}
+.ge-bang {
+  display: inline-block;
+  margin-inline-start: 6px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--ge-warn-bg);
+  color: var(--ge-warn-ink);
+  font-weight: 700;
+}
+.ge-warnline,
+.ge-issues li[data-kind='warning'] {
+  background: var(--ge-warn-bg);
+  color: var(--ge-warn-ink);
+}
+.ge-issues li[data-kind='error'] {
+  background: var(--ge-error-bg);
+  color: var(--ge-error-ink);
+}
+.ge-warnline {
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+.ge-issues {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ge-issuelist {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ge-issuelist li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 4px;
+}
+.ge-issuebadge {
+  font-weight: 700;
+}
+/* Edit mode widens the desktop ingredient column (the read view keeps 300 px). */
+@container (min-width: 900px) {
+  .ge-table th.rg-ing {
+    width: 340px;
+    min-width: 340px;
+    max-width: 340px;
+  }
+  .ge-region .rg-scroller {
+    scroll-padding-inline-start: 348px;
+  }
+}
+@media (pointer: coarse) {
+  .ge-table th.ge-ing .ge-rowbtn {
+    min-height: 56px;
+  }
+}
+@media print {
+  .ge-root {
+    display: none;
+  }
+}
