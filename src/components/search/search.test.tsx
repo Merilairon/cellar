@@ -9,6 +9,7 @@ import {
   listHref,
   queryToApply,
   SEARCH_DEBOUNCE_MS,
+  syncFromUrl,
   toggleTagHref,
 } from './search-url';
 import { SearchBox } from './SearchBox';
@@ -49,6 +50,40 @@ describe('search-url', () => {
     expect(firstParam(['a', 'b'])).toBe('a');
     expect(firstParam('  ')).toBeUndefined();
     expect(firstParam(undefined)).toBeUndefined();
+  });
+});
+
+describe('syncFromUrl', () => {
+  const st = (seenUrlQ: string, value: string, pending: string[] = []) => ({
+    seenUrlQ,
+    value,
+    pending,
+  });
+  it('typed-during-navigation: ab is requested, c is typed, the ab URL lands, abc is kept', () => {
+    // user typed "ab", debounce fired (pending ["ab"]), then typed "c" while the server renders
+    const landed = syncFromUrl(st('', 'abc', ['ab']), 'ab');
+    expect(landed.value).toBe('abc');
+    expect(landed.seenUrlQ).toBe('ab');
+    expect(landed.pending).toEqual([]);
+  });
+  it('an older echo does not clobber when a newer request is still in flight', () => {
+    const a = syncFromUrl(st('', 'abcd', ['ab', 'abc']), 'ab');
+    expect(a.value).toBe('abcd');
+    expect(a.pending).toEqual(['abc']);
+    const b = syncFromUrl(a, 'abc');
+    expect(b.value).toBe('abcd');
+    expect(b.pending).toEqual([]);
+  });
+  it('back/forward (a URL we did not request) is followed', () => {
+    expect(syncFromUrl(st('ab', 'abc'), 'x')).toEqual(st('x', 'x'));
+    expect(syncFromUrl(st('ab', 'ab', ['abc']), '')).toEqual(st('', ''));
+  });
+  it('an unchanged URL changes nothing', () => {
+    const s = st('ab', 'abc', ['abc']);
+    expect(syncFromUrl(s, 'ab')).toBe(s);
+  });
+  it('clearing (Escape) lands on the empty URL and keeps the empty input', () => {
+    expect(syncFromUrl(st('ab', '', ['']), '')).toEqual(st('', '', []));
   });
 });
 

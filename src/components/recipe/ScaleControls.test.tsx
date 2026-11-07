@@ -8,6 +8,8 @@ import { IngredientCell, type QuantityDisplay } from './IngredientCell';
 import { RecipeGrid } from './RecipeGrid';
 import { RecipeList } from './RecipeList';
 import { parseCustomAmount, ScaleControls, type ScaleState } from './ScaleControls';
+import { customFactorFor, enterCustom, summaryKind, typeCustom } from './scale-input';
+import { MAX_FACTOR, MIN_FACTOR } from '@/lib/units/scale';
 
 const wrap = (node: React.ReactNode) =>
   renderToStaticMarkup(
@@ -109,6 +111,14 @@ describe('parseCustomAmount', () => {
     ['abc', null],
     ['1e3', null],
     ['1/2', null],
+    ['1,000', null],
+    ['12,345', null],
+    ['1,000.5', null],
+    ['1.000,5', null],
+    ['1,2,3', null],
+    ['0,125', 0.125],
+    ['1,50', 1.5],
+    ['1.000', 1],
   ])('%j -> %s', (s, n) => expect(parseCustomAmount(s)).toBe(n));
 });
 
@@ -154,5 +164,77 @@ describe('ScaleControls markup', () => {
     );
     expect(html).toContain('role="alert"');
     expect(html).toContain('aria-invalid="true"');
+  });
+});
+
+describe('custom scale state', () => {
+  it('opening Custom keeps the factor on screen and empties the field', () => {
+    expect(enterCustom(2)).toEqual({ text: '', factor: 2 });
+  });
+  it('a valid value is applied, an invalid one keeps the last applied factor', () => {
+    let st = enterCustom(2);
+    st = typeCustom(st, '3', null);
+    expect(st).toEqual({ text: '3', factor: 3 });
+    st = typeCustom(st, 'abc', null);
+    expect(st).toEqual({ text: 'abc', factor: 3 });
+    st = typeCustom(st, '1,000', null);
+    expect(st.factor).toBe(3);
+  });
+  it('servings target divides by the recipe servings and enforces both bounds', () => {
+    expect(customFactorFor('6', 4)).toBe(1.5);
+    expect(customFactorFor('1000', null)).toBeNull();
+    expect(customFactorFor('0.001', null)).toBeNull();
+    expect(customFactorFor(String(MAX_FACTOR), null)).toBe(MAX_FACTOR);
+  });
+  it('the error message names the bounds it enforces', () => {
+    expect(MIN_FACTOR).toBe(1 / 100);
+    expect(messages.recipe.scale.invalid).toContain('1/100');
+    expect(messages.recipe.scale.invalid).toContain('{max}');
+  });
+  it('picks the live-region sentence', () => {
+    expect(summaryKind({ factor: 1, customError: false, servings: 4 })).toBe('original');
+    expect(summaryKind({ factor: 2, customError: false, servings: 4 })).toBe('servings');
+    expect(summaryKind({ factor: 2, customError: false, servings: null })).toBe('factor');
+    expect(summaryKind({ factor: 2, customError: true, servings: 4 })).toBe('invalid');
+  });
+  it('announces the unit system after a flip and an invalid value in the live region', () => {
+    const flipped = wrap(
+      <ScaleControls
+        scale={{
+          display: { pref: 'metric', scale: 1, toggle: 'us' },
+          factor: 1,
+          preset: 'one',
+          customText: '',
+          customError: false,
+          primary: 'us',
+          changed: true,
+          choose: () => {},
+          setCustom: () => {},
+          flip: () => {},
+          reset: () => {},
+        }}
+        servings={4}
+      />,
+    );
+    expect(text(flipped)).toContain('Showing the original amounts. Units: US.');
+    const bad = wrap(
+      <ScaleControls
+        scale={{
+          display: { pref: 'metric', scale: 2, toggle: null },
+          factor: 2,
+          preset: 'custom',
+          customText: 'x',
+          customError: true,
+          primary: 'metric',
+          changed: true,
+          choose: () => {},
+          setCustom: () => {},
+          flip: () => {},
+          reset: () => {},
+        }}
+        servings={null}
+      />,
+    );
+    expect(text(bad)).toContain('Not a valid amount. Amounts stay at 2x.');
   });
 });

@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { deriveAlternate } from './derive';
+import { scaleMeasure } from './scale';
 import { completeMeasures, type IngredientSides } from './complete';
 
 const base: IngredientSides = {
@@ -63,5 +65,49 @@ describe('completeMeasures', () => {
   it('is idempotent', () => {
     const once = completeMeasures(us('butter', 4, 'oz'));
     expect(completeMeasures(once)).toBe(once);
+  });
+  it.each([
+    ['1 tbsp sugar', us('sugar', 1, 'tbsp'), 12.5],
+    ['3 tbsp sugar', us('sugar', 3, 'tbsp'), 37.5],
+    ['2 tbsp honey', us('honey', 2, 'tbsp'), 42],
+  ])('%s keeps the exact derived value when the grid would move it by more than 2%%', (_n, ing, g) => {
+    const r = completeMeasures(ing);
+    expect(r.metricUnit).toBe('g');
+    expect(r.metricQty).toBeCloseTo(g, 1);
+    expect(Math.abs(r.metricQty! - g) / g).toBeLessThanOrEqual(0.005);
+  });
+  it('stores at most one decimal on the exact path', () => {
+    const q = completeMeasures(us('sugar', 1, 'tbsp')).metricQty!;
+    expect(q).toBe(Math.round(q * 10) / 10);
+  });
+  it('rounds to the friendly grid only when the change is within 2%', () => {
+    for (const [name, qty, unit] of [
+      ['sugar', 1, 'cup'],
+      ['flour', 1, 'cup'],
+      ['sugar', 1, 'tbsp'],
+      ['sugar', 3, 'tbsp'],
+      ['honey', 2, 'tbsp'],
+      ['butter', 4, 'oz'],
+      ['butter', 2, 'tbsp'],
+      ['flour', 4, 'cup'],
+      ['sugar', 1, 'tsp'],
+    ] as const) {
+      const r = completeMeasures(us(name, qty, unit));
+      const exact = deriveAlternate({ qty, unit }, 'metric', name)!.qty!;
+      expect(Math.abs(r.metricQty! - exact) / exact, `${qty} ${unit} ${name}`).toBeLessThanOrEqual(
+        0.02,
+      );
+    }
+  });
+  it('a stored exact derived side does not multiply a rounded error when scaled', () => {
+    const r = completeMeasures(us('sugar', 1, 'tbsp'));
+    const s = scaleMeasure({ qty: r.metricQty, unit: r.metricUnit }, 2)!;
+    expect(Math.abs(s.qty - 25) / 25).toBeLessThanOrEqual(0.02);
+  });
+  it('US side derived from metric obeys the same bound', () => {
+    const r = completeMeasures(metric('sugar', 37.5, 'g'));
+    const exact = deriveAlternate({ qty: 37.5, unit: 'g' }, 'us', 'sugar')!;
+    expect(r.usUnit).toBe(exact.unit);
+    expect(Math.abs(r.usQty! - exact.qty!) / exact.qty!).toBeLessThanOrEqual(0.02);
   });
 });

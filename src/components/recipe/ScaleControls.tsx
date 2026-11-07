@@ -2,67 +2,56 @@
 
 import { useId, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { factorFromServings, MAX_FACTOR, MIN_FACTOR } from '@/lib/units/scale';
+import { MAX_FACTOR } from '@/lib/units/scale';
 import { formatQty } from '@/lib/units/display';
 import type { UnitSystem } from '@/lib/units/units';
 import type { QuantityDisplay } from './IngredientCell';
 import { btn, input } from './styles';
+import {
+  customFactorFor,
+  enterCustom,
+  parseCustomAmount,
+  summaryKind,
+  typeCustom,
+} from './scale-input';
 
 type Preset = 'half' | 'one' | 'two' | 'custom';
 const PRESET_FACTOR: Record<Exclude<Preset, 'custom'>, number> = { half: 0.5, one: 1, two: 2 };
 
-/** "1,5" and "1.5" both work; anything else that is not a plain positive number is invalid. */
-export function parseCustomAmount(text: string): number | null {
-  const s = text.trim().replace(',', '.');
-  if (!/^(\d+(\.\d*)?|\.\d+)$/.test(s)) return null;
-  const n = Number(s);
-  return Number.isFinite(n) && n > 0 ? n : null;
-}
+export { parseCustomAmount };
 
 /** View state only: nothing here is persisted, so a reload goes back to the user's preference. */
 export function useScale(pref: UnitSystem, servings: number | null) {
   const [preset, setPreset] = useState<Preset>('one');
-  const [customText, setCustomText] = useState('');
-  const [customFactor, setCustomFactor] = useState(1);
+  const [custom, setCustom] = useState({ text: '', factor: 1 });
   const [toggle, setToggle] = useState<UnitSystem | null>(null);
 
-  const customFactorFor = (text: string): number | null => {
-    const n = parseCustomAmount(text);
-    if (n === null) return null;
-    const f = servings != null ? factorFromServings(servings, n) : n;
-    // factorFromServings clamps; reject out-of-range input instead of silently clamping.
-    const raw = servings != null ? n / servings : n;
-    return f !== null && raw >= MIN_FACTOR && raw <= MAX_FACTOR ? raw : null;
-  };
-
-  const factor = preset === 'custom' ? customFactor : PRESET_FACTOR[preset];
+  const factor = preset === 'custom' ? custom.factor : PRESET_FACTOR[preset];
   const primary: UnitSystem = toggle ?? pref;
   const display = useMemo<QuantityDisplay>(
     () => ({ pref, scale: factor, toggle }),
     [pref, factor, toggle],
   );
   const customError =
-    preset === 'custom' && customText !== '' && customFactorFor(customText) === null;
+    preset === 'custom' && custom.text !== '' && customFactorFor(custom.text, servings) === null;
 
   return {
     display,
     factor,
     preset,
-    customText,
+    customText: custom.text,
     customError,
     primary,
     changed: factor !== 1 || toggle !== null,
-    choose: (p: Preset) => setPreset(p),
-    setCustom: (text: string) => {
-      setCustomText(text);
-      const f = customFactorFor(text);
-      if (f !== null) setCustomFactor(f);
+    choose: (p: Preset) => {
+      if (p === 'custom' && preset !== 'custom') setCustom(enterCustom(factor));
+      setPreset(p);
     },
+    setCustom: (text: string) => setCustom((prev) => typeCustom(prev, text, servings)),
     flip: () => setToggle(primary === 'metric' ? 'us' : 'metric'),
     reset: () => {
       setPreset('one');
-      setCustomText('');
-      setCustomFactor(1);
+      setCustom({ text: '', factor: 1 });
       setToggle(null);
     },
   };
@@ -86,16 +75,24 @@ export function ScaleControls({
   const factorText = formatQty(s.factor);
   const scaledServings = servings != null ? Math.round(servings * s.factor * 100) / 100 : null;
 
+  const kind = summaryKind({
+    factor: s.factor,
+    customError: s.customError,
+    servings,
+  });
   let summary: string;
-  if (s.factor === 1 && s.display.toggle === null) summary = t('recipe.scale.summaryOriginal');
-  else if (scaledServings != null)
+  if (kind === 'invalid') summary = t('recipe.scale.summaryInvalid', { factor: factorText });
+  else if (kind === 'original') summary = t('recipe.scale.summaryOriginal');
+  else if (kind === 'servings')
     summary = t('recipe.scale.summaryServings', {
       factor: factorText,
       servings: Number.isInteger(scaledServings)
         ? String(scaledServings)
-        : `≈ ${formatQty(scaledServings)}`,
+        : `≈ ${formatQty(scaledServings ?? 0)}`,
     });
   else summary = t('recipe.scale.summaryFactor', { factor: factorText });
+  if (s.display.toggle !== null && kind !== 'invalid')
+    summary += ` ${t('recipe.scale.summaryUnits', { system: s.display.toggle })}`;
 
   const preset = (p: Exclude<typeof s.preset, 'custom'>, label: string) => (
     <button type="button" className={seg} aria-pressed={s.preset === p} onClick={() => s.choose(p)}>

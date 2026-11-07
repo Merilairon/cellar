@@ -2,7 +2,7 @@ import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { ulid } from 'ulid';
 import type { Db } from './connection';
 import { readableBy } from './readable';
-import { ingredient, nowIso, recipe, section, step, user } from './schema';
+import { ingredient, nowIso, recipe, section, step } from './schema';
 import { withDeferredFts } from './fts';
 import { deleteOrphanTags, listTagsForRecipe, setRecipeTags, tagIdsForRecipe } from './tags';
 
@@ -215,35 +215,6 @@ function loadFull(conn: Conn, id: string): RecipeFull | undefined {
 
 export function getRecipeFull(db: Db, id: string): RecipeFull | undefined {
   return loadFull(db, id);
-}
-
-export type RecipeListItem = {
-  id: string;
-  title: string;
-  ownerId: string;
-  ownerDisplayName: string;
-  visibility: RecipeRow['visibility'];
-  viewMode: RecipeRow['viewMode'];
-  updatedAt: string;
-};
-
-/** The caller's own recipes plus other users' `users`-visible recipes, newest first. */
-export function listRecipesForUser(db: Db, userId: string): RecipeListItem[] {
-  return db
-    .select({
-      id: recipe.id,
-      title: recipe.title,
-      ownerId: recipe.ownerId,
-      ownerDisplayName: user.displayName,
-      visibility: recipe.visibility,
-      viewMode: recipe.viewMode,
-      updatedAt: recipe.updatedAt,
-    })
-    .from(recipe)
-    .innerJoin(user, eq(user.id, recipe.ownerId))
-    .where(readableBy(userId))
-    .orderBy(desc(recipe.updatedAt), desc(recipe.id))
-    .all();
 }
 
 /** Delete a recipe; sections, ingredients and steps cascade, copies get `copied_from_id = null`. */

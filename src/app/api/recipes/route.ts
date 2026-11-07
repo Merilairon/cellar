@@ -8,12 +8,16 @@ export const dynamic = 'force-dynamic';
 
 // Only q, tag and author are accepted. Anything else (min_rating arrives with ratings in 04c)
 // or a repeated parameter is 400 invalid_query, so a client never believes it is filtering.
+// Limits count code points (a 30-emoji tag is 60 UTF-16 units), like search.ts and /api/tags.
+const maxCodePoints = (n: number) => (s: string) => [...s].length <= n;
+
 const querySchema = z.strictObject({
-  q: z.string().max(100).optional(),
-  tag: z.string().min(1).max(MAX_TAG_LEN).optional(),
+  q: z.string().refine(maxCodePoints(100)).optional(),
+  tag: z.string().min(1).refine(maxCodePoints(MAX_TAG_LEN)).optional(),
   author: z
     .string()
-    .regex(/^(me|[0-9A-HJKMNP-TV-Z]{26})$/i)
+    // Ids are stored uppercase and compared case-sensitively: lowercase is 400, not an empty list.
+    .regex(/^(me|[0-9A-HJKMNP-TV-Z]{26})$/)
     .optional(),
 });
 

@@ -212,11 +212,22 @@ describe('GET /api/recipes search params (T6)', () => {
       '?tag=',
       `?tag=${'t'.repeat(41)}`,
       '?author=nope',
+      `?author=${owner.id.toLowerCase()}`,
+      '?author=ME',
+      `?tag=${'😀'.repeat(41)}`,
     ]) {
       const { res, json } = await list(qs);
       expect([qs, res.status]).toEqual([qs, 400]);
       expect(json).toEqual({ error: 'invalid_query' });
     }
+  });
+  it('length limits count code points: a 30-emoji tag and a 100-emoji q are accepted', async () => {
+    const tag = '😀'.repeat(30);
+    await create({ visibility: 'private', tags: [tag] });
+    const r = await list(`?tag=${encodeURIComponent(tag)}`);
+    expect(r.res.status).toBe(200);
+    expect(r.json.recipes).toHaveLength(1);
+    expect((await list(`?q=${encodeURIComponent('😀'.repeat(100))}`)).res.status).toBe(200);
   });
   it('hostile q values answer 200, never 500', async () => {
     await create({ visibility: 'users' });

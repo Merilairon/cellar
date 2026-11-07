@@ -55,3 +55,28 @@ export function firstParam(v: string | string[] | undefined): string | undefined
   const s = Array.isArray(v) ? v[0] : v;
   return s === undefined || s.trim() === '' ? undefined : s.trim();
 }
+
+export type UrlSyncState = {
+  /** The `?q=` value last seen from the URL. */
+  seenUrlQ: string;
+  /** What the input shows. */
+  value: string;
+  /** `q` values this input requested via the router that have not been seen in the URL yet, oldest first. */
+  pending: readonly string[];
+};
+
+/**
+ * Decide what the input shows when the URL's `q` is `urlQ`.
+ * - Unchanged URL: nothing happens.
+ * - The URL landed on a value this input asked for (possibly an older one while the user kept typing):
+ *   the input keeps what the user typed; entries up to that one are retired.
+ * - Anything else (back/forward, a clear link): the input follows the URL.
+ */
+export function syncFromUrl(state: UrlSyncState, urlQ: string): UrlSyncState {
+  if (urlQ === state.seenUrlQ) return state;
+  const at = state.pending.indexOf(urlQ);
+  if (at !== -1) {
+    return { seenUrlQ: urlQ, value: state.value, pending: state.pending.slice(at + 1) };
+  }
+  return { seenUrlQ: urlQ, value: urlQ, pending: [] };
+}

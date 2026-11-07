@@ -429,11 +429,13 @@
       "toUs": "Show in US units",
       "toMetric": "Show in metric",
       "reset": "Reset",
-      "invalid": "Enter a number above 0 that scales the recipe by at most {max} times.",
+      "invalid": "Enter a number above 0 that scales the recipe from 1/100 to {max} times. Use one decimal point or comma and no thousands separators.",
       "about": "about",
       "summaryOriginal": "Showing the original amounts.",
       "summaryFactor": "Showing amounts at {factor}x.",
-      "summaryServings": "Showing amounts at {factor}x: serves {servings}."
+      "summaryServings": "Showing amounts at {factor}x: serves {servings}.",
+      "summaryInvalid": "Not a valid amount. Amounts stay at {factor}x.",
+      "summaryUnits": "Units: {system, select, metric {metric} other {US}}."
     }
   },
   "search": {

@@ -3,7 +3,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { createDebouncer, listHref, queryToApply, SEARCH_DEBOUNCE_MS } from './search-url';
+import {
+  createDebouncer,
+  listHref,
+  queryToApply,
+  SEARCH_DEBOUNCE_MS,
+  syncFromUrl,
+} from './search-url';
 
 /** Header search. The query lives in the URL (`?q=`); typing updates it after a pause. */
 export function SearchBox() {
@@ -14,13 +20,17 @@ export function SearchBox() {
   const urlQ = params.get('q') ?? '';
   const onList = pathname === '/recipes';
 
-  const [value, setValue] = useState(urlQ);
-  const [seenUrlQ, setSeenUrlQ] = useState(urlQ);
-  if (urlQ !== seenUrlQ) {
-    // Back/forward or a "clear" link changed the URL: follow it.
-    setSeenUrlQ(urlQ);
-    setValue(urlQ);
-  }
+  const [sync, setSync] = useState({
+    seenUrlQ: urlQ,
+    value: urlQ,
+    pending: [] as readonly string[],
+  });
+  // Back/forward or a "clear" link follows the URL; the echo of our own navigation does not
+  // overwrite what the user typed meanwhile.
+  const synced = syncFromUrl(sync, urlQ);
+  if (synced !== sync) setSync(synced);
+  const value = synced.value;
+  const setValue = (v: string) => setSync((p) => ({ ...p, value: v }));
 
   const latest = useRef({
     value,
@@ -40,13 +50,15 @@ export function SearchBox() {
       const next = queryToApply(s.value);
       if (next === undefined || next === s.urlQ) return;
       if (next === '' && !s.onList) return;
-      router.replace(
-        listHref({
-          q: next,
-          tag: s.onList ? (s.tag ?? undefined) : undefined,
-          author: s.onList ? (s.author ?? undefined) : undefined,
-        }),
-      );
+      setSync((p) => ({ ...p, pending: [...p.pending, next] }));
+      const href = listHref({
+        q: next,
+        tag: s.onList ? (s.tag ?? undefined) : undefined,
+        author: s.onList ? (s.author ?? undefined) : undefined,
+      });
+      // From another page the first search is a new place to go back from; refining on the list replaces.
+      if (s.onList) router.replace(href);
+      else router.push(href);
     }, SEARCH_DEBOUNCE_MS);
     debouncerRef.current = d;
     return () => d.cancel();
