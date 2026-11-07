@@ -132,6 +132,23 @@ export function NetworkAlert({ focusKey, onRetry }: { focusKey: number; onRetry:
   );
 }
 
+/** m12: the server wrote the grid but the answer was unreadable; a retry would hit a 409. */
+export function ReloadAlert({ focusKey }: { focusKey: number }) {
+  const t = useTranslations();
+  const reload = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    reload.current?.focus();
+  }, [focusKey]);
+  return (
+    <div role="alert" className="ge-warnline ge-netalert">
+      <span>{t('gridEditor.save.savedUnreadable')}</span>{' '}
+      <button ref={reload} type="button" className={btn} onClick={() => window.location.reload()}>
+        {t('gridEditor.save.reload')}
+      </button>
+    </div>
+  );
+}
+
 /** UX spec 12.5: shown at once while no section has a column step. */
 export function ListNotice({ onAddStep }: { onAddStep: (() => void) | null }) {
   const t = useTranslations();

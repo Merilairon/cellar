@@ -27,7 +27,7 @@ import { useRowActions } from './useRowActions';
 import { useSectionActions } from './useSectionActions';
 import { useStepWiring } from './useStepWiring';
 import { useUndoToast } from './useUndoToast';
-import { ConflictPanel, KeptNote, ListNotice, NetworkAlert } from './SavePanels';
+import { ConflictPanel, KeptNote, ListNotice, NetworkAlert, ReloadAlert } from './SavePanels';
 import { useSaveFlow } from './useSaveFlow';
 import { useLeaveGuard } from './useLeaveGuard';
 
@@ -48,8 +48,8 @@ const isTextField = (el: EventTarget | null) =>
 
 /**
  * The editor shell: reducer wiring, sticky toolbar, status region, issues and one edit-mode
- * table per section. Ingredient rows (T5), steps (T6), sections (T7), the phone sheet (T8)
- * and the save flow (T9) plug into the SEAM markers below.
+ * table per section. Ingredient rows, steps, sections, the phone sheet and the save flow live
+ * in the hooks and components it composes.
  */
 export function GridEditor({ recipe, onClose, onRecipe }: GridEditorProps) {
   const t = useTranslations();
@@ -356,7 +356,15 @@ export function GridEditor({ recipe, onClose, onRecipe }: GridEditorProps) {
               >
                 {t('gridEditor.leave.keep')}
               </button>
-              <button type="button" className={btn} onClick={onClose}>
+              <button
+                type="button"
+                className={`${btn} aria-disabled:opacity-60`}
+                aria-disabled={flow.saving}
+                onClick={() => {
+                  // m1: discarding while a save is in flight would still persist the edits.
+                  if (!flow.saving) onClose();
+                }}
+              >
                 {t('gridEditor.leave.discard')}
               </button>
             </div>
@@ -365,8 +373,14 @@ export function GridEditor({ recipe, onClose, onRecipe }: GridEditorProps) {
               {/* Done when clean, Cancel when dirty: one slot (UX spec F2, section 13). */}
               <button
                 type="button"
-                className={savedClean ? btnPrimary : btn}
-                onClick={() => (dirty ? setConfirmingLeave(true) : onClose())}
+                className={`${savedClean ? btnPrimary : btn} aria-disabled:opacity-60`}
+                aria-disabled={flow.saving}
+                onClick={() => {
+                  // m1: no leaving while a save is in flight (it would persist "discarded" edits).
+                  if (flow.saving) return;
+                  if (dirty) setConfirmingLeave(true);
+                  else onClose();
+                }}
               >
                 {dirty ? t('gridEditor.toolbar.cancel') : t('gridEditor.toolbar.done')}
               </button>
@@ -395,6 +409,7 @@ export function GridEditor({ recipe, onClose, onRecipe }: GridEditorProps) {
       {flow.phase === 'network' && (
         <NetworkAlert focusKey={flow.focusTick.n} onRetry={() => void flow.save()} />
       )}
+      {flow.phase === 'reload' && <ReloadAlert focusKey={flow.focusTick.n} />}
       {flow.kept && flow.phase === 'idle' && <KeptNote />}
       {toastNode}
       {stepUi.tooltip}
@@ -426,7 +441,6 @@ export function GridEditor({ recipe, onClose, onRecipe }: GridEditorProps) {
                 onDelete={() => sections.remove(si)}
                 onAddRow={() => rows.addRow(si)}
                 extraActions={stepUi.toolbar(si)}
-                // SEAM T7 stretch: Move up / down.
               />
               <GridEditorTable
                 section={section}
@@ -446,7 +460,6 @@ export function GridEditor({ recipe, onClose, onRecipe }: GridEditorProps) {
                   {t('gridEditor.issue.row_uncovered', { names: gapNames(section).join(', ') })}
                 </p>
               )}
-              {/* SEAM T8: phone (< 640 px) bottom sheet reuses StepPanel's Adjust rows block. */}
             </section>
           );
         })}

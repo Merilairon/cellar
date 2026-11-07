@@ -4,18 +4,16 @@ import { useCallback, useEffect, useRef, useState, type Dispatch } from 'react';
 import {
   doc,
   isDirty,
-  mapServerErrors,
-  toGridPayload,
   type EditorAction,
   type EditorDoc,
   type EditorIssue,
   type EditorState,
 } from '@/lib/grid/editor';
-import type { GridIssue } from '@/lib/grid/validate';
 import { call } from '../api';
+import { runGridSave } from './save-request';
 import type { ApiRecipe } from '../types';
 
-export type SavePhase = 'idle' | 'saving' | 'network' | 'conflict';
+export type SavePhase = 'idle' | 'saving' | 'network' | 'conflict' | 'reload';
 export type ConflictConfirm = null | 'load' | 'overwrite';
 
 type Say = (
@@ -27,10 +25,12 @@ type Say = (
  * T9: the save request, its four outcomes and the leave guard.
  *
  * - 200: the response is the new recipe (new `updated_at`, new ids, G4). It becomes the next
- *   `base_updated_at` and goes to `onRecipe`; `markSaved` runs only if the document is still
- *   the one that was sent (edits made while the request was in flight stay dirty). History is
- *   kept (Q9).
- * - 422: the paths are mapped onto the current document; they stay until the next edit.
+ *   `base_updated_at` and goes to `onRecipe`; `markSaved` carries the sent document and the
+ *   reducer applies it only if that is still the present one (edits made while the request was
+ *   in flight stay dirty). History is kept (Q9). A 200 with an unreadable body is refetched;
+ *   if that fails too the phase is `reload` (saved, reload to continue), never a retry.
+ * - 422: the paths are mapped onto the SENT document and kept with it, so they show only while
+ *   the document is still that one.
  * - 409: the server's current stamp is held so "Save mine anyway" can reuse it.
  * - anything else (network, 5xx, 401/403/404): a retry alert; nothing is lost.
  *
@@ -74,10 +74,10 @@ export function useSaveFlow({
     what: 'issues',
   });
 
+  // Assigned during render so `save` never reads a state older than the one on screen.
   const latest = useRef(editor);
-  useEffect(() => {
-    latest.current = editor;
-  }, [editor]);
+  // eslint-disable-next-line react-hooks/refs -- intentional: the freshest state for `save`
+  latest.current = editor;
   const inFlight = useRef(false);
   const dirty = isDirty(editor);
 
@@ -103,47 +103,47 @@ export function useSaveFlow({
       setConfirm(null);
       say('', 'saving');
       try {
-        const res = await call(
-          `/api/recipes/${recipeId}/grid`,
-          'PUT',
-          toGridPayload(sent, baseOverride ?? base),
-        );
-        if (res?.status === 200) {
-          const r = (await res.json().catch(() => null)) as ApiRecipe | null;
-          if (r && typeof r.updated_at === 'string') {
+        const out = await runGridSave(recipeId, sent, baseOverride ?? base);
+        switch (out.kind) {
+          case 'saved': {
+            const r = out.recipe;
             setBase(r.updated_at);
             setRejected(null);
             setConflictStamp(null);
             setKept(false);
             setPhase('idle');
-            if (doc(latest.current) === doc(sent)) dispatch({ type: 'markSaved' });
+            // The reducer applies this only while the present document is still `sent`.
+            dispatch({ type: 'markSaved', doc: doc(sent) });
             onRecipe?.(r);
             say('', r.view_mode === 'list' ? 'savedList' : 'saved');
             return;
           }
-        } else if (res?.status === 422) {
-          const body = (await res.json().catch(() => null)) as { errors?: GridIssue[] } | null;
-          if (Array.isArray(body?.errors)) {
-            const d = doc(latest.current);
-            const errors = mapServerErrors(d, body.errors);
-            setRejected({ doc: d, errors });
+          case 'savedUnreadable':
+            // Written, but no new stamp: saved is saved; the page must reload for the new base.
+            setRejected(null);
+            setConflictStamp(null);
+            setKept(false);
+            setPhase('reload');
+            dispatch({ type: 'markSaved', doc: doc(sent) });
+            focusOn('alert');
+            return;
+          case 'rejected':
+            setRejected({ doc: out.doc, errors: out.errors });
             setPhase('idle');
-            say(String(errors.length), 'rejected');
+            say(String(out.errors.length), 'rejected');
             focusOn('issues');
             return;
-          }
-        } else if (res?.status === 409) {
-          const body = (await res.json().catch(() => null)) as { updated_at?: string } | null;
-          if (typeof body?.updated_at === 'string') {
-            setConflictStamp(body.updated_at);
+          case 'conflict':
+            setConflictStamp(out.stamp);
             setPhase('conflict');
             focusOn('conflict');
             return;
-          }
+          case 'failed':
+            setPhase('network');
+            say('', 'failed');
+            focusOn('alert');
+            return;
         }
-        setPhase('network');
-        say('', 'failed');
-        focusOn('alert');
       } finally {
         inFlight.current = false;
       }

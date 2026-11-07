@@ -107,7 +107,8 @@ export type EditorAction =
   | { type: 'select'; stepKey?: string | null; rowKey?: string | null }
   | { type: 'undo' }
   | { type: 'redo' }
-  | { type: 'markSaved' }
+  /** `doc` is the document that was sent; applies only while it is still the present one. */
+  | { type: 'markSaved'; doc: EditorDoc }
   | { type: 'reset'; recipe: ApiRecipeLike };
 
 // ---- helpers ----------------------------------------------------------------------------
@@ -618,6 +619,7 @@ export function reduce(state: EditorState, action: EditorAction): EditorState {
     }
 
     case 'markSaved': {
+      if (state.history.present !== action.doc) return state;
       const history = hMarkSaved(state.history);
       return history === state.history ? state : { ...state, history };
     }

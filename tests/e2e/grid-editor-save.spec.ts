@@ -253,3 +253,68 @@ test('leave guard: browser Back asks while dirty, Keep and Discard behave, no hi
   await expect.poll(() => page.url()).not.toBe(url);
   await ctx.close();
 });
+
+test('m1/m2: while a save is in flight Cancel and Discard are inert; two quick Backs both ask', async ({
+  browser,
+}) => {
+  const { page, ctx } = await openEditor(browser);
+  const url = page.url();
+  const confirm = page.getByText('Discard your unsaved changes?');
+  let release: () => void = () => {};
+  const gate = new Promise<void>((r) => (release = r));
+  await page.route('**/api/recipes/*/grid', async (route) => {
+    await gate;
+    await route.continue();
+  });
+  await rename(page, '2 oz inflight butter');
+  await save(page).click();
+  await expect(page.getByRole('button', { name: /^Saving/ })).toBeVisible();
+  const cancel = page.getByRole('button', { name: 'Cancel', exact: true });
+  await expect(cancel).toHaveAttribute('aria-disabled', 'true');
+  await cancel.click();
+  await expect(confirm).toHaveCount(0);
+  // Back during the save asks, but Discard cannot drop the edits that are being saved.
+  await page.goBack().catch(() => null);
+  await expect(confirm).toBeVisible();
+  const discard = page.getByRole('button', { name: 'Discard changes' });
+  await expect(discard).toHaveAttribute('aria-disabled', 'true');
+  await discard.click();
+  await expect(page.getByRole('heading', { name: 'Grid editor' })).toBeVisible();
+  expect(page.url()).toBe(url);
+  release();
+  await expect(page.getByText('All changes saved')).toBeVisible();
+  await page.unroute('**/api/recipes/*/grid');
+
+  // Two quick Backs while dirty: both are intercepted, the URL stays, the editor stays.
+  await rename(page, '1 oz double back butter');
+  await page.goBack().catch(() => null);
+  await page.goBack().catch(() => null);
+  await expect(confirm).toBeVisible();
+  expect(page.url()).toBe(url);
+  await expect(page.getByRole('heading', { name: 'Grid editor' })).toBeVisible();
+  await ctx.close();
+});
+
+test('m12: a 200 with an unreadable body is "saved, reload", not a retry that would hit 409', async ({
+  browser,
+}) => {
+  const { page, ctx } = await openEditor(browser);
+  let puts = 0;
+  await page.route('**/api/recipes/*/grid', async (route) => {
+    puts++;
+    await route.fetch(); // the write really happens
+    await route.fulfill({ status: 200, contentType: 'text/plain', body: 'garbled' });
+  });
+  await page.route(/\/api\/recipes\/[^/]+$/, (route) =>
+    route.request().method() === 'GET' ? route.abort() : route.continue(),
+  );
+  await rename(page, '9 oz unreadable butter');
+  await save(page).click();
+  const alert = page.getByRole('alert').filter({ hasText: 'Your changes were saved' });
+  await expect(alert).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Try again' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Reload' })).toBeFocused();
+  await expect(page.getByText('All changes saved')).toBeVisible();
+  expect(puts).toBe(1);
+  await ctx.close();
+});

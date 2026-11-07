@@ -95,7 +95,7 @@ describe('toGridPayload / fromApiRecipe round trip', () => {
 
   it('client keys survive the payload round trip with server ids replaced (G4)', () => {
     const before = fromApiRecipe(SAMPLE_VANILLA_CAKE);
-    const afterSave = run(before, [{ type: 'markSaved' }]);
+    const afterSave = run(before, [{ type: 'markSaved', doc: doc(before) }]);
     expect(doc(afterSave).sections[0].key).toBe(doc(before).sections[0].key);
   });
 });

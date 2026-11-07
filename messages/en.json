@@ -709,6 +709,8 @@
       "failed": "Could not save. Check your connection and try again. Your changes are still here.",
       "failedShort": "Could not save. Your changes are still here.",
       "retry": "Try again",
+      "savedUnreadable": "Your changes were saved, but the reply could not be read. Reload the page to continue.",
+      "reload": "Reload",
       "viewModeList": "This recipe has no step columns. It will be saved as a list.",
       "addStep": "Add a step",
       "stepAddedForList": "Step added. The recipe will stay a grid."

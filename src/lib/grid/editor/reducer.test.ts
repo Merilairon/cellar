@@ -586,11 +586,22 @@ describe('undo / redo / saved / reset / selection', () => {
     expect(isDirty(s)).toBe(false);
     s = reduce(s, { type: 'rowMove', section: 0, from: 0, to: 1 });
     expect(isDirty(s)).toBe(true);
-    s = reduce(s, { type: 'markSaved' });
+    s = reduce(s, { type: 'markSaved', doc: doc(s) });
     expect(isDirty(s)).toBe(false);
     expect(canUndo(s)).toBe(true);
     s = reduce(s, { type: 'undo' });
     expect(isDirty(s)).toBe(true);
+  });
+  it('markSaved applies only while the present document is the one that was sent (M2)', () => {
+    const sent = reduce(make(2), { type: 'rowMove', section: 0, from: 0, to: 1 });
+    // An edit lands after the request left and before the response is processed.
+    const edited = reduce(sent, { type: 'rowAdd', section: 0 });
+    const after = reduce(edited, { type: 'markSaved', doc: doc(sent) });
+    expect(after).toBe(edited);
+    expect(isDirty(after)).toBe(true);
+    expect(doc(after)).toBe(doc(edited));
+    // Same document: applies.
+    expect(isDirty(reduce(sent, { type: 'markSaved', doc: doc(sent) }))).toBe(false);
   });
   it('reset rebuilds the state from a recipe', () => {
     const s = reduce(reduce(make(1), { type: 'rowAdd', section: 0 }), {

@@ -60,7 +60,8 @@ describe('session: label stack mirrors history', () => {
   });
 
   it('markSaved clears dirty, keeps history, and sets saved', () => {
-    const s = run(start(), { type: 'rowAdd', section: 0 }, { type: 'markSaved' });
+    const edited = run(start(), { type: 'rowAdd', section: 0 });
+    const s = run(edited, { type: 'markSaved', doc: doc(edited.editor) });
     expect(isDirty(s.editor)).toBe(false);
     expect(s.saved).toBe(true);
     expect(s.labels.past).toEqual(['rowAdd']);
