@@ -243,11 +243,6 @@ function formFromDraftSections(d: Draft, sections: DraftSections): FormState {
   });
 }
 
-/** Pre-fills the form from an import draft (list view: spans stay empty unless the draft has them). */
-export function formFromDraft(d: Draft): FormState {
-  return formFromDraftSections(d, d.sections);
-}
-
 /**
  * Form for one structure of the draft: `list` is the flat page-order sections, `grid` the
  * mapper's proposal (falls back to the list when there is no proposal). Spans go from 0-based
