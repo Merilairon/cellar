@@ -1,6 +1,14 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
-import { account, createRecipe, hydrated, registerViaInvite, SAMPLES, signIn } from './helpers';
+import {
+  account,
+  createRecipe,
+  hydrated,
+  registerViaInvite,
+  SAMPLES,
+  signIn,
+  scrollSettled,
+} from './helpers';
 
 // T5 / T7: ingredient row actions and sections in the grid editor, keyboard and mouse.
 test.describe.configure({ mode: 'serial' });
@@ -43,7 +51,7 @@ test('desktop: inline Move buttons exist and Alt+ArrowDown moves a row', async (
   await expect(page.locator('[data-ge-act="moveDown"]').first()).toBeVisible();
   await first.focus();
   await page.keyboard.press('Alt+ArrowDown');
-  await expect(page.getByRole('status')).toContainText('moved to row 2');
+  await expect(page.getByRole('status').filter({ hasText: 'moved to row 2' })).toHaveCount(1);
   await expect(page.locator('[data-ge-target^="row:"]').nth(1)).toBeFocused();
   await expect(page.locator('[data-ge-target^="row:"]').nth(1)).toContainText(
     name.split(' ').pop()!,
@@ -56,10 +64,9 @@ test('desktop: inline Move buttons exist and Alt+ArrowDown moves a row', async (
 test('tablet: no inline Move buttons, Row actions menu offers them', async ({ browser }) => {
   const { page, close } = await openEditor(browser, 800);
   await expect(page.locator('[data-ge-act="moveDown"]').first()).toBeHidden();
-  await page
-    .getByRole('button', { name: /^Row actions for/ })
-    .first()
-    .click();
+  const rowActions = page.getByRole('button', { name: /^Row actions for/ }).first();
+  await scrollSettled(rowActions);
+  await rowActions.click();
   const menu = page.getByRole('menu');
   await expect(menu.getByRole('menuitem', { name: 'Edit text' })).toBeFocused();
   await expect(menu.getByRole('menuitem', { name: /^Move .* down$/ })).toBeVisible();
@@ -99,20 +106,18 @@ test('edit text, add, split, delete with Undo toast', async ({ browser }) => {
   await expect(rows.first()).toContainText('unsalted butter');
 
   // Add row below, committing empty text removes it again.
-  await page
-    .getByRole('button', { name: /^Row actions for/ })
-    .first()
-    .click();
+  const actions = page.getByRole('button', { name: /^Row actions for/ }).first();
+  await scrollSettled(actions);
+  await actions.click();
   await page.getByRole('menuitem', { name: 'Add row below' }).click();
   await expect(page.getByRole('textbox', { name: 'Edit ingredient 2' })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(rows).toHaveCount(before);
 
   // Split into portions: chips and a focused label field.
-  await page
-    .getByRole('button', { name: /^Row actions for/ })
-    .first()
-    .click();
+  const actions2 = page.getByRole('button', { name: /^Row actions for/ }).first();
+  await scrollSettled(actions2);
+  await actions2.click();
   await page.getByRole('menuitem', { name: 'Split into portions' }).click();
   await expect(page.getByRole('textbox', { name: /^Portion label for/ })).toBeFocused();
   await page.keyboard.type('later');

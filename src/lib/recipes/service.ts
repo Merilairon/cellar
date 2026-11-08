@@ -15,13 +15,21 @@ import {
   type RecipeTree,
 } from '@/lib/db/recipes';
 import { searchRecipes, type SearchOptions } from '@/lib/db/search';
+import { ratingSummary, type RatingSummary } from '@/lib/db/ratings';
 import { TagLimitError, listReadableTags } from '@/lib/db/tags';
-import { listPhotoPathsByRecipe } from '@/lib/db/photos';
+import {
+  coverPhotoIdsFor,
+  listPhotoPathsByRecipe,
+  listPhotos,
+  type PhotoRow,
+} from '@/lib/db/photos';
 import { removeUploadFiles } from '@/lib/import/uploads';
 import { joinQtyRange } from '@/lib/import/ingredient-parser';
 import { validateRecipeGrid } from '@/lib/grid/validate';
 import { completeMeasures } from '@/lib/units/complete';
 import { canRead, canWrite } from './access';
+import { toApiRating } from './ratings';
+import { copyPhotosTo, toApiPhoto } from './photos';
 import {
   gridInputSchema,
   recipeInputSchema,
@@ -155,7 +163,12 @@ export function prepareRecipe(
   };
 }
 
-export function toApiRecipe(r: RecipeFull, canEdit: boolean) {
+export function toApiRecipe(
+  r: RecipeFull,
+  canEdit: boolean,
+  photos: PhotoRow[] = [],
+  rating: RatingSummary = { avg: null, count: 0, mine: null },
+) {
   return {
     id: r.id,
     owner_id: r.ownerId,
@@ -174,6 +187,8 @@ export function toApiRecipe(r: RecipeFull, canEdit: boolean) {
     created_at: r.createdAt,
     updated_at: r.updatedAt,
     can_edit: canEdit,
+    photos: photos.map(toApiPhoto),
+    ...toApiRating(rating),
     sections: r.sections.map((s) => ({
       id: s.id,
       position: s.position,
@@ -214,6 +229,8 @@ export function toApiRecipe(r: RecipeFull, canEdit: boolean) {
 export type ApiRecipe = ReturnType<typeof toApiRecipe>;
 
 export function listRecipes(db: Db, actor: Actor, query: SearchOptions = {}) {
+  // One query for all covers the actor can read (G13), not one per card.
+  const covers = coverPhotoIdsFor(db, actor.id);
   return searchRecipes(db, actor.id, query).map((r) => ({
     id: r.id,
     title: r.title,
@@ -223,6 +240,9 @@ export function listRecipes(db: Db, actor: Actor, query: SearchOptions = {}) {
     view_mode: r.viewMode,
     updated_at: r.updatedAt,
     tags: r.tags,
+    cover_photo_id: covers.get(r.id) ?? null,
+    rating_avg: r.ratingAvg,
+    rating_count: r.ratingCount,
   }));
 }
 
@@ -241,7 +261,10 @@ export function createRecipeFor(
 export function getRecipeFor(db: Db, actor: Actor, id: string): Result<{ recipe: ApiRecipe }> {
   const r = getRecipeFull(db, id);
   if (!r || !canRead(actor, r)) return { ok: false, status: 404 };
-  return { ok: true, recipe: toApiRecipe(r, canWrite(actor, r)) };
+  return {
+    ok: true,
+    recipe: toApiRecipe(r, canWrite(actor, r), listPhotos(db, id), ratingSummary(db, id, actor.id)),
+  };
 }
 
 export function updateRecipeFor(
@@ -266,7 +289,15 @@ export function updateRecipeFor(
   );
   if (!res.ok) return res;
   if (!res.value) return { ok: false, status: 404 };
-  return { ok: true, recipe: toApiRecipe(getRecipeFull(db, id)!, true) };
+  return {
+    ok: true,
+    recipe: toApiRecipe(
+      getRecipeFull(db, id)!,
+      true,
+      listPhotos(db, id),
+      ratingSummary(db, id, actor.id),
+    ),
+  };
 }
 
 /**
@@ -298,7 +329,15 @@ export function updateGridFor(
   );
   if (!res.ok) return res;
   if (!res.value) return { ok: false, status: 404 };
-  return { ok: true, recipe: toApiRecipe(getRecipeFull(db, id)!, true) };
+  return {
+    ok: true,
+    recipe: toApiRecipe(
+      getRecipeFull(db, id)!,
+      true,
+      listPhotos(db, id),
+      ratingSummary(db, id, actor.id),
+    ),
+  };
 }
 
 /**
@@ -337,10 +376,21 @@ export function setVisibilityFor(
   return res.value ? { ok: true, visibility: parsed.data.visibility } : { ok: false, status: 404 };
 }
 
-export function copyRecipeFor(db: Db, actor: Actor, id: string): Result<{ id: string }> {
+/**
+ * `uploadsDir`, when given, makes the copy get its own photo files (best effort, G10); notes
+ * and ratings are never copied.
+ */
+export function copyRecipeFor(
+  db: Db,
+  actor: Actor,
+  id: string,
+  opts: { uploadsDir?: string } = {},
+): Result<{ id: string }> {
   const res = guarded(() => copyRecipe(db, id, actor.id, readGuard(actor)));
   if (!res.ok) return res;
-  return res.value ? { ok: true, id: res.value } : { ok: false, status: 404 };
+  if (!res.value) return { ok: false, status: 404 };
+  if (opts.uploadsDir) copyPhotosTo(db, opts.uploadsDir, id, res.value);
+  return { ok: true, id: res.value };
 }
 
 /** Tag autocomplete / chips for the caller; only tags on recipes they can read. `q` is a prefix. */

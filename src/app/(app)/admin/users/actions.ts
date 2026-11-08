@@ -72,7 +72,7 @@ export async function deleteUserAction(_: ActionState, form: FormData): Promise<
   const parsed = deleteUserSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) return { error: 'admin.users.errors.invalidInput' };
   const { userId, ...choice } = parsed.data;
-  const result = deleteUser(getDb(), userId, choice);
+  const result = deleteUser(getDb(), userId, choice, { uploadsDir: getEnv().UPLOADS_DIR });
   const errors = {
     last_admin: 'admin.users.errors.lastAdminDelete',
     not_found: 'admin.users.errors.notFound',

@@ -38,9 +38,17 @@ export function SearchBox() {
     onList,
     tag: params.get('tag'),
     author: params.get('author'),
+    minRating: params.get('min_rating'),
   });
   useEffect(() => {
-    latest.current = { value, urlQ, onList, tag: params.get('tag'), author: params.get('author') };
+    latest.current = {
+      value,
+      urlQ,
+      onList,
+      tag: params.get('tag'),
+      author: params.get('author'),
+      minRating: params.get('min_rating'),
+    };
   });
 
   const debouncerRef = useRef<ReturnType<typeof createDebouncer> | null>(null);
@@ -55,6 +63,7 @@ export function SearchBox() {
         q: next,
         tag: s.onList ? (s.tag ?? undefined) : undefined,
         author: s.onList ? (s.author ?? undefined) : undefined,
+        minRating: s.onList ? (s.minRating ?? undefined) : undefined,
       });
       // From another page the first search is a new place to go back from; refining on the list replaces.
       if (s.onList) router.replace(href);
@@ -81,6 +90,7 @@ export function SearchBox() {
             q: v,
             tag: s.onList ? (s.tag ?? undefined) : undefined,
             author: s.onList ? (s.author ?? undefined) : undefined,
+            minRating: s.onList ? (s.minRating ?? undefined) : undefined,
           }),
         );
       }}

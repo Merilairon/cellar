@@ -870,3 +870,294 @@ dialog.ge-sheet .ge-steppervalue {
 .ge-rowctl {
   padding-inline-start: 8px;
 }
+
+/* ---------- Photos, notes, ratings (v0.4.2; tokens from the UX spec section 9) ---------- */
+:root {
+  --md-star: #8a5a00;
+  --md-star-empty: var(--rg-muted);
+  --md-private-line: var(--rg-muted);
+}
+:root[data-theme='dark'] {
+  --md-star: #f2c46d;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --md-star: #f2c46d;
+  }
+}
+.md-stars {
+  display: inline-flex;
+}
+.md-star {
+  position: relative;
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--md-star-empty);
+}
+.md-star svg {
+  width: 28px;
+  height: 28px;
+  fill: none;
+}
+.md-star[data-on='true'] {
+  color: var(--md-star);
+}
+.md-star[data-on='true'] svg {
+  fill: currentColor;
+}
+.md-star:has(input:focus-visible) {
+  outline: 3px solid var(--rg-focus);
+  outline-offset: 2px;
+}
+.md-star[aria-disabled='true'] {
+  cursor: default;
+  opacity: 0.6;
+}
+/* Pointer preview: fine pointers only, up to the hovered star. */
+@media (hover: hover) and (pointer: fine) {
+  .md-stars:hover .md-star {
+    color: var(--md-star-empty);
+  }
+  .md-stars:hover .md-star svg {
+    fill: none;
+  }
+  .md-stars:hover .md-star:hover,
+  .md-stars:hover .md-star:has(~ .md-star:hover) {
+    color: var(--md-star);
+  }
+  .md-stars:hover .md-star:hover svg,
+  .md-stars:hover .md-star:has(~ .md-star:hover) svg {
+    fill: currentColor;
+  }
+}
+.md-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---------- Cook mode (v0.4.2 T10, docs/tasks/v0.4.2-ux-spec.md section 6) ---------- */
+dialog.rg-sheet.ck-dialog {
+  --ck-scale: 1.25;
+  --ck-ing-w: 184px;
+  --ck-row-h: 64px;
+  inset: 0;
+  margin: 0;
+  width: 100dvw;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: auto;
+  font-size: calc(1rem * var(--ck-scale));
+}
+@media (min-width: 640px) {
+  dialog.rg-sheet.ck-dialog {
+    --ck-scale: 1.375;
+    --ck-ing-w: 260px;
+    --ck-row-h: 72px;
+  }
+}
+@media (min-width: 900px) {
+  dialog.rg-sheet.ck-dialog {
+    --ck-scale: 1.5;
+    --ck-ing-w: 380px;
+  }
+}
+.ck-root {
+  min-height: 100%;
+}
+.ck-bar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 8px 16px;
+  background: var(--rg-surface);
+  border-bottom: 1px solid var(--rg-line);
+}
+.ck-title {
+  /* First in the DOM so the initial focus lands here; Close is drawn before it. */
+  order: 2;
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 1.1em;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ck-title:focus-visible {
+  outline: 3px solid var(--rg-focus);
+  outline-offset: 2px;
+}
+.ck-close {
+  order: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 48px;
+  min-width: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--rg-ink);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--rg-ink);
+  font: inherit;
+  font-size: 1rem;
+  cursor: pointer;
+}
+.ck-close:focus-visible,
+.ck-box:focus-visible {
+  outline: 3px solid var(--rg-focus);
+  outline-offset: 2px;
+}
+.ck-info {
+  padding: 8px 16px 0;
+  color: var(--rg-muted);
+  font-size: 0.8em;
+}
+.ck-wake:empty {
+  display: none;
+}
+.ck-body {
+  padding: 12px 16px 24px;
+}
+.ck-sectitle {
+  margin-bottom: 8px;
+  font-size: 1.1em;
+  font-weight: 600;
+  color: var(--rg-accent);
+}
+.ck-box {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  accent-color: var(--rg-accent);
+  cursor: pointer;
+}
+/* Ingredient cell: the whole cell is the label; 48 px hit zone by padding. */
+.ck-dialog .rg-table th.rg-ing {
+  width: var(--ck-ing-w);
+  min-width: var(--ck-ing-w);
+  max-width: var(--ck-ing-w);
+  padding: 0;
+  font-size: 1em;
+  line-height: 1.3;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.ck-ing,
+.ck-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--ck-row-h);
+  padding: 8px 10px;
+  cursor: pointer;
+}
+.ck-ing:has(.ck-box:checked),
+.ck-item[data-checked='true'] {
+  background: var(--rg-banner);
+  color: var(--rg-muted);
+}
+.ck-ing:has(.ck-box:checked) > span,
+.ck-item[data-checked='true'] > span:last-child {
+  text-decoration: line-through;
+}
+.ck-ing:has(.ck-box:focus-visible),
+.ck-item:has(.ck-box:focus-visible) {
+  outline: 3px solid var(--rg-focus);
+  outline-offset: -3px;
+}
+.ck-dialog .rg-table td.rg-step {
+  padding: 0;
+  min-width: 156px;
+  cursor: default;
+}
+.ck-dialog .rg-table td.rg-step:hover {
+  filter: none;
+}
+.ck-dialog .rg-table td.rg-banner {
+  padding: 0;
+  font-size: 1em;
+}
+.ck-dialog .rg-table td.rg-banner .rg-bn {
+  width: auto;
+  position: static;
+  padding: 8px 10px;
+  flex: 1;
+}
+.ck-stepcell,
+.ck-bannerrow {
+  display: flex;
+  align-items: stretch;
+  min-height: var(--ck-row-h);
+}
+.ck-bannerrow {
+  align-items: center;
+  text-align: center;
+}
+.ck-strip {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  min-height: 48px;
+  cursor: pointer;
+  border-right: 1px solid var(--rg-line);
+}
+li > .ck-item > .ck-strip {
+  align-self: stretch;
+}
+.ck-stepcell .rg-stepbtn {
+  flex: 1;
+  min-width: 108px;
+  min-height: 48px;
+  padding: 6px 8px;
+  font-size: 1em;
+}
+.ck-dialog .rg-par {
+  font-size: 0.8em;
+}
+.ck-stepcell:has(.ck-box:checked) .rg-lbl {
+  text-decoration: line-through;
+  color: var(--rg-muted);
+}
+.ck-list {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.ck-list > li {
+  border-bottom: 1px solid var(--rg-line);
+}
+.ck-num {
+  font-weight: 600;
+}
+.ck-dialog .rg-panel {
+  font-size: 1em;
+}
+.ck-dialog dialog.rg-sheet {
+  font-size: calc(1rem * var(--ck-scale));
+}
+@media (max-width: 639px) {
+  .ck-dialog .rg-table th.rg-ing {
+    font-size: 1em;
+  }
+}

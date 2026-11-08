@@ -116,3 +116,17 @@ export async function expectNoAxeViolations(page: Page) {
     })),
   ).toEqual([]);
 }
+
+/**
+ * Scrolls `locator` into view and waits for the resulting scroll event to be delivered. Menus
+ * that close on scroll (grid editor Row actions) would otherwise be closed by the scroll event
+ * of Playwright's own auto-scroll, which fires one frame after the click on a tall page.
+ */
+export async function scrollSettled(locator: Locator) {
+  await locator.scrollIntoViewIfNeeded();
+  await locator
+    .page()
+    .evaluate(
+      () => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))),
+    );
+}

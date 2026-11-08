@@ -55,7 +55,10 @@ export function SheetDialog({
       ref={ref}
       className={`rg-sheet ${className}`.trim()}
       aria-labelledby={labelledBy}
-      onClose={() => {
+      onClose={(e) => {
+        // React bubbles `close` through the component tree, so a sheet nested in another dialog
+        // (the step sheet inside cook mode) must not close its parent.
+        if (e.target !== e.currentTarget) return;
         if (!tearingDown.current) onClose();
       }}
       // A click on the dialog element itself (not its body) is a click on the backdrop.

@@ -13,6 +13,8 @@ import { RecipeGrid } from './RecipeGrid';
 import { RecipeList } from './RecipeList';
 import { StepSheet } from './StepDetail';
 import type { ApiRecipe } from './types';
+import type { QuantityDisplay } from './IngredientCell';
+import type { CookMode as CookModeComponent } from './cook/CookMode';
 import { btn, btnPrimary } from './styles';
 import { PHONE_QUERY, useMediaQuery, useViewPreference } from './useViewPreference';
 
@@ -68,6 +70,26 @@ export function RecipeView({
   const [editing, setEditing] = useState(false);
   const [justConverted, setJustConverted] = useState(false);
   const entry = useRef<HTMLButtonElement>(null);
+  // Cook mode (T10): the chunk loads on the first click; scale and units are frozen at open.
+  const cookButton = useRef<HTMLButtonElement>(null);
+  const [cookLoading, setCookLoading] = useState(false);
+  const [cook, setCook] = useState<{
+    View: typeof CookModeComponent;
+    display: QuantityDisplay;
+  } | null>(null);
+  const openCook = () => {
+    if (cookLoading) return;
+    const display = scale.display;
+    setCookLoading(true);
+    import('./cook/CookMode')
+      .then((m) => setCook({ View: m.CookMode, display }))
+      .catch(() => {})
+      .finally(() => setCookLoading(false));
+  };
+  const closeCook = () => {
+    setCook(null);
+    requestAnimationFrame(() => cookButton.current?.focus());
+  };
 
   const gridPossible = recipe.view_mode === 'grid';
   const mode = effectiveViewMode({
@@ -132,6 +154,32 @@ export function RecipeView({
     <div ref={root}>
       {actions !== undefined && (
         <div className="my-4 flex flex-wrap items-center gap-2">
+          <button
+            ref={cookButton}
+            type="button"
+            className={btn}
+            aria-haspopup="dialog"
+            aria-busy={cookLoading || undefined}
+            onClick={openCook}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="20"
+              height="20"
+              aria-hidden="true"
+              focusable="false"
+              className="mr-2"
+            >
+              <path
+                d="M7 10a4 4 0 1 1 3-6.6A4 4 0 0 1 17 10v1H7zM7 13h10v6a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1z"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinejoin="round"
+              />
+            </svg>
+            {t('cook.open')}
+          </button>
           {actions}
           {canEditGrid && (
             <button ref={entry} type="button" className={btn} onClick={openEditor}>
@@ -191,6 +239,14 @@ export function RecipeView({
         </>
       ) : (
         <RecipeList sections={recipe.sections} display={scale.display} />
+      )}
+      {cook && (
+        <cook.View
+          recipe={recipe}
+          display={cook.display}
+          mode={gridPossible ? 'grid' : 'list'}
+          onClose={closeCook}
+        />
       )}
     </div>
   );

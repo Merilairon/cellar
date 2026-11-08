@@ -21,6 +21,10 @@ export function apiFromInput(r: RecipeInput, id = 'r1'): ApiRecipe {
     created_at: '2026-01-01T00:00:00.000Z',
     updated_at: '2026-01-01T00:00:00.000Z',
     can_edit: true,
+    photos: [],
+    rating_avg: null,
+    rating_count: 0,
+    my_rating: null,
     sections: r.sections.map((s, si) => ({
       id: `s${si}`,
       position: si,

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { buildSectionLayout } from '@/lib/grid/layout';
 import { formatStepParams, type StepT } from './formatStep';
@@ -5,6 +6,10 @@ import { IngredientCell, type QuantityDisplay } from './IngredientCell';
 import { ScrollRegion } from './ScrollRegion';
 import { StepPanel } from './StepDetail';
 import type { ApiSection, ApiStep } from './types';
+
+/** Context handed to the optional lead slots (cook mode checkboxes). Indexes, never ids (G6). */
+export type IngredientLeadCtx = { sectionIndex: number; rowIndex: number };
+export type StepLeadCtx = { sectionIndex: number; stepIndex: number; step: ApiStep };
 
 export type RecipeGridProps = {
   sections: ApiSection[];
@@ -20,6 +25,15 @@ export type RecipeGridProps = {
   detailMode?: 'inline' | 'sheet';
   /** Unit preference, factor and toggle for the ingredient quantities. */
   display?: QuantityDisplay;
+  /**
+   * `cell` (default): the whole step `<td>` is the click target. `button`: only the inner button
+   * expands and the `<td>` has no click handler (cook mode, where a checkbox zone shares the cell).
+   */
+  stepTarget?: 'cell' | 'button';
+  /** Absent by default. When given, the ingredient cell becomes a label around lead + text. */
+  renderIngredientLead?: (ctx: IngredientLeadCtx) => ReactNode;
+  /** Absent by default. Rendered before the step button (and before banner text). */
+  renderStepLead?: (ctx: StepLeadCtx) => ReactNode;
 };
 
 /** Props in, markup out. One real <table> per section. */
@@ -30,6 +44,9 @@ export function RecipeGrid({
   onSelectStep,
   detailMode = 'inline',
   display,
+  stepTarget = 'cell',
+  renderIngredientLead,
+  renderStepLead,
 }: RecipeGridProps) {
   const t = useTranslations();
   const stepT: StepT = (key, values) => t(key, values);
@@ -48,13 +65,27 @@ export function RecipeGrid({
 
         const banner = (s: ApiStep) => {
           const params = formatStepParams(s, stepT);
+          const text = (
+            <div className="rg-bn">
+              {s.detail || s.label}
+              {params && <span className="rg-parinline"> {params}</span>}
+            </div>
+          );
           return (
             <tr key={s.id}>
               <td colSpan={colSpan} className="rg-banner">
-                <div className="rg-bn">
-                  {s.detail || s.label}
-                  {params && <span className="rg-parinline"> {params}</span>}
-                </div>
+                {renderStepLead ? (
+                  <div className="ck-bannerrow">
+                    {renderStepLead({
+                      sectionIndex: si,
+                      stepIndex: section.steps.indexOf(s),
+                      step: s,
+                    })}
+                    {text}
+                  </div>
+                ) : (
+                  text
+                )}
               </td>
             </tr>
           );
@@ -88,7 +119,16 @@ export function RecipeGrid({
                   {ingredients.map((ing, r) => (
                     <tr key={ing.id}>
                       <th scope="row" className="rg-ing">
-                        <IngredientCell ingredient={ing} display={display} />
+                        {renderIngredientLead ? (
+                          <label className="ck-ing">
+                            {renderIngredientLead({ sectionIndex: si, rowIndex: r })}
+                            <span>
+                              <IngredientCell ingredient={ing} display={display} />
+                            </span>
+                          </label>
+                        ) : (
+                          <IngredientCell ingredient={ing} display={display} />
+                        )}
                       </th>
                       {layout.rows[r].map((cell) => {
                         if (cell.type === 'empty') {
@@ -98,37 +138,62 @@ export function RecipeGrid({
                         const step = c.step;
                         const open = step.id === expandedStepId;
                         const params = formatStepParams(step, stepT);
+                        const button = (
+                          <button
+                            type="button"
+                            onClick={
+                              stepTarget === 'button'
+                                ? () => onSelectStep?.(open ? null : step.id)
+                                : undefined
+                            }
+                            className="rg-stepbtn"
+                            data-step-id={step.id}
+                            aria-expanded={detailMode === 'inline' ? open : undefined}
+                            aria-controls={detailMode === 'inline' ? detailId : undefined}
+                            aria-haspopup={detailMode === 'sheet' ? 'dialog' : undefined}
+                          >
+                            <span className="rg-lbl">{step.label}</span>
+                            {params && <span className="rg-par">{params}</span>}
+                            <span className="sr-only">
+                              {c.rowStart === c.rowEnd
+                                ? t('recipe.grid.stepRow', {
+                                    name: ingredients[c.rowStart]?.name ?? '',
+                                  })
+                                : t('recipe.grid.stepRows', {
+                                    from: ingredients[c.rowStart]?.name ?? '',
+                                    to: ingredients[c.rowEnd]?.name ?? '',
+                                  })}
+                            </span>
+                          </button>
+                        );
                         return (
-                          // The td takes the click so the whole cell is a target; the inner
+                          // 'cell': the td takes the click so the whole cell is a target; the inner
                           // button is the keyboard stop and its click bubbles up to here.
+                          // 'button': only the button expands (cook mode shares the cell with a
+                          // checkbox zone).
                           <td
                             key={step.id}
                             rowSpan={c.rowSpan}
                             className="rg-step"
                             data-selected={open}
-                            onClick={() => onSelectStep?.(open ? null : step.id)}
+                            onClick={
+                              stepTarget === 'cell'
+                                ? () => onSelectStep?.(open ? null : step.id)
+                                : undefined
+                            }
                           >
-                            <button
-                              type="button"
-                              className="rg-stepbtn"
-                              data-step-id={step.id}
-                              aria-expanded={detailMode === 'inline' ? open : undefined}
-                              aria-controls={detailMode === 'inline' ? detailId : undefined}
-                              aria-haspopup={detailMode === 'sheet' ? 'dialog' : undefined}
-                            >
-                              <span className="rg-lbl">{step.label}</span>
-                              {params && <span className="rg-par">{params}</span>}
-                              <span className="sr-only">
-                                {c.rowStart === c.rowEnd
-                                  ? t('recipe.grid.stepRow', {
-                                      name: ingredients[c.rowStart]?.name ?? '',
-                                    })
-                                  : t('recipe.grid.stepRows', {
-                                      from: ingredients[c.rowStart]?.name ?? '',
-                                      to: ingredients[c.rowEnd]?.name ?? '',
-                                    })}
-                              </span>
-                            </button>
+                            {renderStepLead ? (
+                              <div className="ck-stepcell">
+                                {renderStepLead({
+                                  sectionIndex: si,
+                                  stepIndex: section.steps.indexOf(step),
+                                  step,
+                                })}
+                                {button}
+                              </div>
+                            ) : (
+                              button
+                            )}
                           </td>
                         );
                       })}

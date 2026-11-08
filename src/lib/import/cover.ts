@@ -1,9 +1,9 @@
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import sharp from 'sharp';
 import { ulid } from 'ulid';
 import type { Db } from '@/lib/db/connection';
 import { insertCoverPhoto } from '@/lib/db/photos';
+import { MAIN_EDGE, MAX_UPLOAD_PIXELS, processImage, sniffImage } from '@/lib/images/process';
 import { ImportError } from './errors';
 import { limitDecode, limitFetch } from './limiter';
 import {
@@ -16,15 +16,14 @@ import {
 // rules, image accept types, 5 MB cap, 10 s). Bytes are then verified by magic number,
 // size-checked before decode, decoded by sharp, resized, stripped of metadata (EXIF/GPS)
 // and re-encoded as WebP. The file name is a fresh ULID, never derived from remote input.
-// Open item (04c): `POST /api/recipes/:id/copy` does not copy the cover file.
+// Main and thumbnail files are both stored (G1); "Save a copy" copies them (recipes/photos.ts).
 
-export const MAX_COVER_EDGE = 1600;
-/** Pixel cap checked from the header, before any decode (decompression-bomb guard). */
-export const MAX_COVER_PIXELS = 16_000_000;
+export const MAX_COVER_EDGE = MAIN_EDGE;
+export const MAX_COVER_PIXELS = MAX_UPLOAD_PIXELS;
+export { sniffImage };
 
-// Small hosts (Raspberry Pi): one libvips thread, no operation cache.
-sharp.concurrency(1);
-sharp.cache(false);
+// Imports keep accepting gif (first frame only); uploads do not.
+const IMPORT_ALLOWED = ['jpeg', 'png', 'webp', 'gif'] as const;
 
 export type CoverDeps = {
   safeFetch?: (url: string, opts?: SafeFetchOptions) => Promise<SafeFetchResult>;
@@ -35,62 +34,13 @@ export type CoverDeps = {
 
 export type CoverFailure = 'fetch_failed' | 'invalid_image' | 'too_large' | 'blocked';
 
-/** Image kind from magic bytes; SVG and everything else is refused. */
-export function sniffImage(b: Uint8Array): 'jpeg' | 'png' | 'webp' | 'gif' | null {
-  const at = (i: number) => b[i];
-  if (b.length >= 3 && at(0) === 0xff && at(1) === 0xd8 && at(2) === 0xff) return 'jpeg';
-  if (
-    b.length >= 8 &&
-    at(0) === 0x89 &&
-    at(1) === 0x50 &&
-    at(2) === 0x4e &&
-    at(3) === 0x47 &&
-    at(4) === 0x0d &&
-    at(5) === 0x0a &&
-    at(6) === 0x1a &&
-    at(7) === 0x0a
-  )
-    return 'png';
-  const ascii = (from: number, s: string) =>
-    b.length >= from + s.length && [...s].every((c, i) => at(from + i) === c.charCodeAt(0));
-  if (ascii(0, 'RIFF') && ascii(8, 'WEBP')) return 'webp';
-  if (ascii(0, 'GIF87a') || ascii(0, 'GIF89a')) return 'gif';
-  return null;
-}
-
 /** Re-encode untrusted image bytes. Throws ImportError('fetch_failed') for anything invalid. */
 export async function reencodeCover(
   bytes: Uint8Array,
 ): Promise<{ data: Buffer; width: number; height: number }> {
-  const kind = sniffImage(bytes);
-  if (!kind) throw new ImportError('fetch_failed');
-  try {
-    const input = sharp(bytes, { limitInputPixels: MAX_COVER_PIXELS, failOn: 'error' });
-    const meta = await input.metadata();
-    if (
-      !meta.format ||
-      !['jpeg', 'png', 'webp', 'gif'].includes(meta.format) ||
-      !meta.width ||
-      !meta.height ||
-      meta.width * meta.height > MAX_COVER_PIXELS
-    ) {
-      throw new ImportError('fetch_failed');
-    }
-    const { data, info } = await input
-      .rotate() // apply EXIF orientation, then metadata is dropped (sharp default)
-      .resize({
-        width: MAX_COVER_EDGE,
-        height: MAX_COVER_EDGE,
-        fit: 'inside',
-        withoutEnlargement: true,
-      })
-      .webp({ quality: 80 })
-      .toBuffer({ resolveWithObject: true });
-    return { data, width: info.width, height: info.height };
-  } catch (e) {
-    if (e instanceof ImportError) throw e;
-    throw new ImportError('fetch_failed', e);
-  }
+  const r = await processImage(bytes, { allowed: IMPORT_ALLOWED });
+  if (!r.ok) throw new ImportError('fetch_failed');
+  return r.main;
 }
 
 /**
@@ -105,16 +55,28 @@ export async function fetchAndStoreCover(
 ): Promise<string> {
   const fetchImage = deps.safeFetch ?? defaultSafeFetch;
   const res = await limitFetch(() => fetchImage(url, { ...deps.fetchOptions, accept: 'image' }));
-  const { data, width, height } = await limitDecode(() => reencodeCover(res.body));
+  const processed = await limitDecode(() => processImage(res.body, { allowed: IMPORT_ALLOWED }));
+  if (!processed.ok) throw new ImportError('fetch_failed');
+  const { main, thumb } = processed;
 
-  const fileName = `${ulid()}.webp`;
+  // Both files are written before the row; on any failure nothing stays on disk (G1, G11).
+  const mainName = `${ulid()}.webp`;
+  const thumbName = `${ulid()}.webp`;
   await mkdir(deps.uploadsDir, { recursive: true, mode: 0o700 });
-  const abs = join(deps.uploadsDir, fileName);
-  await writeFile(abs, data, { mode: 0o600, flag: 'wx' });
+  const mainAbs = join(deps.uploadsDir, mainName);
+  const thumbAbs = join(deps.uploadsDir, thumbName);
   try {
-    return insertCoverPhoto(db, recipeId, { filePath: fileName, width, height }).id;
+    await writeFile(mainAbs, main.data, { mode: 0o600, flag: 'wx' });
+    await writeFile(thumbAbs, thumb.data, { mode: 0o600, flag: 'wx' });
+    return insertCoverPhoto(db, recipeId, {
+      filePath: mainName,
+      thumbPath: thumbName,
+      width: main.width,
+      height: main.height,
+    }).id;
   } catch (e) {
-    await rm(abs, { force: true });
+    await rm(mainAbs, { force: true });
+    await rm(thumbAbs, { force: true });
     throw new ImportError('fetch_failed', e);
   }
 }

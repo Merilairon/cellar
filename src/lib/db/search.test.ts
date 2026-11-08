@@ -246,3 +246,34 @@ describe('searchRecipes', () => {
     );
   }, 120_000);
 });
+
+describe('searchRecipes query plan (T14 regression)', () => {
+  it('runs the recipe_fts MATCH once (materialized CTE), not per recipe row', () => {
+    const db = openDb(':memory:');
+    runMigrations(db);
+    const u = db
+      .insert(user)
+      .values({ email: 'p@x.test', displayName: 'p', passwordHash: 'h', role: 'member' })
+      .returning()
+      .get();
+    const stmts: string[] = [];
+    const orig = db.$client.prepare.bind(db.$client);
+    (db.$client as unknown as { prepare: unknown }).prepare = (sqlText: string) => {
+      stmts.push(sqlText);
+      return orig(sqlText);
+    };
+    searchRecipes(db, u.id, { q: 'chicken' });
+    (db.$client as unknown as { prepare: unknown }).prepare = orig;
+    const text = stmts.find((t) => /recipe_fts/.test(t) && /note_fts/.test(t));
+    expect(text).toBeDefined();
+    const params = (text!.match(/\?/g) ?? []).length;
+    const plan = (
+      db.$client
+        .prepare(`explain query plan ${text}`)
+        .all(...Array.from({ length: params }, () => '"chicken"*')) as { detail: string }[]
+    ).map((r) => r.detail);
+    expect(plan.some((d) => /MATERIALIZE rf/.test(d))).toBe(true);
+    // recipe_fts must never be the inner side of a LEFT JOIN (re-run per recipe row).
+    expect(plan.some((d) => /recipe_fts.*LEFT-JOIN/.test(d))).toBe(false);
+  });
+});

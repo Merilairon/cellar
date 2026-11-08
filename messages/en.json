@@ -22,6 +22,165 @@
     "passwordChanged": "Password updated. Sign in with your new password.",
     "registered": "Account created. Sign in."
   },
+  "notes": {
+    "errors": {
+      "note_limit": "You can add at most 200 notes to one recipe.",
+      "nul_char": "The note contains a character that is not allowed.",
+      "too_small": "Write something before saving the note.",
+      "too_big": "A note can have at most 4000 characters.",
+      "invalid_type": "Enter a valid value.",
+      "unrecognized_keys": "The note contains a field that is not allowed."
+    },
+    "heading": "Notes",
+    "list": {
+      "label": "Notes"
+    },
+    "empty": "No notes yet. Notes you mark Only me stay private.",
+    "you": "You",
+    "marker": {
+      "private": "Only you",
+      "shared": "Shared"
+    },
+    "add": {
+      "label": "Add a note",
+      "submit": "Add note",
+      "hintCtrlEnter": "Ctrl+Enter to add.",
+      "reasonEmpty": "Write something first",
+      "reasonTooLong": "{n, plural, one {# character too many} other {# characters too many}}"
+    },
+    "added": "Note added.",
+    "counter": {
+      "value": "{n} / {max}",
+      "left": "{n} characters left",
+      "limit": "Limit reached"
+    },
+    "visibility": {
+      "legend": "Who can see this note",
+      "private": "Only me",
+      "privateHelp": "Nobody else can see or search this note.",
+      "shared": "Everyone who can see this recipe",
+      "sharedHelp": "Shown with your name. Found by search.",
+      "nowPrivate": "Others will no longer see or find this note.",
+      "nowShared": "Others will see this note with your name."
+    },
+    "edit": "Edit",
+    "save": "Save",
+    "cancel": "Cancel",
+    "saved": "Note saved.",
+    "delete": "Delete",
+    "deleteConfirm": "Delete this note? This cannot be undone.",
+    "deleteYes": "Delete",
+    "deleteKeep": "Keep",
+    "deleted": "Note deleted.",
+    "error": {
+      "limit": "You have 200 notes on this recipe, the most allowed.",
+      "empty": "Write something before saving.",
+      "tooLong": "A note can have at most 4000 characters.",
+      "forbidden": "You can no longer add notes to this recipe.",
+      "network": "Could not save the note. Your text is still here. Try again.",
+      "generic": "The note could not be saved. Check the text and try again."
+    }
+  },
+  "rating": {
+    "errors": {
+      "invalid_type": "Choose a rating of 1 to 5 stars.",
+      "too_small": "Choose a rating of 1 to 5 stars.",
+      "too_big": "Choose a rating of 1 to 5 stars.",
+      "unrecognized_keys": "The rating contains a field that is not allowed."
+    },
+    "group": {
+      "label": "Your rating"
+    },
+    "star": "{n} of 5 stars",
+    "yours": "Your rating: {n} of 5",
+    "none": "Not rated yet",
+    "clear": "Clear my rating",
+    "saved": "Your rating is {n} of 5 stars.",
+    "cleared": "Your rating was cleared.",
+    "error": {
+      "save": "Could not save your rating."
+    },
+    "summary": {
+      "some": "{avg} from {count, plural, one {# rating} other {# ratings}}",
+      "none": "No ratings yet"
+    },
+    "card": {
+      "label": "Average rating {avg} of 5 from {count, plural, one {# rating} other {# ratings}}",
+      "none": "Not rated yet"
+    },
+    "filter": {
+      "legend": "Minimum rating",
+      "any": "Any",
+      "option": "{n}+ stars",
+      "optionLabel": "{n} stars or more",
+      "chip": "{n}+ stars",
+      "remove": "Remove minimum rating filter",
+      "unratedHidden": "Recipes nobody has rated are hidden.",
+      "empty": "No recipes with an average of {n} stars or more match. Lower the minimum rating or clear the filters."
+    }
+  },
+  "photos": {
+    "errors": {
+      "photo_limit": "A recipe can have at most 10 photos.",
+      "empty_file": "The file is empty.",
+      "invalid_image": "This file is not a readable image.",
+      "unsupported_type": "Only JPEG, PNG and WebP photos are accepted.",
+      "too_many_pixels": "This image is too large. Use one under 16 megapixels.",
+      "payload_too_large": "The photo is larger than 10 MB.",
+      "unsupported_media_type": "Send the photo as an image file.",
+      "busy": "The server is busy processing photos. Try again in a moment.",
+      "request_timeout": "The upload took too long. Check your connection and try again.",
+      "invalid_query": "That image size is not available."
+    },
+    "heading": "Photos",
+    "count": "{n} of {max}",
+    "edit": "Edit photos",
+    "done": "Done",
+    "add": "Add photos",
+    "addFirst": "Add a photo",
+    "empty": "No photos yet.",
+    "emptyPrompt": "No photo yet",
+    "cover": "Cover",
+    "makeCover": "Make cover",
+    "nowCover": "Photo {n} of {total} is now the cover.",
+    "delete": "Delete",
+    "deleteConfirm": "Delete this photo? This cannot be undone.",
+    "deleteYes": "Delete",
+    "deleteKeep": "Keep",
+    "deleted": "Photo deleted.",
+    "alt": {
+      "hero": "Photo of {title}",
+      "item": "Photo {n} of {total}"
+    },
+    "unavailable": "Photo unavailable",
+    "gallery": {
+      "label": "Photos"
+    },
+    "upload": {
+      "progress": "Uploading {i} of {n}: {percent} %",
+      "pending": "Waiting to upload",
+      "added": "Photo added.",
+      "addedMany": "{n} photos added.",
+      "addedCover": "Added. It is now the cover.",
+      "addedRow": "Added",
+      "retry": "Try again",
+      "dismiss": "Dismiss",
+      "problem": "Problem",
+      "limitReached": "This recipe has 10 photos, the most it can have. Delete one to add another."
+    },
+    "error": {
+      "tooLarge": "{name} is larger than 10 MB.",
+      "unsupported": "{name} is not a supported image. Use JPEG, PNG or WebP.",
+      "invalid": "{name} could not be read as an image.",
+      "tooManyPixels": "{name} has too many pixels. Resize it and try again.",
+      "limit": "This recipe already has 10 photos. Delete one to add another.",
+      "busy": "The server is busy. Try again in a moment.",
+      "forbidden": "You can no longer edit this recipe.",
+      "network": "Could not upload {name}. Check your connection.",
+      "coverFailed": "Could not change the cover. Try again.",
+      "deleteFailed": "Could not delete the photo. Try again."
+    }
+  },
   "common": {
     "logout": "Sign out",
     "invalidLink": "This link is invalid or has expired.",
@@ -734,6 +893,29 @@
       "close": "Close",
       "details": "Step details (label, text, time)",
       "covers": "{count, plural, one {Covers # row} other {Covers # rows}}"
+    }
+  },
+  "cook": {
+    "open": "Cook",
+    "close": "Close",
+    "heading": "Cooking: {title}",
+    "progress": "{i} of {n} ingredients, {j} of {m} steps",
+    "scale": "Scaled {n}x",
+    "units": {
+      "us": "US units",
+      "metric": "Metric units"
+    },
+    "step": {
+      "check": "Mark {label} done"
+    },
+    "wake": {
+      "on": "Screen stays on while you cook.",
+      "unsupported": "Your screen may turn off. Keeping it on needs a secure (HTTPS) connection or a browser that supports it.",
+      "failed": "Could not keep the screen on. It may turn off."
+    },
+    "list": {
+      "ingredients": "Ingredients",
+      "steps": "Steps"
     }
   }
 }

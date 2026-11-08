@@ -1,4 +1,8 @@
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { insertPhoto } from '@/lib/db/photos';
 import { openDb, type Db } from '@/lib/db/connection';
 import { runMigrations } from '@/lib/db/migrate';
 import { createRecipe, getRecipeFull } from '@/lib/db/recipes';
@@ -198,5 +202,60 @@ describe('deleteUserSchema', () => {
     expect(
       deleteUserSchema.safeParse({ userId: 'u', recipes: 'reassign', reassignTo: 'v' }).success,
     ).toBe(true);
+  });
+});
+
+describe('deleteUser photo files (C2)', () => {
+  const tree = () => toTree(recipeInputSchema.parse(SAMPLE_VANILLA_CAKE), 'grid');
+  const photoFor = (dir: string, recipeId: string, name: string) => {
+    writeFileSync(join(dir, `${name}.webp`), 'x');
+    writeFileSync(join(dir, `${name}-t.webp`), 'x');
+    insertPhoto(db, recipeId, {
+      filePath: `${name}.webp`,
+      thumbPath: `${name}-t.webp`,
+      width: 1,
+      height: 1,
+    });
+  };
+
+  it("recipes: 'delete' unlinks the owner's photo files, others and reassign keep theirs", () => {
+    setup();
+    const dir = mkdtempSync(join(tmpdir(), 'c2-'));
+    try {
+      const a = mk('a@x.test', 'admin');
+      const m = mk('m@x.test', 'member');
+      const n = mk('n@x.test', 'member');
+      const mine = createRecipe(db, m.id, tree());
+      const other = createRecipe(db, n.id, tree());
+      photoFor(dir, mine, 'mine');
+      photoFor(dir, other, 'other');
+      expect(deleteUser(db, m.id, { recipes: 'delete' }, { uploadsDir: dir })).toBe('ok');
+      expect(existsSync(join(dir, 'mine.webp'))).toBe(false);
+      expect(existsSync(join(dir, 'mine-t.webp'))).toBe(false);
+      expect(existsSync(join(dir, 'other.webp'))).toBe(true);
+      const kept = createRecipe(db, n.id, tree());
+      photoFor(dir, kept, 'kept');
+      expect(
+        deleteUser(db, n.id, { recipes: 'reassign', reassignTo: a.id }, { uploadsDir: dir }),
+      ).toBe('ok');
+      expect(existsSync(join(dir, 'kept.webp'))).toBe(true);
+      expect(existsSync(join(dir, 'other.webp'))).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('a refused delete (last admin) leaves the files alone', () => {
+    setup();
+    const dir = mkdtempSync(join(tmpdir(), 'c2-'));
+    try {
+      const a = mk('a@x.test', 'admin');
+      const r = createRecipe(db, a.id, tree());
+      photoFor(dir, r, 'adm');
+      expect(deleteUser(db, a.id, { recipes: 'delete' }, { uploadsDir: dir })).toBe('last_admin');
+      expect(existsSync(join(dir, 'adm.webp'))).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
