@@ -1,6 +1,14 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
-import { account, createRecipe, hydrated, registerViaInvite, SAMPLES, signIn } from './helpers';
+import {
+  account,
+  createRecipe,
+  hydrated,
+  registerViaInvite,
+  SAMPLES,
+  scrollSettled,
+  signIn,
+} from './helpers';
 
 // T12: axe (WCAG 2.2 A/AA rule set) over every state of the editor, light and dark, at 375 / 768 /
 // 1280, plus target size (2.5.8), reflow (1.4.10), reduced motion and the tab-stop count per
@@ -82,10 +90,9 @@ for (const scheme of ['light', 'dark'] as const) {
       if (phone) await expect(page.getByRole('dialog')).toBeHidden();
 
       // Row actions: menu at >= 640, row sheet on the phone.
-      await page
-        .getByRole('button', { name: /^Row actions for/ })
-        .first()
-        .click();
+      const firstActions = page.getByRole('button', { name: /^Row actions for/ }).first();
+      await scrollSettled(firstActions);
+      await firstActions.click();
       await expect(page.getByRole(phone ? 'dialog' : 'menu')).toBeVisible();
       await axe(page, phone ? 'row sheet' : 'row actions menu');
       await page.keyboard.press('Escape');
@@ -114,7 +121,7 @@ for (const scheme of ['light', 'dark'] as const) {
 
       // Warning: a new, uncovered row, then the problems panel.
       const lastMenu = page.getByRole('button', { name: /^Row actions for/ }).last();
-      await lastMenu.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+      await scrollSettled(lastMenu);
       await lastMenu.click();
       await page.getByRole(phone ? 'button' : 'menuitem', { name: 'Add row below' }).click();
       await page.keyboard.type('1 tsp warning salt');

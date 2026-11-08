@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
-import { account, createRecipe, registerViaInvite, signIn } from './helpers';
+import { account, createRecipe, registerViaInvite, scrollSettled, signIn } from './helpers';
 import {
   COOKIE_BANNERS_TOP,
   COOKIE_COLUMNS,
@@ -96,10 +96,9 @@ test('mouse only: recreate the Mocha Skillet Cookie, save, reload, compare with 
   await expect(rows).toHaveCount(8);
 
   // Row 9: Row actions > Add row below, type, click away to commit.
-  await page
-    .getByRole('button', { name: /^Row actions for/ })
-    .last()
-    .click();
+  const lastActions = page.getByRole('button', { name: /^Row actions for/ }).last();
+  await scrollSettled(lastActions);
+  await lastActions.click();
   await page.getByRole('menuitem', { name: 'Add row below' }).click();
   await page.getByRole('textbox', { name: 'Edit ingredient 9' }).fill(NINTH_ROW_TEXT);
   await page.getByRole('heading', { name: 'Grid editor' }).click();

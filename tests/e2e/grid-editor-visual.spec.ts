@@ -1,5 +1,13 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test';
-import { account, createRecipe, hydrated, registerViaInvite, SAMPLES, signIn } from './helpers';
+import {
+  account,
+  createRecipe,
+  hydrated,
+  registerViaInvite,
+  SAMPLES,
+  scrollSettled,
+  signIn,
+} from './helpers';
 
 /**
  * Visual baselines for the grid editor (v0.4.1 T13) on the Mocha Skillet Cookie at 375 / 768 /
@@ -167,7 +175,7 @@ for (const { w, h } of WIDTHS) {
   test(`editor issues panel @${w}`, async ({ browser }) => {
     const { page, close } = await open(browser, { w, h });
     const lastMenu = page.getByRole('button', { name: /^Row actions for/ }).last();
-    await lastMenu.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+    await scrollSettled(lastMenu);
     await lastMenu.click();
     await page.getByRole(phone ? 'button' : 'menuitem', { name: 'Add row below' }).click();
     await page.keyboard.type('1 tsp warning salt');

@@ -106,20 +106,18 @@ test('edit text, add, split, delete with Undo toast', async ({ browser }) => {
   await expect(rows.first()).toContainText('unsalted butter');
 
   // Add row below, committing empty text removes it again.
-  await page
-    .getByRole('button', { name: /^Row actions for/ })
-    .first()
-    .click();
+  const actions = page.getByRole('button', { name: /^Row actions for/ }).first();
+  await scrollSettled(actions);
+  await actions.click();
   await page.getByRole('menuitem', { name: 'Add row below' }).click();
   await expect(page.getByRole('textbox', { name: 'Edit ingredient 2' })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(rows).toHaveCount(before);
 
   // Split into portions: chips and a focused label field.
-  await page
-    .getByRole('button', { name: /^Row actions for/ })
-    .first()
-    .click();
+  const actions2 = page.getByRole('button', { name: /^Row actions for/ }).first();
+  await scrollSettled(actions2);
+  await actions2.click();
   await page.getByRole('menuitem', { name: 'Split into portions' }).click();
   await expect(page.getByRole('textbox', { name: /^Portion label for/ })).toBeFocused();
   await page.keyboard.type('later');
