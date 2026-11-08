@@ -3,6 +3,7 @@ import { getCurrentUser } from '@/lib/auth/current-user';
 import { getEnv } from '@/lib/env';
 import type { User } from '@/lib/db/users';
 import type { Failure } from './service';
+import { uploadReadTimeoutMs } from './upload-gate';
 
 export const json = (status: number, body: unknown): Response => Response.json(body, { status });
 
@@ -88,4 +89,69 @@ export async function readJson(
   } catch {
     return json(400, { error: 'invalid_json' });
   }
+}
+
+/** Photo upload cap: exactly 10 MiB is accepted, one byte more is 413 (spec, Q11). */
+export const PHOTO_BODY_MAX = 10 * 1024 * 1024;
+
+/**
+ * Read a raw `image/*` request body (photo upload), never holding more than `maxBytes`.
+ * Order matters: a non-image Content-Type is 415 before anything is read; an oversize
+ * Content-Length is 413 before anything is read; a missing or lying length is caught while
+ * streaming (the reader is cancelled at the first chunk that crosses the cap, so at most one
+ * chunk past the cap is ever pulled). A valid declared length under the cap preallocates the
+ * result once and chunks are copied straight in (no second concat copy); a body longer than it
+ * declared grows the buffer, still bounded by the cap. The whole read has a deadline
+ * (`timeoutMs`, default 30 s): a stalled sender gets 408 `request_timeout`. The type is only a
+ * hint: magic bytes decide later. Returns the bytes (possibly zero-length; the caller rejects
+ * that) or a Response.
+ */
+export async function readCappedBytes(
+  request: Request,
+  maxBytes: number = PHOTO_BODY_MAX,
+  opts: { timeoutMs?: number } = {},
+): Promise<{ bytes: Uint8Array } | Response> {
+  const type = request.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() ?? '';
+  if (!/^image\/[a-z0-9.+-]+$/.test(type)) return json(415, { error: 'unsupported_media_type' });
+  const declared = request.headers.get('content-length');
+  if (declared !== null && Number(declared) > maxBytes) {
+    return json(413, { error: 'payload_too_large' });
+  }
+  if (!request.body) return { bytes: new Uint8Array(0) };
+  const timeoutMs = opts.timeoutMs ?? uploadReadTimeoutMs();
+  const n = declared !== null && /^\d+$/.test(declared) ? Number(declared) : 0;
+  let buf = new Uint8Array(n > 0 && n <= maxBytes ? n : 0);
+  let total = 0;
+  const reader = request.body.getReader();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<'timeout'>((resolve) => {
+    timer = setTimeout(() => resolve('timeout'), timeoutMs);
+  });
+  try {
+    for (;;) {
+      const next = await Promise.race([reader.read(), timedOut]);
+      if (next === 'timeout') {
+        reader.cancel().catch(() => undefined);
+        return json(408, { error: 'request_timeout' });
+      }
+      if (next.done) break;
+      const chunk = next.value;
+      if (total + chunk.byteLength > maxBytes) {
+        await reader.cancel().catch(() => undefined);
+        return json(413, { error: 'payload_too_large' });
+      }
+      if (total + chunk.byteLength > buf.byteLength) {
+        const grown = new Uint8Array(
+          Math.min(maxBytes, Math.max(total + chunk.byteLength, buf.byteLength * 2, 64 * 1024)),
+        );
+        grown.set(buf.subarray(0, total));
+        buf = grown;
+      }
+      buf.set(chunk, total);
+      total += chunk.byteLength;
+    }
+  } finally {
+    clearTimeout(timer);
+  }
+  return { bytes: total === buf.byteLength ? buf : buf.subarray(0, total) };
 }

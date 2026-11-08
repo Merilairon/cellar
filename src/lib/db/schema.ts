@@ -267,6 +267,8 @@ export const photo = sqliteTable(
     filePath: text('file_path').notNull(),
     width: integer('width').notNull(),
     height: integer('height').notNull(),
+    // Relative to the uploads dir (<ulid>.webp). NULL for rows that predate 0007: serve the full image.
+    thumbPath: text('thumb_path'),
     position: integer('position').notNull().default(0),
     isCover: integer('is_cover', { mode: 'boolean' }).notNull().default(false),
     createdAt: createdAt(),
@@ -315,5 +317,62 @@ export const recipeTag = sqliteTable(
   ],
 );
 
+/** Max length of a note body (DB backstop; the service validates first). */
+export const MAX_NOTE_LENGTH = 4000;
+
+/**
+ * Per-user note on a recipe; `shared = 1` makes it visible to everyone who can read the recipe.
+ * Keyed by recipe_id only (recipe ids of children change on every save, the recipe id does not).
+ * Deleting the recipe or the author deletes the note (owner decision Q14).
+ */
+export const note = sqliteTable(
+  'note',
+  {
+    id: id(),
+    recipeId: text('recipe_id')
+      .notNull()
+      .references(() => recipe.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    body: text('body').notNull(),
+    shared: integer('shared', { mode: 'boolean' }).notNull().default(false),
+    createdAt: createdAt(),
+    updatedAt: text('updated_at')
+      .notNull()
+      .$defaultFn(() => nowIso()),
+  },
+  (t) => [
+    index('note_recipe_id_idx').on(t.recipeId),
+    index('note_user_id_idx').on(t.userId),
+    check('note_body_len_chk', sql`length(${t.body}) BETWEEN 1 AND 4000`),
+    check('note_shared_chk', sql`${t.shared} IN (0, 1)`),
+  ],
+);
+
+/** One star rating (1..5) per user and recipe. */
+export const rating = sqliteTable(
+  'rating',
+  {
+    recipeId: text('recipe_id')
+      .notNull()
+      .references(() => recipe.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    stars: integer('stars').notNull(),
+    createdAt: createdAt(),
+    updatedAt: text('updated_at')
+      .notNull()
+      .$defaultFn(() => nowIso()),
+  },
+  (t) => [
+    primaryKey({ columns: [t.recipeId, t.userId] }),
+    index('rating_recipe_id_idx').on(t.recipeId),
+    check('rating_stars_chk', sql`${t.stars} BETWEEN 1 AND 5`),
+  ],
+);
+
 // `recipe_fts` (FTS5 virtual table) and its sync triggers exist only in the hand-written
-// migration 0005_search_tags.sql; drizzle-kit cannot model them.
+// migration 0005_search_tags.sql; drizzle-kit cannot model them. Same for `note_fts` and its
+// triggers in 0007.

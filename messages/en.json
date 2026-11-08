@@ -22,6 +22,38 @@
     "passwordChanged": "Password updated. Sign in with your new password.",
     "registered": "Account created. Sign in."
   },
+  "notes": {
+    "errors": {
+      "note_limit": "You can add at most 200 notes to one recipe.",
+      "nul_char": "The note contains a character that is not allowed.",
+      "too_small": "Write something before saving the note.",
+      "too_big": "A note can have at most 4000 characters.",
+      "invalid_type": "Enter a valid value.",
+      "unrecognized_keys": "The note contains a field that is not allowed."
+    }
+  },
+  "rating": {
+    "errors": {
+      "invalid_type": "Choose a rating of 1 to 5 stars.",
+      "too_small": "Choose a rating of 1 to 5 stars.",
+      "too_big": "Choose a rating of 1 to 5 stars.",
+      "unrecognized_keys": "The rating contains a field that is not allowed."
+    }
+  },
+  "photos": {
+    "errors": {
+      "photo_limit": "A recipe can have at most 10 photos.",
+      "empty_file": "The file is empty.",
+      "invalid_image": "This file is not a readable image.",
+      "unsupported_type": "Only JPEG, PNG and WebP photos are accepted.",
+      "too_many_pixels": "This image is too large. Use one under 16 megapixels.",
+      "payload_too_large": "The photo is larger than 10 MB.",
+      "unsupported_media_type": "Send the photo as an image file.",
+      "busy": "The server is busy processing photos. Try again in a moment.",
+      "request_timeout": "The upload took too long. Check your connection and try again.",
+      "invalid_query": "That image size is not available."
+    }
+  },
   "common": {
     "logout": "Sign out",
     "invalidLink": "This link is invalid or has expired.",

@@ -205,7 +205,12 @@ describe('GET /api/recipes search params (T6)', () => {
   });
   it('rejects unknown, repeated and oversize params with 400 invalid_query', async () => {
     for (const qs of [
-      '?min_rating=3',
+      '?min_rating=0',
+      '?min_rating=6',
+      '?min_rating=3.5',
+      '?min_rating=x',
+      '?min_rating=',
+      '?min_rating=3&min_rating=4',
       '?foo=1',
       '?q=a&q=b',
       `?q=${'x'.repeat(101)}`,

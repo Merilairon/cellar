@@ -6,8 +6,7 @@ import { MAX_TAG_LEN } from '@/lib/recipes/tag-name';
 
 export const dynamic = 'force-dynamic';
 
-// Only q, tag and author are accepted. Anything else (min_rating arrives with ratings in 04c)
-// or a repeated parameter is 400 invalid_query, so a client never believes it is filtering.
+// Only q, tag, author and min_rating are accepted. Anything else or a repeated parameter is 400 invalid_query, so a client never believes it is filtering.
 // Limits count code points (a 30-emoji tag is 60 UTF-16 units), like search.ts and /api/tags.
 const maxCodePoints = (n: number) => (s: string) => [...s].length <= n;
 
@@ -18,6 +17,12 @@ const querySchema = z.strictObject({
     .string()
     // Ids are stored uppercase and compared case-sensitively: lowercase is 400, not an empty list.
     .regex(/^(me|[0-9A-HJKMNP-TV-Z]{26})$/)
+    .optional(),
+  // Digits only: "3.5", "0", "6", "x", "+3", " 3" are all 400. Stored avg >= n is applied in SQL.
+  min_rating: z
+    .string()
+    .regex(/^[1-5]$/)
+    .transform(Number)
     .optional(),
 });
 
@@ -33,7 +38,14 @@ export async function GET(request: Request) {
   }
   const parsed = querySchema.safeParse(raw);
   if (!parsed.success) return noStore(json(400, { error: 'invalid_query' }));
-  const res = json(200, { recipes: listRecipes(getDb(), auth.user, parsed.data) });
+  const res = json(200, {
+    recipes: listRecipes(getDb(), auth.user, {
+      q: parsed.data.q,
+      tag: parsed.data.tag,
+      author: parsed.data.author,
+      minRating: parsed.data.min_rating,
+    }),
+  });
   res.headers.set('Cache-Control', 'private, no-store');
   return res;
 }

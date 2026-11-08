@@ -84,8 +84,16 @@ describe('migrations', () => {
       'import_job',
       'ingredient',
       'invite',
+      'note',
+      'note_fts',
+      'note_fts_config',
+      'note_fts_content',
+      'note_fts_data',
+      'note_fts_docsize',
+      'note_fts_idx',
       'password_reset',
       'photo',
+      'rating',
       'recipe',
       'recipe_fts',
       'recipe_fts_config',
@@ -113,7 +121,7 @@ describe('migrations', () => {
     const n = db2.$client.prepare('SELECT count(*) AS n FROM __drizzle_migrations').get() as {
       n: number;
     };
-    expect(n.n).toBe(7);
+    expect(n.n).toBe(8);
   });
 
   it('enforces uniqueness, defaults, ULID ids and FK cascade', () => {

@@ -198,7 +198,7 @@ One ordinary (not contentless) row per recipe, so FTS row count equals recipe co
 | `title`, `description` | as stored (`''` when null) |
 | `ingredients` | `ingredient.name` plus `ingredient.note` per row, space-joined (ordered by ingredient id). **Not** `raw_text`, **not** section titles (Q9) |
 | `tags` | tag names of the recipe, space-joined, ordered by name |
-| `notes` | **reserved, always `''`** until 04c adds triggers on the `note` table (Q2). Private notes cannot live in a shared row; 04c decides between a per-user second index and a join check |
+| `notes` | **reserved, always `''`, stays reserved** (v0.4.2 Q2). Private notes cannot live in a shared row, so notes are indexed in the separate `note_fts` table (one row per note) and `searchRecipes` ORs `recipe_fts MATCH` with `recipe.id IN (note_fts match joined to note where shared = 1 or user_id = caller)`, inside the `readableBy` statement. Note-only matches rank after all `recipe_fts` matches (constant score), so a private note never changes another user's results or order |
 
 `remove_diacritics 2` plus the unicode61 case folding make "creme" find "Crème" and "espresso" find "ESPRESSO"; `prefix = '2 3'` makes 2 and 3 character prefixes (`esp*`) cheap.
 
@@ -353,7 +353,7 @@ The instance is internet-exposed (PRD §6), so this is a hard requirement. Block
 | Method | Path | Purpose |
 | --- | --- | --- |
 | POST | /api/auth/login, /logout, /register (invite) | Auth |
-| GET | /api/recipes | List/search. Implemented: `?q=` (at most 100 characters; FTS prefix search over title, description, ingredient names and notes, tags; at most 8 tokens of 2 or more characters; result cap 100, bm25 ranked with weights title 10, tags 6, ingredients 4, description 2), `?tag=` (normalized tag name), `?author=` (a user id or `me`). Filters are ANDed and always restricted by the visibility predicate `readableBy` (own recipes plus `visibility = users`; no admin reach). Without `q`: newest first, uncapped. Unknown or repeated parameters, including `min_rating` (not accepted until the `rating` table exists in v0.4.2), are 400 `invalid_query`. 200 responses are `Cache-Control: private, no-store` |
+| GET | /api/recipes | List/search. Implemented: `?q=` (at most 100 characters; FTS prefix search over title, description, ingredient names and notes, tags; at most 8 tokens of 2 or more characters; result cap 100, bm25 ranked with weights title 10, tags 6, ingredients 4, description 2), `?tag=` (normalized tag name), `?author=` (a user id or `me`). Filters are ANDed and always restricted by the visibility predicate `readableBy` (own recipes plus `visibility = users`; no admin reach). Without `q`: newest first, uncapped. `?min_rating=` (integer 1 to 5; stored average >= n, unrated excluded). Unknown or repeated parameters and a non-integer or out-of-range `min_rating` are 400 `invalid_query`. 200 responses are `Cache-Control: private, no-store` |
 | POST | /api/recipes | Create (accepts `tags`, at most 20) |
 | GET | /api/tags | Tags on recipes the caller can read, with counts; optional `?q=` prefix (at most 40 characters, else 400 `invalid_query`) |
 | GET/PUT/DELETE | /api/recipes/:id | Read, update, delete |

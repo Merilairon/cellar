@@ -164,6 +164,11 @@ describe('fetchAndStoreCover', () => {
     expect(statSync(abs).mode & 0o777).toBe(0o600);
     expect(statSync(join(dir, 'uploads')).mode & 0o777).toBe(0o700);
     expect((await sharp(readFileSync(abs)).metadata()).format).toBe('webp');
+    // G1: a thumbnail file is stored too (400 px longest edge, never upscaled).
+    expect(cover.thumbPath).toMatch(/^[0-9A-Z]{26}\.webp$/);
+    expect(cover.thumbPath).not.toBe(cover.filePath);
+    const thumb = await sharp(readFileSync(join(dir, 'uploads', cover.thumbPath!))).metadata();
+    expect([thumb.format, thumb.width, thumb.height]).toEqual(['webp', 40, 20]);
   });
 
   it('refuses a private-IP cover with no request made (real safeFetch, fake transport)', async () => {
