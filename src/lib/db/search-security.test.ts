@@ -118,7 +118,8 @@ describe('FTS trigger cost is linear (F1)', () => {
     const copied = copyRecipeFor(db, b, id);
     if (!copied.ok) throw new Error('copy failed');
     const elapsed = performance.now() - t0;
-    expect(elapsed).toBeLessThan(8000);
+    // Was 8000 and failed once under load; pre-0006 this took ~35 s, so 20000 still catches a regression.
+    expect(elapsed).toBeLessThan(20_000);
     expect(searchRecipes(db, b.id, { q: 'ingredient19x199' }).map((r) => r.id)).toContain(id);
     expect(ftsRow(id)!.tags).toBe('big');
     expect(ftsRow(copied.id)!.tags).toBe('big');

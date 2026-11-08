@@ -6,6 +6,9 @@ import { useTranslations } from 'next-intl';
 import { PHONE_QUERY, useMediaQuery } from '../useViewPreference';
 import { RowSheet } from './RowSheet';
 
+/** Upper bound of the Row actions menu height (6 items at the 44 px target plus padding). */
+const MENU_MAX_HEIGHT = 290;
+
 /** Dispatched on a row's controls wrapper by Shift+F10 / ContextMenu on the row target. */
 export const OPEN_ROW_ACTIONS = 'ge-open-row-actions';
 
@@ -50,7 +53,7 @@ export function RowControls({
   const isPhone = useMediaQuery(PHONE_QUERY);
   const [open, setOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
+  const [pos, setPos] = useState<{ top?: number; bottom?: number; right: number } | null>(null);
   const button = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
   const wrap = useRef<HTMLDivElement>(null);
@@ -69,7 +72,13 @@ export function RowControls({
 
   const openMenu = () => {
     const r = button.current?.getBoundingClientRect();
-    if (r) setPos({ top: r.bottom, right: Math.max(8, window.innerWidth - r.right) });
+    if (r) {
+      const right = Math.max(8, window.innerWidth - r.right);
+      // Any scroll closes the menu, so one that sticks out below the viewport would be
+      // unreachable (reaching it scrolls). Open upwards when it does not fit below the button.
+      const flip = r.bottom + MENU_MAX_HEIGHT > window.innerHeight && r.top > MENU_MAX_HEIGHT;
+      setPos(flip ? { bottom: window.innerHeight - r.top, right } : { top: r.bottom, right });
+    }
     setOpen(true);
   };
 
@@ -213,7 +222,12 @@ export function RowControls({
             role="menu"
             aria-label={t('gridEditor.row.actionsFor', { name })}
             className="fixed z-40 flex min-w-48 flex-col rounded border border-neutral-500 p-1 shadow-lg"
-            style={{ top: pos.top, right: pos.right, background: 'var(--rg-surface)' }}
+            style={{
+              top: pos.top,
+              bottom: pos.bottom,
+              right: pos.right,
+              background: 'var(--rg-surface)',
+            }}
             onKeyDown={onMenuKey}
           >
             {items.map((it) => (

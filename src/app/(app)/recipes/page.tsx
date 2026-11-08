@@ -9,6 +9,8 @@ import { listRecipes } from '@/lib/recipes/service';
 import { ResultsStatus } from '@/components/search/ResultsStatus';
 import { firstParam } from '@/components/search/search-url';
 import { TagFilter } from '@/components/search/TagFilter';
+import { RatingFilter } from '@/components/search/RatingFilter';
+import { parseMinRating } from '@/components/recipe/rating/rating-format';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,12 +18,20 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 export default async function Page({ searchParams }: { searchParams: SearchParams }) {
   const sp = await searchParams;
-  const filters = { q: firstParam(sp.q), tag: firstParam(sp.tag), author: firstParam(sp.author) };
-  const filtered = Boolean(filters.q || filters.tag || filters.author);
+  const minRating = parseMinRating(firstParam(sp.min_rating));
+  const filters = {
+    q: firstParam(sp.q),
+    tag: firstParam(sp.tag),
+    author: firstParam(sp.author),
+    minRating: minRating === undefined ? undefined : String(minRating),
+  };
+  const filtered = Boolean(filters.q || filters.tag || filters.author || filters.minRating);
   const user = await getCurrentUser();
   const t = await getTranslations();
   const db = getDb();
-  const recipes = user ? listRecipes(db, user, filters) : [];
+  const recipes = user
+    ? listRecipes(db, user, { q: filters.q, tag: filters.tag, author: filters.author, minRating })
+    : [];
   const tags = user ? listTagCounts(db, user.id) : [];
   return (
     <main>
@@ -34,6 +44,7 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
         )}
       </div>
       <TagFilter tags={tags} filters={filters} />
+      <RatingFilter filters={filters} />
       <ResultsStatus count={recipes.length} filters={filters} />
       {recipes.length === 0 && filtered ? null : recipes.length === 0 ? (
         <section className="mt-6 rounded border border-dashed border-neutral-400 p-6 text-center">
@@ -61,6 +72,9 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
                 visibility: r.visibility,
                 updated_at: r.updated_at,
                 tags: r.tags,
+                cover_photo_id: r.cover_photo_id,
+                rating_avg: r.rating_avg,
+                rating_count: r.rating_count,
               }}
             />
           ))}

@@ -1,4 +1,6 @@
 import type { Db } from '@/lib/db/connection';
+import { listPhotoPathsByOwner } from '@/lib/db/photos';
+import { removeUploadFiles } from '@/lib/import/uploads';
 import {
   deactivateUserGuarded,
   deleteUserGuarded,
@@ -31,8 +33,21 @@ export type RecipeChoice = { recipes: 'delete' } | { recipes: 'reassign'; reassi
 /**
  * Permanently delete a user (sessions, invites, resets cascade). The recipe choice is
  * applied atomically by the db layer: `delete` removes the user's recipes, `reassign`
- * moves them to `reassignTo` (validated there before anything changes).
+ * moves them to `reassignTo` (validated there before anything changes). With `uploadsDir`,
+ * a `delete` also unlinks the removed recipes' photo files after the commit (best effort;
+ * the rows cascade, so without this the files would stay on disk unreachable, C2).
  */
-export function deleteUser(db: Db, targetId: string, choice: RecipeChoice): DeleteResult {
-  return deleteUserGuarded(db, targetId, choice);
+export function deleteUser(
+  db: Db,
+  targetId: string,
+  choice: RecipeChoice,
+  opts: { uploadsDir?: string } = {},
+): DeleteResult {
+  const files =
+    opts.uploadsDir && choice.recipes === 'delete' ? listPhotoPathsByOwner(db, targetId) : [];
+  const result = deleteUserGuarded(db, targetId, choice);
+  if (result === 'ok' && opts.uploadsDir && files.length > 0) {
+    removeUploadFiles(opts.uploadsDir, files);
+  }
+  return result;
 }

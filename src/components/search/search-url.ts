@@ -3,7 +3,7 @@
 export const MIN_SEARCH_CHARS = 2;
 export const SEARCH_DEBOUNCE_MS = 250;
 
-export type ListFilters = { q?: string; tag?: string; author?: string };
+export type ListFilters = { q?: string; tag?: string; author?: string; minRating?: string };
 
 /** `/recipes` plus only the non-empty filters, in a stable order. */
 export function listHref(filters: ListFilters): string {
@@ -12,6 +12,8 @@ export function listHref(filters: ListFilters): string {
     const v = filters[key]?.trim();
     if (v) p.set(key, v);
   }
+  const min = filters.minRating?.trim();
+  if (min) p.set('min_rating', min);
   const qs = p.toString();
   return qs ? `/recipes?${qs}` : '/recipes';
 }
@@ -79,4 +81,9 @@ export function syncFromUrl(state: UrlSyncState, urlQ: string): UrlSyncState {
     return { seenUrlQ: urlQ, value: state.value, pending: state.pending.slice(at + 1) };
   }
   return { seenUrlQ: urlQ, value: urlQ, pending: [] };
+}
+
+/** Link target for a minimum-rating chip; choosing the active value (or "any") removes it. */
+export function minRatingHref(filters: ListFilters, n: number | undefined): string {
+  return listHref({ ...filters, minRating: n === undefined ? undefined : String(n) });
 }

@@ -110,9 +110,13 @@ export function searchRecipes(
     const cap = Math.min(opts.limit ?? SEARCH_RESULT_CAP, SEARCH_RESULT_CAP);
     // A recipe matches on recipe_fts, or on a note that is shared or the caller's own (T7/G7).
     // The visibility predicate and readableBy live in this one statement; admins get no reach.
-    stmt = sql`select ${cols} from ${recipe}
-      left join (select recipe_id, bm25(recipe_fts, 0, 10, 2, 4, 6, 1) as score
-        from recipe_fts where recipe_fts match ${match}) rf on rf.recipe_id = ${recipe.id}
+    // The FTS match runs once, in a MATERIALIZED CTE. As a LEFT JOIN subquery SQLite re-ran the
+    // match per recipe row (1.5 s at 1000 recipes, 34 s at 5000; T14).
+    stmt = sql`with rf as materialized (
+        select recipe_id, bm25(recipe_fts, 0, 10, 2, 4, 6, 1) as score
+        from recipe_fts where recipe_fts match ${match})
+      select ${cols} from ${recipe}
+      left join rf on rf.recipe_id = ${recipe.id}
       join ${user} on ${user.id} = ${recipe.ownerId}
       ${ratingJoin}
       where (rf.recipe_id is not null or ${recipe.id} in (

@@ -225,3 +225,14 @@ export function listPhotoPathsByRecipe(db: Db, recipeId: string): string[] {
     .all()
     .flatMap((r) => (r.thumbPath ? [r.filePath, r.thumbPath] : [r.filePath]));
 }
+
+/** Relative paths (main and thumb) of all photos on recipes owned by `ownerId` (user deletion cleanup). */
+export function listPhotoPathsByOwner(db: Db, ownerId: string): string[] {
+  return db
+    .select({ filePath: photo.filePath, thumbPath: photo.thumbPath })
+    .from(photo)
+    .innerJoin(recipe, eq(recipe.id, photo.recipeId))
+    .where(eq(recipe.ownerId, ownerId))
+    .all()
+    .flatMap((r) => (r.thumbPath ? [r.filePath, r.thumbPath] : [r.filePath]));
+}

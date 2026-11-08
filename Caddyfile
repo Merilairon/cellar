@@ -2,11 +2,26 @@
 # reachable from the internet and the DNS name must point at this host.
 {$SITE_ADDRESS} {
 	encode zstd gzip
-	# Reject oversized request bodies before they reach the app (forms are tiny).
-	request_body {
-		max_size 1MB
-	}
+	# Reject oversized request bodies before they reach the app. Photo uploads send the raw
+	# image as the body (up to 10 MiB, enforced again in the app), so that one route gets 11 MB;
+	# everything else (forms, JSON) stays at 1 MB. handle blocks are mutually exclusive, so the
+	# smaller cap cannot shadow the larger one.
 	# Caddy sets X-Forwarded-For/Proto/Host itself and drops client-supplied values.
 	# The app only trusts them from TRUSTED_PROXIES (= Caddy's fixed IP, 172.28.0.10).
-	reverse_proxy app:3000
+	@photo_upload {
+		method POST
+		path_regexp ^/api/recipes/[^/]+/photos$
+	}
+	handle @photo_upload {
+		request_body {
+			max_size 11MB
+		}
+		reverse_proxy app:3000
+	}
+	handle {
+		request_body {
+			max_size 1MB
+		}
+		reverse_proxy app:3000
+	}
 }
