@@ -141,23 +141,46 @@ Added in migration `0005_search_tags` (v0.4.0).
 **Normalization and limits (owner decision Q7).** The service layer (T4) trims, collapses inner whitespace, applies Unicode NFC and lowercases, so "Dessert" and "dessert" are one tag; capitalization is not preserved and display is lowercase. 1 to 40 characters, no control characters. At most 20 tags per recipe. The DB enforces only what SQL can do reliably: the length CHECK, `name` uniqueness and a `BEFORE INSERT` trigger on `recipe_tag` (`recipe_tag_limit_bi`) that aborts with `recipe_tag_limit` when a recipe already has 20. Case folding is not a CHECK because SQLite `lower()` is ASCII-only. Tag names are rendered as React text only.
 
 ### photo
-(migration `0003_import_photo`)
+(migration `0003_import_photo`; `thumb_path` added in `0007_note_rating_thumb`)
 
 | Column | Type | Notes |
 | --- | --- | --- |
 | id | text PK | ULID |
-| recipe_id | text FK recipe | `ON DELETE CASCADE`; the recipe delete service also removes the files (best effort) |
-| file_path | text | relative to the uploads dir (`UPLOADS_DIR`, `/data/uploads` in Docker), server-generated `<ulid>.webp`, never absolute or user-supplied |
+| recipe_id | text FK recipe | `ON DELETE CASCADE`; the recipe delete service also removes the files (best effort), and so does `deleteUser` with `recipes: 'delete'` (v0.4.2, via `UPLOADS_DIR`) |
+| file_path | text | relative to the uploads dir (`UPLOADS_DIR`, `/data/uploads` in Docker), server-generated `<ulid>.webp`, never absolute or user-supplied. Re-encoded WebP, long edge at most 1600 px (`MAIN_EDGE`) |
+| thumb_path | text | nullable; the 400 px WebP variant (`THUMB_EDGE`, quality 80) made inside the upload request. Null on rows that predate `0007` (imported covers): `GET /api/photos/:id?size=thumb` then serves the full image |
 | width / height | integer | pixels after re-encode |
-| position | integer | default 0 |
+| position | integer | default 0; upload order is not used to reorder anything in v0.4.2 (cover selection only) |
 | is_cover | integer (boolean) | default 0; unique partial index `photo(recipe_id) WHERE is_cover = 1` allows one cover per recipe |
 | created_at | text | |
 
+At most 10 photos per recipe (`MAX_PHOTOS_PER_RECIPE`, error `photo_limit`). No original is stored. Photos reference `recipe_id` only, never section, ingredient or step ids, so a grid save leaves them untouched.
+
 ### note
-`id`, `recipe_id`, `user_id`, `body`, `shared` (bool: visible to everyone who can see the recipe), `created_at`.
+(migration `0007_note_rating_thumb`)
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | text PK | ULID |
+| recipe_id | text FK recipe | `ON DELETE CASCADE`; index `note_recipe_id_idx` |
+| user_id | text FK user | author; `ON DELETE CASCADE`; index `note_user_id_idx` |
+| body | text | plain text, `CHECK length(body) BETWEEN 1 AND 4000` (`note_body_len_chk`); the API trims and rejects NUL |
+| shared | integer (boolean) | default 0; `CHECK shared IN (0, 1)`. 1 = visible to everyone who can read the recipe; 0 = visible to the author only (admins get no reach) |
+| created_at / updated_at | text | |
+
+Any reader of a recipe may add notes and edit or delete their own (owner decision Q3). Notes and ratings never change `recipe.updated_at`.
 
 ### rating
-`recipe_id`, `user_id`, `stars` (1–5); PK `(recipe_id, user_id)`.
+(migration `0007_note_rating_thumb`)
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| recipe_id | text FK recipe | `ON DELETE CASCADE`; index `rating_recipe_id_idx` |
+| user_id | text FK user | `ON DELETE CASCADE` |
+| stars | integer | `CHECK stars BETWEEN 1 AND 5` (`rating_stars_chk`) |
+| created_at / updated_at | text | |
+
+PK `(recipe_id, user_id)`: one rating per user per recipe. Any reader may rate, including their own recipe. The average and count are computed from the rows (`rating_avg`, `rating_count`); there is no stored aggregate column.
 
 ### import_job
 (migration `0003_import_photo`)
@@ -218,6 +241,21 @@ Moving an ingredient to another recipe (`recipe_id` update) is not handled; the 
 **Backfill.** The migration ends the table setup with one `INSERT INTO recipe_fts ... SELECT` over every existing recipe, so recipes created before v0.4.0 are searchable immediately; tags are empty at that point.
 
 **Test.** `src/lib/db/search-schema.test.ts` applies `0000`-`0004` to a database with data, then `0005`, and asserts rows unchanged, backfill, `foreign_key_check` and `integrity_check` clean, re-run is a no-op, each trigger, and the invariant that after 200 seeded mixed writes the index equals an independently computed rebuild from the source tables.
+
+### note_fts
+FTS5 virtual table, created in migration `0007_note_rating_thumb` (hand-written SQL, as `recipe_fts`).
+
+```sql
+CREATE VIRTUAL TABLE note_fts USING fts5(
+  note_id UNINDEXED, recipe_id UNINDEXED, body,
+  tokenize = 'unicode61 remove_diacritics 2', prefix = '2 3');
+```
+
+One row per note, kept in sync by the triggers `note_fts_note_ai` (insert), `note_fts_note_au` (update of `body` or `recipe_id`) and `note_fts_note_ad` (delete). Each deletes the row for `note_id` and, except on delete, inserts the new one. The index holds private note text too; it is never returned directly. `searchRecipes` reaches it only through a query-time join to `note` that keeps rows with `note.shared = 1 OR note.user_id = caller`, inside the `readableBy` statement.
+
+**Why `recipe_fts.notes` stays reserved (owner decision Q2).** `recipe_fts` has one row per recipe that every reader's query matches against. Putting note text there would put a private note into a row shared by all readers, so it could affect another reader's matches and ranking (bm25 statistics are table-wide). A second table with one row per note lets visibility be decided per query. The `notes` column is kept (changing an FTS5 column set needs a table rebuild) and stays `''`.
+
+**Known cost.** The `note_fts` delete triggers filter on the UNINDEXED column `note_id`, which scans the table, so a note write is linear in the number of notes (measured on disk, desktop: insert 0.8 ms at 1000 recipes / 3100 notes, 4 ms at 5000 / 15500). Keying the table by rowid would fix it and needs a new migration; carried in `docs/tasks/v0.4.2-carryover.md`.
 
 ## 2. Grid Model
 
@@ -353,22 +391,29 @@ The instance is internet-exposed (PRD §6), so this is a hard requirement. Block
 | Method | Path | Purpose |
 | --- | --- | --- |
 | POST | /api/auth/login, /logout, /register (invite) | Auth |
-| GET | /api/recipes | List/search. Implemented: `?q=` (at most 100 characters; FTS prefix search over title, description, ingredient names and notes, tags; at most 8 tokens of 2 or more characters; result cap 100, bm25 ranked with weights title 10, tags 6, ingredients 4, description 2), `?tag=` (normalized tag name), `?author=` (a user id or `me`). Filters are ANDed and always restricted by the visibility predicate `readableBy` (own recipes plus `visibility = users`; no admin reach). Without `q`: newest first, uncapped. `?min_rating=` (integer 1 to 5; stored average >= n, unrated excluded). Unknown or repeated parameters and a non-integer or out-of-range `min_rating` are 400 `invalid_query`. 200 responses are `Cache-Control: private, no-store` |
+| GET | /api/recipes | List/search. Implemented: `?q=` (at most 100 characters; FTS prefix search over title, description, ingredient names and notes, tags; at most 8 tokens of 2 or more characters; result cap 100, bm25 ranked with weights title 10, tags 6, ingredients 4, description 2), `?tag=` (normalized tag name), `?author=` (a user id or `me`). Filters are ANDed and always restricted by the visibility predicate `readableBy` (own recipes plus `visibility = users`; no admin reach). Without `q`: newest first, uncapped. `?min_rating=` (integer 1 to 5; the average of all ratings on the recipe is at least n; unrated recipes are excluded). Each result carries `cover_photo_id` (the cover photo id the caller can read, or `null`), `rating_avg` (number or `null`) and `rating_count`. Unknown or repeated parameters and a non-integer or out-of-range `min_rating` are 400 `invalid_query`. 200 responses are `Cache-Control: private, no-store` |
 | POST | /api/recipes | Create (accepts `tags`, at most 20) |
 | GET | /api/tags | Tags on recipes the caller can read, with counts; optional `?q=` prefix (at most 40 characters, else 400 `invalid_query`) |
 | GET/PUT/DELETE | /api/recipes/:id | Read, update, delete |
 | PUT | /api/recipes/:id/grid | Grid editor save. Body `{ base_updated_at, sections }` (the same section schema as the recipe body: ingredients and steps, 1 to 20 sections; unknown keys such as `title`, `tags`, `view_mode` are 422). Replaces all sections, ingredients and steps atomically in one transaction; recipe fields, tags and visibility are never touched. Authorization as `PUT /api/recipes/:id` (404 not readable, 403 read-only). `base_updated_at` must equal the stored `updated_at`, else 409 `{ error: "conflict", updated_at }` and nothing is written. The server recomputes `view_mode` (`grid` with a column step, else `list`), rewrites `split_group_id`, and derives a missing alternate measure; a client changing a quantity or unit must send the other side as null (a non-null side is stored as sent). 422 `{ errors: [{ path, code }] }` (validator errors only; an uncovered row is a warning and saves). Every response is `Cache-Control: private, no-store` |
-| PUT | /api/recipes/:id/visibility | Set `private` or `users` |
+| PUT | /api/recipes/:id/visibility | Set `private` or `users`. Responses are `Cache-Control: private, no-store` (v0.4.2) |
 | POST/DELETE | /api/recipes/:id/share-link | Create / rotate / revoke the public link token |
-| POST | /api/recipes/:id/copy | **Save a copy** of a visible recipe into the caller's book |
+| POST | /api/recipes/:id/copy | **Save a copy** of a visible recipe into the caller's book. Responses are `Cache-Control: private, no-store` (v0.4.2) |
 | GET | /r/:share_token | Public read-only page |
 | POST | /api/import | Start import `{url}` or `{text}` (exactly one; text max 500 KB) → `{ id, status, method, draft, warnings, error_code, duplicate, confidence, mapping_level }` (`confidence` is `draft.mapping.confidence` or `null`; `mapping_level` is `high`, `medium`, `low` or `null`; both are derived from `draft_json`, not stored in their own columns). A failed fetch or no recipe returns 200 with `status: 'failed'` and `error_code`; 4xx is for bad input (400, 401, 403, 415, 422) and 429 with `Retry-After` |
 | GET | /api/import/:id | Owner only: restore a review after reload |
 | POST | /api/import/:id/save | Persist the edited draft (same schema as recipe create, plus `import_cover`); 201 `{ id }`, 404 if not the caller's job, 409 if already saved |
-| GET | /api/photos/:id | Authenticated cover image, gated by the recipe's read permission |
-| POST | /api/recipes/:id/photos | Upload photo |
-| PUT | /api/recipes/:id/rating | Set own rating |
-| POST/GET | /api/recipes/:id/notes | Notes |
+| GET | /api/photos/:id | Authenticated image, gated by the recipe's read permission (404 when the photo is missing or the recipe is unreadable). `?size=thumb` serves the 400 px variant (a row without one serves the full image); any other `size` value or a repeated `size` is 400 `invalid_query`. Responses carry `Content-Type: image/webp`, `X-Content-Type-Options: nosniff`, `Cache-Control: private, no-cache` and an `ETag` (`If-None-Match` gives 304); errors are `no-store` |
+| DELETE | /api/photos/:id | Delete a photo and its files. `canWrite` (owner or admin): 403 for a reader of a `users` recipe, 404 when unreadable or missing; 204 |
+| GET | /api/recipes/:id/photos | List the recipe's photos, `{ photos }`. Any reader |
+| POST | /api/recipes/:id/photos | Upload a photo. The request body is the image itself (raw bytes, `Content-Type: image/*`, not multipart). `canWrite` (404 not readable, 403 read-only). Declared type, name and extension are ignored: magic bytes decide (JPEG, PNG, WebP), then a sharp decode with a 16 megapixel cap (`MAX_UPLOAD_PIXELS`); the image is always re-encoded, so metadata is dropped. The 10 MiB cap (`PHOTO_BODY_MAX`) is enforced while streaming (413), the read has a 30 s timeout (408), at most 3 uploads are in flight (503 with `Retry-After`), and a busy decoder answers 503. 201 with the photo. The first photo becomes the cover. 422 codes include `photo_limit` (10 per recipe), `unsupported_type` and `too_many_pixels` |
+| PUT | /api/recipes/:id/photos/:photoId/cover | Set the cover. `canWrite`. A photo id that belongs to another recipe is 404. 200 `{ photos }` |
+| PUT | /api/recipes/:id/rating | Set your own rating. Body `{ "stars": 1..5 }` (strict: other keys are 422). Any reader (404 when unreadable). 200 `{ rating_avg, rating_count, my_rating }` |
+| DELETE | /api/recipes/:id/rating | Remove your own rating. 204; 404 when unreadable or you have none |
+| GET | /api/recipes/:id/notes | Notes you may see: all shared notes plus your own private ones. `{ notes }`, each `{ id, body, shared, author, mine, created_at, updated_at }`. Any reader |
+| POST | /api/recipes/:id/notes | Add a note. Body `{ body, shared? }` (`body` 1 to 4000 characters after trim, `shared` default `false`). Any reader. 201 with the note |
+| PUT | /api/recipes/:id/notes/:noteId | Change your own note: `{ body?, shared? }`, at least one. 404 for another user's note |
+| DELETE | /api/recipes/:id/notes/:noteId | Delete your own note. 204 |
 | GET | /api/export | Full JSON backup |
 | POST | /api/import/backup | Restore backup |
 
@@ -390,3 +435,5 @@ The instance is internet-exposed (PRD §6), so this is a hard requirement. Block
   ]
 }
 ```
+
+> v0.4.2 added photos, notes and ratings to the database, but the export and restore routes and this backup format do not exist yet. The v1.0 backup format must carry photos (files), notes (with `shared` and author) and ratings; see `docs/tasks/v0.4.2-carryover.md`.

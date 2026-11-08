@@ -39,11 +39,11 @@
 | 3 | Taps **×2** | Quantities double in both units; times unchanged |
 | 4 | Taps a step cell ("fold in") | Expands full instruction text |
 | 5 | Switches unit to US | Primary unit swaps (saved to her profile) |
-| 6 | Optionally taps ingredient/step to check off | Visual strike-through (local state) |
+| 6 | Optionally taps **Cook** to open cook mode | Full-screen overlay with the ingredients and steps as large check-off items (a grid recipe keeps its grid); checked items are struck through (component state, lost on close); progress is announced; the screen is kept on with the Wake Lock API over HTTPS or localhost, with a notice when it cannot be |
 
 **Edge cases**
 - Narrow screen: horizontal scroll with sticky ingredient column; toggle to list view.
-- *As built in v0.4.0:* search results are a list of recipe cards with tags and no cover photos (photos are shown from v0.4.2). **×2** is one of 1/2x, 1x, 2x and Custom; amounts show the preferred unit first with the other in parentheses when known. The unit switch on the recipe page applies to that recipe only and resets on reload; the saved preference is set on the profile page. Scaling does not touch times or temperatures.
+- *As built in v0.4.0:* search results are a list of recipe cards with tags (cover photos are shown from v0.4.2). **×2** is one of 1/2x, 1x, 2x and Custom; amounts show the preferred unit first with the other in parentheses when known. The unit switch on the recipe page applies to that recipe only and resets on reload; the saved preference is set on the profile page. Scaling does not touch times or temperatures.
 - Scaling yields odd values (e.g., 1.5 eggs): show rounded value with ≈ and tooltip.
 - Ingredient has only one unit system: show only that one.
 - Screen sleeping: use Wake Lock API where available (cook mode).
@@ -54,8 +54,8 @@
 2. Adds ingredients line by line (free text parsed into qty/unit/name, with live preview of parsed fields).
 3. Adds steps (label + detail; mark prep steps as banners).
 4. Opens **Edit grid layout** (the grid editor, v0.4.1; a list recipe uses **Convert to grid** first): drags span handles per step (on a phone, uses the Start and End steppers in the bottom sheet); warnings for uncovered ingredients.
-5. Uploads a photo, adds tags.
-6. Saves; recipe appears in list.
+5. Adds tags. Saves; the recipe page opens. Photos are added there (**Add a photo**; the file picker on a phone may offer the camera, which has not been tried on a real device): a photo cannot be uploaded from the new-recipe or edit form because the recipe has no id until it is saved.
+6. The recipe appears in the list; with a photo, its cover shows on the card.
 
 **Edge cases:** a recipe with several parts uses **sections** (Cake / Frosting); an ingredient used twice is split into two rows; steps after baking go in a bottom banner; ingredient reorder updates existing spans; deleting an ingredient inside a span shrinks it; deleting a whole span range removes the step with an Undo and an announcement (v0.4.1); a row moved by the editor keeps its steps, and a step's span widens to the hull of its moved rows; unsaved changes prompt on navigation.
 
@@ -76,7 +76,7 @@
 
 **Edge cases:** no results → suggest clearing filters or importing; typos → prefix match.
 
-*As built in v0.4.0 (slice 4a):* step 1 searches title, ingredient names and notes on ingredients, and tags (recipe notes arrive in v0.4.2). Step 2 is tag filtering only; there is no rating filter until v0.4.2 (`min_rating` is rejected). Step 3 is not available yet. There is no typo tolerance: only prefix matching, and no stemming.
+*As built in v0.4.2:* step 1 also searches note text: shared notes on recipes you can read and your own private notes; nobody else's private notes. A recipe that matches only through a note is listed after recipes that match elsewhere. Step 2 filters by tag and by minimum rating (`min_rating`, 1 to 5, on the average rating). Step 3 works from the recipe page: notes are private by default and can be shared with everyone who can read the recipe; a rating is 1 to 5 stars per user. There is no typo tolerance: only prefix matching, and no stemming.
 
 ## Journey 6 — Print and back up (Jan)
 
