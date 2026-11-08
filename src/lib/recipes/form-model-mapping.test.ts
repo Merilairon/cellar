@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Draft } from '@/lib/import/normalize';
 import {
-  formFromDraft,
   formFromDraftMode,
   formToPreviewSections,
   previewIssues,
@@ -43,7 +42,6 @@ const draft = {
 describe('formFromDraftMode', () => {
   it('list is the page order with empty spans; grid is the proposal with 1-based spans', () => {
     const list = formFromDraftMode(draft, 'list');
-    expect(list).toEqual(formFromDraft(draft));
     expect(list.sections[0].ingredientsText).toBe('onion\nwater');
     expect(list.sections[0].steps[0].rowStart).toBe('');
     const grid = formFromDraftMode(draft, 'grid');
@@ -55,7 +53,9 @@ describe('formFromDraftMode', () => {
   });
 
   it('grid without a proposal falls back to the list', () => {
-    expect(formFromDraftMode({ ...draft, mapping: null }, 'grid')).toEqual(formFromDraft(draft));
+    expect(formFromDraftMode({ ...draft, mapping: null }, 'grid')).toEqual(
+      formFromDraftMode(draft, 'list'),
+    );
   });
 
   it('withSections replaces only sections', () => {

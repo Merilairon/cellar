@@ -58,7 +58,10 @@ const save = (p: Page) => p.getByRole('button', { name: 'Save imported recipe' }
 async function expectSavedGrid(p: Page, title: string) {
   await expect(p).toHaveURL(/\/recipes\/[0-9A-Z]{26}$/);
   await expect(p.getByRole('heading', { name: title, level: 1 })).toBeVisible();
-  await expect(p.getByRole('button', { name: 'Grid' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(p.getByRole('button', { name: 'Grid', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
 }
 
 test('high confidence: opens as grid with preview, saves as grid, recipe page renders the grid', async () => {

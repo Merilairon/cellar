@@ -45,12 +45,18 @@ export default async function Page({
           {t('recipe.sharedNotice', { name: ownerName ?? '' })}
         </p>
       )}
-      <div className="my-4 flex flex-wrap items-center gap-2">
-        {recipe.can_edit && <OwnerActions id={recipe.id} />}
-        {recipe.can_edit && <VisibilityControl id={recipe.id} visibility={recipe.visibility} />}
-        {!isOwner && <SaveCopyButton id={recipe.id} />}
-      </div>
-      <RecipeView recipe={recipe} userId={user.id} unitPref={user.unitPref} />
+      <RecipeView
+        recipe={recipe}
+        userId={user.id}
+        unitPref={user.unitPref}
+        actions={
+          <>
+            {recipe.can_edit && <OwnerActions id={recipe.id} />}
+            {recipe.can_edit && <VisibilityControl id={recipe.id} visibility={recipe.visibility} />}
+            {!isOwner && <SaveCopyButton id={recipe.id} />}
+          </>
+        }
+      />
     </main>
   );
 }

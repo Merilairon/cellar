@@ -83,6 +83,11 @@ describe('warningMessage', () => {
     );
     expect(warningMessage(t, 'whatever')).toBe('import.warning.generic');
   });
+  it('an unknown code with markup in the suffix gets the generic text, never the markup', () => {
+    const out = warningMessage(t, 'whatever:<img src=x onerror=alert(1)>');
+    expect(out).toBe('import.warning.generic');
+    expect(out).not.toContain('<');
+  });
 });
 
 describe('security checkpoint', () => {

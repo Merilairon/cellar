@@ -6,11 +6,19 @@ import type { Failure } from './service';
 
 export const json = (status: number, body: unknown): Response => Response.json(body, { status });
 
-/** Map a service failure to its HTTP response (422 carries field errors). */
+export const NO_STORE = 'private, no-store';
+
+/** Mark a response uncacheable (C3). Returns the same response for chaining. */
+export function noStore(response: Response): Response {
+  response.headers.set('Cache-Control', NO_STORE);
+  return response;
+}
+
+/** Map a service failure to its HTTP response (422 carries field errors, 409 the current stamp). */
 export function failure(f: Failure): Response {
-  return f.status === 422
-    ? json(422, { errors: f.errors })
-    : new Response(null, { status: f.status });
+  if (f.status === 422) return json(422, { errors: f.errors });
+  if (f.status === 409) return json(409, { error: 'conflict', updated_at: f.currentUpdatedAt });
+  return new Response(null, { status: f.status });
 }
 
 /**
@@ -29,6 +37,13 @@ export async function authenticate(request: Request): Promise<{ user: User } | R
 /** Body caps (bytes) for JSON endpoints that accept free text. */
 export const IMPORT_BODY_MAX = 1024 * 1024;
 export const SAVE_BODY_MAX = 256 * 1024;
+/**
+ * Grid save cap. Not lowered to SAVE_BODY_MAX: a legitimate payload at the schema ceiling
+ * (20 sections x 200 ingredients with short fields) is about 475 KB, and the replace cost is
+ * bounded by the row limits (about 0.7 s measured), not by bytes. The cap bounds memory and
+ * parse work only (v0.4.1 checkpoint L2).
+ */
+export const GRID_BODY_MAX = 1024 * 1024;
 
 /**
  * Read the body as text, never buffering more than `maxBytes`. Rejects early on an

@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useId, useRef } from 'react';
+import { useId } from 'react';
 import { useTranslations } from 'next-intl';
 import { formatStepParams, type StepT } from './formatStep';
+import { SheetDialog } from './SheetDialog';
 import type { ApiStep } from './types';
 
 function useStepT(): StepT {
@@ -39,27 +40,10 @@ export function StepSheet({ step, onClose }: { step: ApiStep | null; onClose: ()
     step ?? { temp_c: null, temp_f: null, minutes_min: null, minutes_max: null },
     useStepT(),
   );
-  const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
 
-  useEffect(() => {
-    const d = ref.current;
-    if (!d) return;
-    if (step && !d.open) d.showModal();
-    else if (!step && d.open) d.close();
-  }, [step]);
-
   return (
-    <dialog
-      ref={ref}
-      className="rg-sheet"
-      aria-labelledby={titleId}
-      onClose={onClose}
-      // A click on the dialog element itself (not its body) is a click on the backdrop.
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
+    <SheetDialog open={step !== null} onClose={onClose} labelledBy={titleId}>
       <div className="rg-sheet-body">
         {step && (
           <>
@@ -78,6 +62,6 @@ export function StepSheet({ step, onClose }: { step: ApiStep | null; onClose: ()
           </>
         )}
       </div>
-    </dialog>
+    </SheetDialog>
   );
 }

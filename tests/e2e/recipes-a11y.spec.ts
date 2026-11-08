@@ -34,7 +34,10 @@ async function open(
   });
   const page = await ctx.newPage();
   await page.goto(`/recipes/${id}`);
-  await expect(page.getByRole('button', { name: 'Grid' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: 'Grid', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
   return { page, close: () => ctx.close() };
 }
 
@@ -110,7 +113,7 @@ test('keyboard: Tab reaches the scroll region and every step cell; Enter opens d
     expect(expected, key).toHaveLength(steps);
 
     // Start from the Grid toggle, then Tab forward collecting every focused step button.
-    await page.getByRole('button', { name: 'Grid' }).focus();
+    await page.getByRole('button', { name: 'Grid', exact: true }).focus();
     const reached = new Set<string>();
     let sawRegion = false;
     for (let i = 0; i < 40 && reached.size < expected.length; i++) {

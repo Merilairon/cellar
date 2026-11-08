@@ -7,7 +7,7 @@ import {
   emptyStep,
   errorMap,
   errorMessageKey,
-  formFromDraft,
+  formFromDraftMode,
   formFromRecipe,
   formToPayload,
   ingredientLines,
@@ -175,7 +175,7 @@ describe('validateForm', () => {
   });
 });
 
-describe('formFromDraft', () => {
+describe('formFromDraftMode (list)', () => {
   const draft = {
     title: 'Pancakes <b>',
     description: null,
@@ -205,7 +205,7 @@ describe('formFromDraft', () => {
   };
 
   it('pre-fills metadata, ingredient lines and steps without spans', () => {
-    const f = formFromDraft(draft as never);
+    const f = formFromDraftMode(draft as never, 'list');
     expect(f).toMatchObject({
       title: 'Pancakes <b>', // kept as plain text, escaped by React on render
       servings: '4',
@@ -220,7 +220,7 @@ describe('formFromDraft', () => {
   });
 
   it('validates as a list recipe', () => {
-    const v = validateForm(formFromDraft(draft as never));
+    const v = validateForm(formFromDraftMode(draft as never, 'list'));
     expect(v.ok).toBe(true);
     if (v.ok) expect(v.viewMode).toBe('list');
   });
@@ -247,16 +247,19 @@ describe('render-time builders never touch the module key counter (hydration)', 
     expect(first).toEqual(['s0']);
   });
 
-  it('emptyForm, formFromRecipe and formFromDraft do not advance nextKey', () => {
+  it('emptyForm, formFromRecipe and formFromDraftMode do not advance nextKey', () => {
     const before = Number(nextKey().slice(1));
     emptyForm();
     formFromRecipe(apiShaped(SAMPLE_VANILLA_CAKE));
-    formFromDraft({
-      ...SAMPLE_VANILLA_CAKE,
-      tags: [],
-      cover_image_url: null,
-      mapping: null,
-    } as never);
+    formFromDraftMode(
+      {
+        ...SAMPLE_VANILLA_CAKE,
+        tags: [],
+        cover_image_url: null,
+        mapping: null,
+      } as never,
+      'list',
+    );
     expect(Number(nextKey().slice(1))).toBe(before + 1);
   });
 

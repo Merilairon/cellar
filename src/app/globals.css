@@ -313,3 +313,560 @@ dialog.rg-sheet::backdrop {
     overflow: visible;
   }
 }
+
+/* ---------- Grid editor (v0.4.1, docs/tasks/v0.4.1-ux-spec.md section 17) ---------- */
+:root {
+  --ge-warn-ink: #7a4e00;
+  --ge-warn-bg: #fff4d6;
+  --ge-warn-line: #9a6500;
+  --ge-error-ink: #a31b12;
+  --ge-error-bg: #fdecea;
+  --ge-cover: #d3ebc4;
+  --ge-page: #ffffff; /* the body background (bg-white): sticky bars must match it */
+  --ge-handle: #2f6b1a;
+  --ge-handle-edge: #ffffff;
+  --ge-toast-bg: #1f2a1f;
+  --ge-toast-ink: #ffffff;
+  --ge-target: 36px;
+}
+@media (pointer: coarse) {
+  :root {
+    --ge-target: 44px;
+  }
+}
+:root[data-theme='dark'] {
+  --ge-warn-ink: #f2c46d;
+  --ge-warn-bg: #3a2d0e;
+  --ge-warn-line: #d9a43a;
+  --ge-error-ink: #ff9b8f;
+  --ge-error-bg: #3d1714;
+  --ge-cover: #385334;
+  --ge-page: #0a0a0a; /* bg-neutral-950 */
+  --ge-handle: #9fd97c;
+  --ge-handle-edge: #10160f;
+  --ge-toast-bg: #e8efe6;
+  --ge-toast-ink: #1f2a1f;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --ge-warn-ink: #f2c46d;
+    --ge-warn-bg: #3a2d0e;
+    --ge-warn-line: #d9a43a;
+    --ge-error-ink: #ff9b8f;
+    --ge-error-bg: #3d1714;
+    --ge-cover: #385334;
+    --ge-page: #0a0a0a;
+    --ge-handle: #9fd97c;
+    --ge-handle-edge: #10160f;
+    --ge-toast-bg: #e8efe6;
+    --ge-toast-ink: #1f2a1f;
+  }
+}
+
+.ge-root {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ge-h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+.ge-h2:focus,
+.ge-h3:focus {
+  outline: 3px solid var(--rg-focus);
+  outline-offset: 2px;
+}
+.ge-h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--rg-accent);
+}
+.ge-muted {
+  font-size: 0.875rem;
+  color: var(--rg-muted);
+}
+/* F6: the touch hint on coarse pointers, the keyboard hint otherwise. */
+.ge-hint-touch {
+  display: none;
+}
+@media (pointer: coarse) {
+  .ge-hint-touch {
+    display: block;
+  }
+  .ge-hint-fine {
+    display: none;
+  }
+}
+.ge-check {
+  font-weight: 700;
+  color: var(--rg-accent);
+}
+.ge-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 0;
+  background: var(--ge-page);
+  color: var(--rg-ink);
+  border-bottom: 1px solid var(--rg-line);
+}
+.ge-toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.ge-toolbar-end {
+  margin-inline-start: auto;
+}
+.ge-help {
+  padding: 4px 0;
+}
+.ge-helpbody {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--rg-line);
+  border-radius: 6px;
+}
+.ge-helplist {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+.ge-helplist > div {
+  display: grid;
+  gap: 2px 16px;
+  grid-template-columns: minmax(0, 14rem) minmax(0, 1fr);
+}
+@media (max-width: 639px) {
+  .ge-helplist > div {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.ge-helplist dd {
+  margin: 0;
+}
+.ge-helplist kbd {
+  font-family: inherit;
+  font-weight: 600;
+}
+.ge-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.ge-dirty {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.875rem;
+}
+.ge-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ge-warn-line);
+}
+.ge-linkbtn {
+  min-height: var(--ge-target);
+  padding: 0 8px;
+  text-decoration: underline;
+  color: inherit;
+}
+.ge-linkbtn:focus-visible,
+.ge-target:focus-visible {
+  outline: 3px solid var(--rg-focus);
+  outline-offset: 2px;
+}
+.ge-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.ge-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ge-target {
+  display: block;
+  width: 100%;
+  min-height: var(--ge-target);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.ge-target.rg-stepbtn {
+  text-align: center;
+}
+.ge-target.rg-stepbtn:focus-visible,
+.ge-rowbtn:focus-visible,
+.ge-bannerbtn:focus-visible {
+  outline-offset: -4px;
+}
+.ge-bannerbtn {
+  text-align: center;
+}
+.ge-placeholder {
+  color: var(--rg-muted);
+  font-style: italic;
+}
+.ge-table th.rg-ing {
+  padding: 0;
+}
+.ge-table th.ge-ing .ge-rowbtn {
+  padding: 8px 10px;
+  /* T12: with a portion chip the controls wrap under the name instead of squeezing the name to
+     one letter per line in the narrow phone column (reflow 1.4.10, target size 2.5.8). */
+  flex: 1 1 5rem;
+}
+.ge-rowcell {
+  flex-wrap: wrap;
+}
+.ge-table th.ge-ing[data-covered='true'] {
+  background: var(--ge-cover);
+  box-shadow:
+    inset 6px 0 0 var(--rg-accent),
+    1px 0 0 var(--rg-line);
+  font-weight: 600;
+}
+.ge-table th.ge-ing[data-covered='true'] .rg-note,
+.ge-table th.ge-ing[data-covered='true'] .rg-portion,
+.ge-table th.ge-ing[data-covered='true'] .ge-muted {
+  /* The muted ink is too faint on the covered tint in dark mode (axe, AA; T12 O1: 4.21:1). */
+  color: var(--rg-ink);
+}
+.ge-table th.ge-ing[data-uncovered='true'] {
+  outline: 2px dashed var(--ge-warn-line);
+  outline-offset: -4px;
+}
+.ge-bang {
+  display: inline-block;
+  margin-inline-start: 6px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--ge-warn-bg);
+  color: var(--ge-warn-ink);
+  font-weight: 700;
+}
+.ge-warnline,
+.ge-issues li[data-kind='warning'] {
+  background: var(--ge-warn-bg);
+  color: var(--ge-warn-ink);
+}
+.ge-issues li[data-kind='error'] {
+  background: var(--ge-error-bg);
+  color: var(--ge-error-ink);
+}
+.ge-warnline {
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+.ge-issues {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ge-issuelist {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ge-issuelist li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 4px;
+}
+.ge-issuebadge {
+  font-weight: 700;
+}
+/* Edit mode widens the desktop ingredient column (the read view keeps 300 px). */
+@container (min-width: 900px) {
+  .ge-table th.rg-ing {
+    width: 340px;
+    min-width: 340px;
+    max-width: 340px;
+  }
+  .ge-region .rg-scroller {
+    scroll-padding-inline-start: 348px;
+  }
+}
+@media (pointer: coarse) {
+  .ge-table th.ge-ing .ge-rowbtn {
+    min-height: 56px;
+  }
+}
+@media print {
+  .ge-root {
+    display: none;
+  }
+}
+
+/* ---- Grid editor: steps (T6) ---- */
+.ge-table {
+  /* Room inside the scroller for the half of a top/bottom handle that sits outside the table. */
+  margin-block: calc(var(--ge-target) / 2);
+}
+.ge-table td.ge-step {
+  position: relative;
+}
+.ge-handle {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  height: var(--ge-target);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: ns-resize;
+  touch-action: none;
+  opacity: 0;
+}
+.ge-handle[data-edge='start'] {
+  top: 0;
+  transform: translateY(-50%);
+}
+.ge-handle[data-edge='end'] {
+  bottom: 0;
+  transform: translateY(50%);
+}
+.ge-grip {
+  display: block;
+  width: 28px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--ge-handle);
+  outline: 2px solid var(--ge-handle-edge);
+}
+.ge-table td.ge-step:hover .ge-handle,
+.ge-table td.ge-step:focus-within .ge-handle,
+.ge-table td.ge-step[data-selected='true'] .ge-handle,
+.ge-handle:focus-visible {
+  opacity: 1;
+}
+.ge-handle:focus-visible {
+  outline: 3px solid var(--rg-focus);
+  outline-offset: -3px;
+}
+/* Touch: only the selected step's handles take pointer events (UX spec F5), so one-finger
+   scrolling over any other cell is never captured. */
+@media (pointer: coarse) {
+  .ge-table td.ge-step .ge-handle {
+    pointer-events: none;
+  }
+  .ge-table td.ge-step[data-selected='true'] .ge-handle {
+    pointer-events: auto;
+  }
+}
+/* Phone: the step cell holds exactly one control; the sheet (T8) replaces handles. */
+@container (max-width: 639px) {
+  .ge-handle {
+    display: none;
+  }
+}
+/* A5: the toast has an inverted surface, so the page focus colour fails 3:1 on it (2.56 light,
+   2.04 dark). The toast ink on the toast surface is 14.90:1 light, 12.72:1 dark. */
+[data-ge-toast] :focus-visible {
+  outline: 3px solid var(--ge-toast-ink);
+  outline-offset: 2px;
+}
+/* A6: while the fixed toast is shown, keep scrolled-to focus clear of it (2.4.11). */
+:root:has([data-ge-toast]) {
+  scroll-padding-bottom: 9rem;
+}
+.ge-dragtip {
+  position: fixed;
+  z-index: 40;
+  pointer-events: none;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--ge-toast-bg);
+  color: var(--ge-toast-ink);
+  font-size: 0.85rem;
+}
+.ge-steptools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.ge-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border: 2px solid var(--rg-accent);
+  border-radius: 6px;
+}
+.ge-h4 {
+  font-weight: 600;
+}
+.ge-h4:focus {
+  outline: 3px solid var(--rg-focus);
+  outline-offset: 2px;
+}
+.ge-panelbar,
+.ge-choice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.ge-choice {
+  border: 1px solid var(--rg-line);
+  border-radius: 6px;
+  padding: 8px;
+}
+.ge-choice label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: var(--ge-target);
+}
+.ge-adjust {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ge-stepperrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.ge-stepperlabel {
+  min-width: 5.5rem;
+  font-weight: 600;
+}
+.ge-steppervalue {
+  min-width: 10rem;
+}
+.ge-stepper {
+  min-width: var(--ge-target);
+  min-height: var(--ge-target);
+}
+.ge-stepper[aria-disabled='true'] {
+  opacity: 0.5;
+}
+.ge-panelbar [aria-disabled='true'] {
+  opacity: 0.5;
+}
+.ge-fields {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+}
+.ge-fields .ge-wide {
+  grid-column: 1 / -1;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .ge-handle {
+    transition: opacity 0.1s;
+  }
+}
+
+/* Editor bottom sheets (T8): lighter backdrop so the grid and its live highlight stay visible. */
+dialog.rg-sheet.ge-sheet {
+  max-height: 55dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+dialog.rg-sheet.ge-sheet::backdrop {
+  background: rgba(0, 0, 0, 0.18);
+}
+@media (max-height: 479px) {
+  dialog.rg-sheet.ge-sheet {
+    max-height: 70dvh;
+  }
+}
+.ge-sheetbody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ge-sheetbody .ge-panel {
+  border: 0;
+  padding: 0;
+}
+.ge-panelhead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--ge-page);
+}
+dialog.ge-sheet .ge-panelhead {
+  background: var(--rg-surface); /* the sheet is a surface, not the page */
+}
+dialog.ge-sheet .ge-stepper,
+dialog.ge-sheet .ge-panelbar .btn,
+.ge-rowsheetbtn {
+  min-width: 44px;
+  min-height: 44px;
+}
+dialog.ge-sheet .ge-stepperlabel {
+  flex-basis: 100%;
+}
+dialog.ge-sheet .ge-steppervalue {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+}
+.ge-covered {
+  max-height: 12rem;
+  margin: 0;
+  padding-inline-start: 1.75rem;
+  overflow-y: auto;
+  list-style: decimal;
+}
+.ge-details {
+  border-top: 1px solid var(--rg-line);
+  padding-top: 8px;
+}
+.ge-summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 600;
+}
+.ge-rowsheet {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ge-rowsheetbtn {
+  width: 100%;
+  justify-content: flex-start;
+}
+.ge-rowsheetbtn[aria-disabled='true'] {
+  opacity: 0.5;
+}
+.ge-rowctl {
+  padding-inline-start: 8px;
+}

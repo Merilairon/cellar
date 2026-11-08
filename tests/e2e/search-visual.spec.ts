@@ -75,7 +75,7 @@ for (const { w, h } of WIDTHS) {
   test(`recipe page tag chips and scale controls @${w}`, async ({ browser }) => {
     const { page, close } = await open(browser, { w, h }, `/recipes/${cookieId}`);
     await expect(page.getByRole('list', { name: 'Tags', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Grid' })).toHaveAttribute(
+    await expect(page.getByRole('button', { name: 'Grid', exact: true })).toHaveAttribute(
       'aria-pressed',
       'true',
     );

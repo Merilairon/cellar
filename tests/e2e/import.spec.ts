@@ -238,7 +238,10 @@ test('paste fallback: plain text with headings -> review -> save', async () => {
   await sp.getByRole('button', { name: 'Save imported recipe' }).click();
   await expect(sp).toHaveURL(/\/recipes\/[0-9A-Z]{26}$/);
   await expect(sp.getByRole('heading', { name: 'Pasted Porridge', level: 1 })).toBeVisible();
-  await expect(sp.getByRole('button', { name: 'Grid' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(sp.getByRole('button', { name: 'Grid', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
   expect(await recipeCount(seamCtx)).toBe(before + 1);
 });
 

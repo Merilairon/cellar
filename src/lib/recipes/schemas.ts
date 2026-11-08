@@ -168,6 +168,17 @@ export const recipeInputSchema = z
     );
   });
 
+/** Body of PUT /api/recipes/:id/grid. Strict: recipe fields, tags and ids are rejected, not ignored. */
+export const gridInputSchema = z
+  .object({
+    base_updated_at: z
+      .string()
+      .max(40)
+      .refine((v) => !Number.isNaN(Date.parse(v)), 'invalid_timestamp'),
+    sections: z.array(sectionInputSchema).min(1).max(20),
+  })
+  .strict();
+
 export const visibilityInputSchema = z.object({ visibility: visibilitySchema });
 
 export type IngredientInput = z.output<typeof ingredientInputSchema>;

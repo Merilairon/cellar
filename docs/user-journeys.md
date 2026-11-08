@@ -16,7 +16,7 @@
 | 1 | Clicks **Import** and pastes a URL | Validates URL, shows progress ("Fetching…") | Import dialog |
 | 2 | Waits | Fetches page, finds JSON-LD, parses ingredients/steps, auto-maps grid | Progress indicator |
 | 3 | Sees **review screen** | Editable draft: title, servings, ingredients, grid preview with confidence badge. *Built in v0.3.1 (03b).* | Review grid |
-| 4 | Fixes a span (drags a step's end handle), renames a step label | Live preview updates. *Dragging a handle is a v0.4.1 (04b) feature. In v0.3.1 you fix a span by typing the first and last ingredient row in the step; the preview updates as you type.* | Grid editor |
+| 4 | Fixes a span (drags a step's end handle), renames a step label | Live preview updates. *Dragging a handle is a v0.4.1 (04b) feature, in the grid editor (**Edit grid layout** on the saved recipe; a low-confidence import is saved as a list first, then **Convert to grid**, then fine-tune). In v0.3.1 you fix a span by typing the first and last ingredient row in the step; the preview updates as you type.* | Grid editor |
 | 5 | Adds tags, picks visibility | | Form |
 | 6 | Clicks **Save** | Recipe saved, opens grid view | Recipe page |
 
@@ -53,11 +53,11 @@
 1. **New recipe** → enters title, servings, times.
 2. Adds ingredients line by line (free text parsed into qty/unit/name, with live preview of parsed fields).
 3. Adds steps (label + detail; mark prep steps as banners).
-4. Opens **Grid editor**: drags span handles per step; warnings for uncovered ingredients.
+4. Opens **Edit grid layout** (the grid editor, v0.4.1; a list recipe uses **Convert to grid** first): drags span handles per step (on a phone, uses the Start and End steppers in the bottom sheet); warnings for uncovered ingredients.
 5. Uploads a photo, adds tags.
 6. Saves; recipe appears in list.
 
-**Edge cases:** a recipe with several parts uses **sections** (Cake / Frosting); an ingredient used twice is split into two rows; steps after baking go in a bottom banner; ingredient reorder updates existing spans; deleting an ingredient inside a span shrinks it; deleting a whole span range removes step or asks to confirm; unsaved changes prompt on navigation.
+**Edge cases:** a recipe with several parts uses **sections** (Cake / Frosting); an ingredient used twice is split into two rows; steps after baking go in a bottom banner; ingredient reorder updates existing spans; deleting an ingredient inside a span shrinks it; deleting a whole span range removes the step with an Undo and an announcement (v0.4.1); a row moved by the editor keeps its steps, and a step's span widens to the hull of its moved rows; unsaved changes prompt on navigation.
 
 ## Journey 4 — Share a recipe (Tom → friend)
 

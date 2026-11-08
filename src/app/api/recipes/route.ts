@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { getDb } from '@/lib/db';
-import { authenticate, failure, json, readJson } from '@/lib/recipes/http';
+import { authenticate, failure, json, noStore, readJson } from '@/lib/recipes/http';
 import { createRecipeFor, listRecipes } from '@/lib/recipes/service';
 import { MAX_TAG_LEN } from '@/lib/recipes/tag-name';
 
@@ -23,16 +23,16 @@ const querySchema = z.strictObject({
 
 export async function GET(request: Request) {
   const auth = await authenticate(request);
-  if (auth instanceof Response) return auth;
+  if (auth instanceof Response) return noStore(auth);
   const params = new URL(request.url).searchParams;
   const raw: Record<string, string> = {};
   for (const key of new Set(params.keys())) {
     const all = params.getAll(key);
-    if (all.length > 1) return json(400, { error: 'invalid_query' });
+    if (all.length > 1) return noStore(json(400, { error: 'invalid_query' }));
     raw[key] = all[0]!;
   }
   const parsed = querySchema.safeParse(raw);
-  if (!parsed.success) return json(400, { error: 'invalid_query' });
+  if (!parsed.success) return noStore(json(400, { error: 'invalid_query' }));
   const res = json(200, { recipes: listRecipes(getDb(), auth.user, parsed.data) });
   res.headers.set('Cache-Control', 'private, no-store');
   return res;
