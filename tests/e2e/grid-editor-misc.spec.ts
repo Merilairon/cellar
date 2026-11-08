@@ -7,6 +7,7 @@ import {
   registerViaInvite,
   SAMPLES,
   signIn,
+  scrollSettled,
 } from './helpers';
 import {
   cookieStart,
@@ -113,11 +114,12 @@ test('two sections: add and rename a section, split sugar, undo/redo, leave guar
   // Split sugar (row 2 of the cake).
   const cakeRows = page.locator('[data-ge-table]').first().locator('[data-ge-target^="row:"]');
   const before = await cakeRows.count();
-  await page
-    .getByRole('button', { name: /^Row actions for .*sugar/ })
-    .first()
-    .click();
-  await page.getByRole('menuitem', { name: 'Split into portions' }).click();
+  const sugarActions = page.getByRole('button', { name: /^Row actions for .*sugar/ }).first();
+  await scrollSettled(sugarActions);
+  await sugarActions.click();
+  // dispatchEvent: Playwright's auto-scroll before a real click scrolls the page, and a scroll
+  // closes the Row actions menu (by design); the item is visible, so no scrolling is needed.
+  await page.getByRole('menuitem', { name: 'Split into portions' }).dispatchEvent('click');
   await page.getByRole('textbox', { name: /^Portion label for/ }).fill('second half');
   await page.keyboard.press('Enter');
   await expect(cakeRows).toHaveCount(before + 1);

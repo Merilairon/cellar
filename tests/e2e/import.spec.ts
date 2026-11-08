@@ -186,8 +186,8 @@ test('URL import -> review -> edit -> save lands in list view with source link a
   await expect(sp.getByText('the cover image could not be downloaded')).toHaveCount(0);
   expect(sp.url()).not.toContain('notice=');
   expect(await recipeCount(seamCtx)).toBe(before + 1);
-  // No UI shows the cover yet (media UI is 04c), so check that the re-encoded file landed.
-  expect(coverFiles()).toBe(covers + 1);
+  // The re-encoded cover landed: the pipeline stores the full image and its thumbnail.
+  expect(coverFiles()).toBe(covers + 2);
 });
 
 test('importing the same address again shows the duplicate banner; "Import anyway" dismisses it', async () => {

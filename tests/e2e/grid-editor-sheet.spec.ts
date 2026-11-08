@@ -1,6 +1,14 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type BrowserContext } from '@playwright/test';
-import { account, createRecipe, hydrated, registerViaInvite, SAMPLES, signIn } from './helpers';
+import {
+  account,
+  createRecipe,
+  hydrated,
+  registerViaInvite,
+  SAMPLES,
+  signIn,
+  scrollSettled,
+} from './helpers';
 
 // T8: phone (375 x 667) bottom sheet with Start / End steppers and the Row actions sheet.
 test.describe.configure({ mode: 'serial' });
@@ -67,7 +75,9 @@ test('phone: step sheet steppers, live highlight, focus and Escape', async ({ br
   const startMinus = sheet.getByRole('button', { name: /start one row earlier/ });
   await expect(startMinus).toHaveAttribute('aria-disabled', 'true');
   await startMinus.click({ force: true });
-  await expect(page.getByRole('status')).toContainText('already starts at row 1');
+  await expect(page.getByRole('status').filter({ hasText: 'already starts at row 1' })).toHaveCount(
+    1,
+  );
 
   const axe = await new AxeBuilder({ page }).include('dialog').analyze();
   expect(axe.violations).toEqual([]);
@@ -96,10 +106,9 @@ test('phone: Row actions opens a sheet; Move down works from it', async ({ brows
 
 test('tablet 800: Row actions stays a menu and Adjust rows is inline', async ({ browser }) => {
   const { page, close } = await openEditor(browser, 800);
-  await page
-    .getByRole('button', { name: /^Row actions for/ })
-    .first()
-    .click();
+  const rowActions = page.getByRole('button', { name: /^Row actions for/ }).first();
+  await scrollSettled(rowActions);
+  await rowActions.click();
   await expect(page.getByRole('menu')).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.keyboard.press('Escape');

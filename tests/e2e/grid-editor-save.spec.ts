@@ -56,7 +56,7 @@ test('save: stays in the editor, keeps undo, Done shows the new grid, next sessi
   await expect(page.getByText('Unsaved changes')).toBeVisible();
   await save(page).dblclick();
   await expect(page.getByText('All changes saved')).toBeVisible();
-  await expect(page.getByRole('status')).toContainText('Saved.');
+  await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toHaveCount(1);
   expect(puts).toBe(1);
   await expect(page.getByRole('button', { name: 'Done' })).toBeVisible();
   // Undo history survives the save (Q9): undoing makes the editor dirty again.
@@ -156,7 +156,9 @@ test('409: keep editing, load latest (confirm) and save mine anyway (confirm)', 
   await b.page.getByRole('button', { name: 'Load the latest version' }).click();
   await b.page.getByRole('button', { name: 'Discard and load' }).click();
   await expect(firstRow(b.page)).toContainText('first writer');
-  await expect(b.page.getByRole('status')).toContainText('Loaded the latest version.');
+  await expect(
+    b.page.getByRole('status').filter({ hasText: 'Loaded the latest version.' }),
+  ).toHaveCount(1);
   await expect(
     b.page.getByText('All changes saved').or(b.page.getByText('Unsaved changes')),
   ).toHaveCount(0);

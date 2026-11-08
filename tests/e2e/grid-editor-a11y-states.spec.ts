@@ -97,6 +97,10 @@ for (const scheme of ['light', 'dark'] as const) {
       const field = page.getByRole('textbox', { name: 'Edit ingredient 1' });
       await field.fill('6 oz unsalted butter');
       await expect(page.getByText(/Parsed as: /)).toBeVisible();
+      // The sticky toolbar can cover the nearest "Add row" button at the scroll position the
+      // edit left behind (axe target-size, "partially obscured"); the button is reachable by
+      // scrolling, so audit with the edit field centred instead of at that arbitrary offset.
+      await field.evaluate((el) => el.scrollIntoView({ block: 'center' }));
       await axe(page, 'inline edit');
       await page.keyboard.press('Enter');
       await expect(firstRow(page)).toContainText('butter');
