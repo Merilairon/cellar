@@ -11,6 +11,7 @@ import { getCurrentUser } from '@/lib/auth/current-user';
 import { getDb } from '@/lib/db';
 import { getUserById } from '@/lib/db/users';
 import { listNotesFor } from '@/lib/recipes/notes';
+import { shareContext } from '@/lib/recipes/http';
 import { getRecipeFor } from '@/lib/recipes/service';
 
 export const dynamic = 'force-dynamic';
@@ -25,7 +26,7 @@ export default async function Page({
   const user = await getCurrentUser();
   if (!user) notFound(); // the (app) layout already redirects; this narrows the type
   const db = getDb();
-  const result = getRecipeFor(db, user, (await params).id);
+  const result = getRecipeFor(db, user, (await params).id, shareContext());
   if (!result.ok) notFound(); // not found and not visible look the same
   const recipe = result.recipe;
   const notes = listNotesFor(db, user, recipe.id);

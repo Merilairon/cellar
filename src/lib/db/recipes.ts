@@ -312,6 +312,29 @@ export function setRecipeVisibility(
 }
 
 /**
+ * Set or clear the public share token (`null` revokes). One UPDATE that does NOT touch
+ * `updated_at` (v1.0 R5: sharing is not a content write), guard checked in the same
+ * transaction. Returns false when the recipe does not exist.
+ */
+export function setShareToken(
+  db: Db,
+  id: string,
+  token: string | null,
+  guard?: RecipeGuard,
+): boolean {
+  return db.transaction(
+    (tx) => {
+      const row = tx.select().from(recipe).where(eq(recipe.id, id)).get();
+      if (!row) return false;
+      enforce(guard, row);
+      tx.update(recipe).set({ shareToken: token }).where(eq(recipe.id, id)).run();
+      return true;
+    },
+    { behavior: 'immediate' },
+  );
+}
+
+/**
  * Deep copy into `newOwnerId`'s book: fresh ids everywhere, split groups remapped,
  * private, `copied_from_id` = source, no share token, `view_mode` kept.
  * Returns the new id, or undefined if the source does not exist.
