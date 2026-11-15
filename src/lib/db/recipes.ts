@@ -232,6 +232,11 @@ export function getRecipeRow(db: Db, id: string): RecipeRow | undefined {
   return db.select().from(recipe).where(eq(recipe.id, id)).get();
 }
 
+/** Exact lookup by share token (unique index). The caller still runs `canView` on the row. */
+export function getRecipeRowByShareToken(db: Db, token: string): RecipeRow | undefined {
+  return db.select().from(recipe).where(eq(recipe.shareToken, token)).get();
+}
+
 function loadFull(conn: Conn, id: string): RecipeFull | undefined {
   const r = conn.select().from(recipe).where(eq(recipe.id, id)).get();
   if (!r) return undefined;

@@ -917,5 +917,10 @@
       "ingredients": "Ingredients",
       "steps": "Steps"
     }
+  },
+  "publicPage": {
+    "banner": "Recipe from {source}. Shared read-only via Cellar, not affiliated with the source.",
+    "bannerSourceLabel": "Source: {source}",
+    "footer": "Shared read-only link from a private recipe book."
   }
 }

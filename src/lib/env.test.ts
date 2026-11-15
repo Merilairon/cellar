@@ -74,3 +74,20 @@ describe('PUBLIC_LINKS_ENABLED', () => {
     },
   );
 });
+
+describe('public page rate limit env', () => {
+  it('defaults to 120 per 60 seconds', () => {
+    const e = parseEnv(base);
+    expect(e.RATE_LIMIT_PUBLIC_MAX).toBe(120);
+    expect(e.RATE_LIMIT_PUBLIC_WINDOW_SEC).toBe(60);
+  });
+
+  it('accepts positive integers and rejects zero, negatives and non-numbers', () => {
+    const e = parseEnv({ ...base, RATE_LIMIT_PUBLIC_MAX: '5', RATE_LIMIT_PUBLIC_WINDOW_SEC: '10' });
+    expect([e.RATE_LIMIT_PUBLIC_MAX, e.RATE_LIMIT_PUBLIC_WINDOW_SEC]).toEqual([5, 10]);
+    for (const v of ['0', '-1', 'abc', '1.5']) {
+      expect(() => parseEnv({ ...base, RATE_LIMIT_PUBLIC_MAX: v })).toThrow();
+      expect(() => parseEnv({ ...base, RATE_LIMIT_PUBLIC_WINDOW_SEC: v })).toThrow();
+    }
+  });
+});
