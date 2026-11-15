@@ -1,5 +1,13 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
-import { account, createRecipe, ORIGIN, registerViaInvite, SAMPLES, signIn } from './helpers';
+import {
+  account,
+  createRecipe,
+  hydrated,
+  ORIGIN,
+  registerViaInvite,
+  SAMPLES,
+  signIn,
+} from './helpers';
 
 // T16 main flow. Users are created through the admin invite flow so this file owns its data;
 // it needs the admin from auth.spec.ts, which always runs first on the fresh e2e DB.
@@ -219,8 +227,15 @@ test('share, second user sees it read-only, saves an independent private copy', 
   expect((await readerCtx.request.get(`/api/recipes/${id}`)).status()).toBe(404);
 
   await op.goto(`/recipes/${id}`);
-  await op.getByLabel('Share with all users (read-only)').check();
-  await expect(op.getByRole('status').filter({ hasText: 'Shared with all users.' })).toBeVisible();
+  const shareButton = op.getByRole('button', { name: 'Share', exact: true });
+  await hydrated(shareButton);
+  await shareButton.click();
+  const shareDialog = op.getByRole('dialog', { name: 'Share recipe' });
+  await shareDialog.getByRole('radio', { name: 'All users (read-only)' }).check();
+  await expect(shareDialog.getByRole('status')).toHaveText(
+    'All users of this Cellar can read this recipe.',
+  );
+  await shareDialog.getByRole('button', { name: 'Close' }).click();
 
   await rp.goto('/recipes');
   await expect(rp.getByRole('link', { name: /Shared Cake/ })).toContainText(

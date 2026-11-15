@@ -29,6 +29,9 @@ export default defineConfig({
         // rate-limit e2e pick distinct client IPs via the header.
         TRUSTED_PROXIES: '127.0.0.1,::1',
         RATE_LIMIT_LOGIN_EMAIL_MAX: '5',
+        // Small per-IP cap so public-page.spec.ts can reach the 429 with a few requests. Only
+        // requests carrying x-forwarded-for are limited (the loopback peer is an unknown client).
+        RATE_LIMIT_PUBLIC_MAX: '20',
       },
     },
     {

@@ -8,6 +8,7 @@ import {
   SAMPLES,
   signIn,
 } from './helpers';
+import { importedCake, makeLink } from './share-support';
 
 // Hydration control (v0.3.1 carryover, run in T12). The production build logs a hydration
 // mismatch as a minified React error (#418/#423/#425) or "Hydration failed" text; captureConsole
@@ -63,4 +64,33 @@ test('the recipe list with search and chips hydrates cleanly', async () => {
   expect(logs.hydrationMessages()).toEqual([]);
   expect(logs.all()).toEqual([]);
   await p.close();
+});
+
+test('the public page /r/:token hydrates cleanly, also after scale, units and view changes', async ({
+  browser,
+}) => {
+  const shared = await createRecipe(ctx, importedCake('Hydration Public Cake'));
+  const url = await makeLink(ctx, shared);
+  // A guest: fresh context, no cookies, so the page is the anonymous server render.
+  const guest = await browser.newContext();
+  const p = await guest.newPage();
+  const logs = captureConsole(p); // attach BEFORE the navigation under test
+  await p.goto(url);
+  await hydrated(p.getByRole('button', { name: '2x', exact: true }));
+  await p.getByRole('button', { name: '2x', exact: true }).click();
+  await p.getByRole('button', { name: /Show in/ }).click();
+  await p.getByRole('button', { name: 'List', exact: true }).click();
+  await p.reload();
+  await hydrated(p.getByRole('button', { name: '2x', exact: true }));
+  expect(logs.hydrationMessages()).toEqual([]);
+  expect(logs.all()).toEqual([]);
+
+  // The uniform 404 is server rendered too (the browser itself logs the 404 status, so only
+  // hydration messages are checked here).
+  logs.clear();
+  await p.goto('/r/AAAAAAAAAAAAAAAAAAAAAA');
+  await expect(p.getByText('This link is invalid or has expired.')).toBeVisible();
+  await p.waitForLoadState('networkidle');
+  expect(logs.hydrationMessages()).toEqual([]);
+  await guest.close();
 });

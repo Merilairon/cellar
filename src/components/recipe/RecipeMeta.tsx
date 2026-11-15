@@ -49,10 +49,11 @@ export function RecipeMeta({
   const sourceText = recipe.source_name || safeUrl;
 
   return (
-    <div className="mt-2 text-neutral-700 dark:text-neutral-300">
+    <div className="mt-2 text-neutral-700 print:flex print:flex-col dark:text-neutral-300">
       {facts.length > 0 && <p>{facts.join(' · ')}</p>}
       {showSource && sourceText && (
-        <p>
+        // On paper the source line comes before the facts line (UX spec 4.1 items 2 and 3).
+        <p className="print:order-first">
           {t('recipe.meta.source')}{' '}
           {safeUrl ? (
             <a href={safeUrl} rel="noopener noreferrer" className="print-url underline">

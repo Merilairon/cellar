@@ -1,11 +1,14 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
-import { createRecipe, ORIGIN, SAMPLES, signIn, ADMIN } from './helpers';
+import { account, createRecipe, ORIGIN, registerViaInvite, SAMPLES, signIn } from './helpers';
+import { importedCake, SOURCE_NAME, SOURCE_URL } from './share-support';
 
 // T6 (G11, G12, G25): both seed samples print on exactly one landscape page, from the recipe
 // page and from the public page, on A4 and Letter, and the print table is not clipped. Page
 // count alone hides clipping (overflow: visible cuts at the right edge), so the grid's
-// scrollWidth must also fit its clientWidth under print media. Needs auth.spec.ts to have run
-// first (it creates the admin), like every spec in this suite.
+// scrollWidth must also fit its clientWidth under print media. The spec owns its user (invited
+// through the admin like every spec, so auth.spec.ts must have created the admin first, which the
+// alphabetical single-worker order guarantees) and shares only its own recipes, so it does not
+// depend on any other spec's leftovers or run order.
 test.describe.configure({ mode: 'serial' });
 
 // Printable width in CSS px: page width minus the 2 x 10mm @page margin (297mm / 279.4mm).
@@ -14,6 +17,7 @@ const FORMATS = [
   { format: 'Letter', width: 980 },
 ] as const;
 
+const me = account('printer');
 let ctx: BrowserContext;
 const targets: { name: string; recipe: string; pub: string }[] = [];
 let tall = '';
@@ -30,14 +34,24 @@ async function share(id: string) {
 }
 
 test.beforeAll(async ({ browser }) => {
-  test.setTimeout(60_000);
+  test.setTimeout(120_000);
+  await registerViaInvite(browser, me);
   ctx = await browser.newContext();
   const page = await ctx.newPage();
-  await signIn(page, ADMIN);
+  await signIn(page, me);
   await page.close();
+  // The tallest case: a source line, a source name and tags on top of the grid (the public page
+  // adds the attribution banner), so one page has to hold all of it.
   for (const [key, input] of Object.entries(SAMPLES)) {
-    const title = `Print ${key} ${Date.now()}`;
-    const id = await createRecipe(ctx, { ...input, title });
+    const title = `Print ${key}`;
+    const id = await createRecipe(ctx, {
+      ...importedCake(title),
+      ...input,
+      title,
+      source_url: SOURCE_URL,
+      source_name: SOURCE_NAME,
+      tags: ['baking', 'dessert'],
+    });
     targets.push({ name: input.title, recipe: `/recipes/${id}`, pub: await share(id) });
   }
   // 60 ingredient rows in one column cannot fit one page: proves the counter counts pages.
@@ -48,7 +62,7 @@ test.beforeAll(async ({ browser }) => {
   }));
   tall = await createRecipe(ctx, {
     ...base,
-    title: `Print tall ${Date.now()}`,
+    title: 'Print tall',
     sections: [
       {
         title: null,
@@ -69,6 +83,9 @@ async function openPrint(path: string, width: number): Promise<Page> {
   await p.emulateMedia({ media: 'print', colorScheme: 'dark' });
   return p;
 }
+
+const pageOverflowPx = (p: Page) =>
+  p.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 
 const overflow = (p: Page) =>
   p.evaluate(() =>
@@ -100,6 +117,7 @@ for (const where of ['recipe', 'pub'] as const) {
           ink: getComputedStyle(document.body).color,
         }));
         expect(colours).toEqual({ page: 'rgb(255, 255, 255)', ink: 'rgb(31, 42, 31)' });
+        expect(await pageOverflowPx(p)).toBeLessThanOrEqual(0);
         const pdf = await p.pdf({
           format,
           landscape: true,
@@ -123,6 +141,48 @@ test('a grid taller than a page prints on more pages instead of clipping', async
   });
   expect(pageCount(pdf)).toBeGreaterThan(1);
   await p.close();
+});
+
+test('source URL is printed after the source link; tags print as one line; chips stay on screen', async () => {
+  for (const where of ['recipe', 'pub'] as const) {
+    const p = await ctx.newPage();
+    await p.setViewportSize({ width: 1047, height: 800 });
+    await p.goto(targets[0][where]);
+    const link = p.getByRole('link', { name: SOURCE_NAME });
+    await expect(link).toHaveAttribute('href', SOURCE_URL);
+    const after = () => link.evaluate((a) => getComputedStyle(a, '::after').content);
+
+    // Screen: nothing is appended, tags are chips (recipe page: links, public page: text).
+    await p.emulateMedia({ media: 'screen' });
+    expect(await after()).toBe('none');
+    await expect(p.getByText('Tags: baking, dessert')).toBeHidden();
+    await expect(p.getByText('baking', { exact: true })).toBeVisible();
+
+    // Print: the address follows the name, tags are one comma-separated line, chips are gone.
+    await p.emulateMedia({ media: 'print' });
+    expect(await after()).toBe(`" (${SOURCE_URL})"`);
+    await expect(p.getByText('Tags: baking, dessert')).toBeVisible();
+    await expect(p.getByText('baking', { exact: true })).toBeHidden();
+    await p.close();
+  }
+});
+
+test('on paper the source line comes before the facts line (UX spec 4.1 items 2 and 3)', async () => {
+  for (const where of ['recipe', 'pub'] as const) {
+    const p = await ctx.newPage();
+    await p.setViewportSize({ width: 1047, height: 800 });
+    await p.goto(targets[0][where]);
+    await p.emulateMedia({ media: 'print' });
+    const y = async (re: RegExp) => (await p.getByText(re).first().boundingBox())!.y;
+    const title = (await p.getByRole('heading', { level: 1 }).boundingBox())!.y;
+    const source = await y(where === 'recipe' ? /^Source:/ : /^Recipe from/);
+    const facts = await y(/^Serves \d/);
+    const tags = await y(/^Tags:/);
+    expect(title).toBeLessThan(source);
+    expect(source).toBeLessThan(facts);
+    expect(facts).toBeLessThan(tags);
+    await p.close();
+  }
 });
 
 test('the Include notes option prints notes only when ticked; public page has none', async () => {
