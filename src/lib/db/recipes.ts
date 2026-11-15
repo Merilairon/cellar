@@ -288,6 +288,11 @@ export function deleteRecipe(db: Db, id: string, guard?: RecipeGuard): boolean {
   );
 }
 
+/**
+ * Visibility is not a content write: `updated_at` is left alone (v1.0 Q3, R5), so an open grid
+ * editor's `base_updated_at` stays valid, the newest-first order does not move, and
+ * `isImportedUnedited` keeps detecting an untouched import.
+ */
 export function setRecipeVisibility(
   db: Db,
   id: string,
@@ -299,10 +304,7 @@ export function setRecipeVisibility(
       const row = tx.select().from(recipe).where(eq(recipe.id, id)).get();
       if (!row) return false;
       enforce(guard, row);
-      tx.update(recipe)
-        .set({ visibility, updatedAt: stampAfter(row.updatedAt) })
-        .where(eq(recipe.id, id))
-        .run();
+      tx.update(recipe).set({ visibility }).where(eq(recipe.id, id)).run();
       return true;
     },
     { behavior: 'immediate' },

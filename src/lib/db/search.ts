@@ -7,7 +7,8 @@ import { normalizeTagName } from '@/lib/recipes/tag-name';
 // Recipe search over recipe_fts (migration 0005). User text never reaches MATCH raw: it is
 // tokenised here, every token is double-quoted and gets a prefix `*` appended by code, so FTS5
 // operators, column filters and quotes typed by a user are inert text. Visibility is enforced
-// in the same SQL statement via readableBy (tasklist G4).
+// in the same SQL statement via readableBy (v0.4.0 tasklist G4), the SQL twin of `canView` for list
+// queries (agreement test: src/lib/db/readable.test.ts).
 
 export const MAX_QUERY_CHARS = 100;
 export const MAX_QUERY_TOKENS = 8;

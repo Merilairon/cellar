@@ -152,7 +152,7 @@ describe('delete / visibility / list', () => {
     expect(db.select().from(step).where(eq(step.recipeId, id)).all()).toHaveLength(0);
   });
 
-  it('setRecipeVisibility updates the flag and updated_at', async () => {
+  it('setRecipeVisibility updates the flag and leaves updated_at untouched (v1.0 Q3, R5)', async () => {
     const u = setup();
     const id = createRecipe(db, u.id, tree());
     const before = getRecipeFull(db, id)!;
@@ -160,7 +160,7 @@ describe('delete / visibility / list', () => {
     expect(setRecipeVisibility(db, id, 'users')).toBe(true);
     const after = getRecipeFull(db, id)!;
     expect(after.visibility).toBe('users');
-    expect(after.updatedAt > before.updatedAt).toBe(true);
+    expect(after.updatedAt).toBe(before.updatedAt);
     expect(setRecipeVisibility(db, 'missing', 'users')).toBe(false);
   });
 

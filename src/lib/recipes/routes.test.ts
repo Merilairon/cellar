@@ -290,6 +290,18 @@ describe('PUT /api/recipes/:id/grid', () => {
     expect((await put(r.id, body)).status).toBe(409);
   });
 
+  it('a visibility change between load and save is not a conflict: grid save 200 (v1.0 Q3, R5)', async () => {
+    const r = await created();
+    const body = gridBody(r); // base_updated_at captured before the visibility change
+    expect((await visPut(req('PUT', { visibility: 'users' }), ctx(r.id))).status).toBe(200);
+    expect((await visPut(req('PUT', { visibility: 'private' }), ctx(r.id))).status).toBe(200);
+    const stored = (await (await GET(req('GET', undefined, {}), ctx(r.id))).json()) as Loose;
+    expect(stored.updated_at).toBe(r.updated_at);
+    const res = await put(r.id, body);
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as Loose).updated_at > r.updated_at).toBe(true);
+  });
+
   it('422 with validator paths; an uncovered row is 200; unknown keys 422', async () => {
     const r = await created();
     const bad = await put(

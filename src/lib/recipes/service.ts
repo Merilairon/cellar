@@ -27,7 +27,7 @@ import { removeUploadFiles } from '@/lib/import/uploads';
 import { joinQtyRange } from '@/lib/import/ingredient-parser';
 import { validateRecipeGrid } from '@/lib/grid/validate';
 import { completeMeasures } from '@/lib/units/complete';
-import { canRead, canWrite } from './access';
+import { canView, canEdit, type Actor as AccessActor } from './access';
 import { toApiRating } from './ratings';
 import { copyPhotosTo, toApiPhoto } from './photos';
 import {
@@ -40,7 +40,8 @@ import {
   type ViewMode,
 } from './schemas';
 
-export type Actor = { id: string; role: 'admin' | 'member' };
+/** A signed-in caller: the non-null half of the access-layer `Actor` (anonymous is `null`). */
+export type Actor = NonNullable<AccessActor>;
 
 export type Failure =
   | { ok: false; status: 404 | 403 }
@@ -121,11 +122,11 @@ export function toTree(input: RecipeInput, viewMode: ViewMode): RecipeTree {
 const readGuard =
   (actor: Actor): RecipeGuard =>
   (row) =>
-    canRead(actor, row) ? 'ok' : 'not_found';
+    canView(actor, row) ? 'ok' : 'not_found';
 const writeGuard =
   (actor: Actor): RecipeGuard =>
   (row) =>
-    !canRead(actor, row) ? 'not_found' : canWrite(actor, row) ? 'ok' : 'forbidden';
+    !canView(actor, row) ? 'not_found' : canEdit(actor, row) ? 'ok' : 'forbidden';
 
 /** Run a guarded db write; a guard refusal inside the transaction becomes a 404/403 failure. */
 function guarded<T>(fn: () => T): { ok: true; value: T } | Failure {
@@ -260,10 +261,10 @@ export function createRecipeFor(
 
 export function getRecipeFor(db: Db, actor: Actor, id: string): Result<{ recipe: ApiRecipe }> {
   const r = getRecipeFull(db, id);
-  if (!r || !canRead(actor, r)) return { ok: false, status: 404 };
+  if (!r || !canView(actor, r)) return { ok: false, status: 404 };
   return {
     ok: true,
-    recipe: toApiRecipe(r, canWrite(actor, r), listPhotos(db, id), ratingSummary(db, id, actor.id)),
+    recipe: toApiRecipe(r, canEdit(actor, r), listPhotos(db, id), ratingSummary(db, id, actor.id)),
   };
 }
 
@@ -275,8 +276,8 @@ export function updateRecipeFor(
 ): Result<{ recipe: ApiRecipe }> {
   // Cheap pre-checks for status ordering; the authoritative check re-runs in the transaction.
   const row = getRecipeRow(db, id);
-  if (!row || !canRead(actor, row)) return { ok: false, status: 404 };
-  if (!canWrite(actor, row)) return { ok: false, status: 403 };
+  if (!row || !canView(actor, row)) return { ok: false, status: 404 };
+  if (!canEdit(actor, row)) return { ok: false, status: 403 };
   const prepared = prepareRecipe(body);
   if (!prepared.ok) return prepared;
   // View mode omitted: a stored list stays list; a stored grid stays grid only while it is
@@ -314,8 +315,8 @@ export function updateGridFor(
   body: unknown,
 ): Result<{ recipe: ApiRecipe }> {
   const row = getRecipeRow(db, id);
-  if (!row || !canRead(actor, row)) return { ok: false, status: 404 };
-  if (!canWrite(actor, row)) return { ok: false, status: 403 };
+  if (!row || !canView(actor, row)) return { ok: false, status: 404 };
+  if (!canEdit(actor, row)) return { ok: false, status: 403 };
   const parsed = gridInputSchema.safeParse(body);
   if (!parsed.success) return { ok: false, status: 422, errors: zodIssuesToErrors(parsed.error) };
   const { errors } = validateRecipeGrid(parsed.data);
@@ -367,8 +368,8 @@ export function setVisibilityFor(
   body: unknown,
 ): Result<{ visibility: 'private' | 'users' }> {
   const row = getRecipeRow(db, id);
-  if (!row || !canRead(actor, row)) return { ok: false, status: 404 };
-  if (!canWrite(actor, row)) return { ok: false, status: 403 };
+  if (!row || !canView(actor, row)) return { ok: false, status: 404 };
+  if (!canEdit(actor, row)) return { ok: false, status: 403 };
   const parsed = visibilityInputSchema.safeParse(body);
   if (!parsed.success) return { ok: false, status: 422, errors: zodIssuesToErrors(parsed.error) };
   const res = guarded(() => setRecipeVisibility(db, id, parsed.data.visibility, writeGuard(actor)));

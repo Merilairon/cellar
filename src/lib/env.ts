@@ -120,6 +120,13 @@ const schema = z.object({
     (v) => isDevOrTest || !v,
     'IMPORT_ALLOW_LOCAL_FETCH is only allowed when NODE_ENV is development or test',
   ),
+  // Public share links (/r/<token>). `false` keeps stored tokens but makes them inert (v1.0 Q5).
+  // Strict on purpose: only the literal strings are accepted, so a typo cannot silently expose
+  // or hide links.
+  PUBLIC_LINKS_ENABLED: z
+    .enum(['true', 'false'], { error: 'PUBLIC_LINKS_ENABLED must be "true" or "false"' })
+    .default('true')
+    .transform((v) => v === 'true'),
 });
 
 const schemaWithDerived = schema

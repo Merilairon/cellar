@@ -147,7 +147,7 @@ describe('photo authorization matrix', () => {
     expect((await delPhoto(p2.id)).status).toBe(204);
   });
 
-  it('admin may write on another member recipe (canWrite parity)', async () => {
+  it('admin may write on another member recipe (canEdit parity)', async () => {
     const rid = await makeRecipe('private');
     const p = await add(rid, admin);
     as(admin);

@@ -54,3 +54,23 @@ describe('headless env', () => {
     expect(parseEnv({ ...base, HEADLESS_TIMEOUT_MS: '1000' }).HEADLESS_TIMEOUT_MS).toBe(1000);
   });
 });
+
+describe('PUBLIC_LINKS_ENABLED', () => {
+  it('defaults to true', () => {
+    expect(parseEnv(base).PUBLIC_LINKS_ENABLED).toBe(true);
+  });
+
+  it('parses the two literal strings', () => {
+    expect(parseEnv({ ...base, PUBLIC_LINKS_ENABLED: 'true' }).PUBLIC_LINKS_ENABLED).toBe(true);
+    expect(parseEnv({ ...base, PUBLIC_LINKS_ENABLED: 'false' }).PUBLIC_LINKS_ENABLED).toBe(false);
+  });
+
+  it.each(['maybe', '1', '0', 'TRUE', 'yes', ''])(
+    'rejects %j with a message naming the variable',
+    (v) => {
+      expect(() => parseEnv({ ...base, PUBLIC_LINKS_ENABLED: v })).toThrow(
+        /PUBLIC_LINKS_ENABLED must be \\"true\\" or \\"false\\"/,
+      );
+    },
+  );
+});

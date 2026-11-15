@@ -387,7 +387,7 @@ describe('updateGridFor: conflicts (409)', () => {
     ).toMatchObject({ ok: true });
   });
 
-  it('a recipe-form PUT or a visibility change between load and save conflicts (G13)', () => {
+  it('a recipe-form PUT between load and save conflicts (G13); a visibility change does not (v1.0 Q3)', () => {
     const { owner } = setup();
     const r = make(owner);
     const body = bodyFrom(r);
@@ -398,13 +398,14 @@ describe('updateGridFor: conflicts (409)', () => {
     const r2 = getRecipeFor(db, owner, r.id);
     if (!r2.ok) throw new Error();
     const body2 = bodyFrom(r2.recipe);
+    // Visibility is not a content write (R5): the stale base stays valid and the save lands.
     setVisibilityFor(db, owner, r.id, { visibility: 'users' });
-    expect(updateGridFor(db, owner, r.id, body2)).toMatchObject({ ok: false, status: 409 });
+    expect(updateGridFor(db, owner, r.id, body2)).toMatchObject({ ok: true });
   });
 
-  // L1: with the clock frozen, a write in the same millisecond as the load must still move the
-  // stamp, or a stale base would pass the compare.
-  it('a recipe-form PUT or a visibility change in the same millisecond still conflicts (L1)', () => {
+  // L1: with the clock frozen, a content write in the same millisecond as the load must still
+  // move the stamp, or a stale base would pass the compare. A visibility change never moves it.
+  it('a recipe-form PUT in the same millisecond still conflicts (L1); a visibility change leaves the stamp', () => {
     const { owner } = setup();
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2030-01-01T00:00:00.000Z'));
@@ -416,12 +417,15 @@ describe('updateGridFor: conflicts (409)', () => {
     expect(updateGridFor(db, owner, r.id, body)).toMatchObject({ ok: false, status: 409 });
     const r2 = getRecipeFor(db, owner, r.id);
     if (!r2.ok) throw new Error();
-    const body2 = bodyFrom(r2.recipe);
     setVisibilityFor(db, owner, r.id, { visibility: 'users' });
-    expect(updateGridFor(db, owner, r.id, body2)).toMatchObject({ ok: false, status: 409 });
     const r3 = getRecipeFor(db, owner, r.id);
     if (!r3.ok) throw new Error();
-    expect(r3.recipe.updated_at > r2.recipe.updated_at).toBe(true);
+    expect(r3.recipe.updated_at).toBe(r2.recipe.updated_at);
+    // The grid save after it is a content write and does move the stamp, even in the same ms.
+    expect(updateGridFor(db, owner, r.id, bodyFrom(r3.recipe))).toMatchObject({ ok: true });
+    const r4 = getRecipeFor(db, owner, r.id);
+    if (!r4.ok) throw new Error();
+    expect(r4.recipe.updated_at > r3.recipe.updated_at).toBe(true);
   });
 
   it('a tag-only change on the recipe form also conflicts (the form PUT bumps updated_at)', () => {

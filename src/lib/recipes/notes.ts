@@ -9,7 +9,7 @@ import {
   type NoteItem,
 } from '@/lib/db/notes';
 import { getRecipeRow, RecipeGuardError, type RecipeGuard } from '@/lib/db/recipes';
-import { canRead, canWrite } from './access';
+import { canView, canEdit } from './access';
 import { zodIssuesToErrors, type FieldError } from './schemas';
 import type { Actor } from './service';
 
@@ -62,7 +62,7 @@ const toApi = (n: NoteItem): ApiNote => ({
 const readGuard =
   (actor: Actor): RecipeGuard =>
   (row) =>
-    canRead(actor, row) ? 'ok' : 'not_found';
+    canView(actor, row) ? 'ok' : 'not_found';
 
 const invalid = (error: z.ZodError): Failure => ({
   ok: false,
@@ -85,7 +85,7 @@ function guarded<T>(fn: () => T): { ok: true; value: T } | Failure {
 /** Cheap pre-check before the body is read (404 when missing or unreadable, like every note op). */
 export function checkNoteRead(db: Db, actor: Actor, recipeId: string): { ok: true } | Failure {
   const row = getRecipeRow(db, recipeId);
-  return row && canRead(actor, row) ? { ok: true } : { ok: false, status: 404 };
+  return row && canView(actor, row) ? { ok: true } : { ok: false, status: 404 };
 }
 
 export function listNotesFor(
@@ -94,7 +94,7 @@ export function listNotesFor(
   recipeId: string,
 ): { ok: true; notes: ApiNote[] } | Failure {
   const row = getRecipeRow(db, recipeId);
-  if (!row || !canRead(actor, row)) return { ok: false, status: 404 };
+  if (!row || !canView(actor, row)) return { ok: false, status: 404 };
   return { ok: true, notes: listNotes(db, recipeId, actor.id).map(toApi) };
 }
 
@@ -107,7 +107,7 @@ export function createNoteFor(
   body: unknown,
 ): { ok: true; note: ApiNote } | Failure {
   const row = getRecipeRow(db, recipeId);
-  if (!row || !canRead(actor, row)) return { ok: false, status: 404 };
+  if (!row || !canView(actor, row)) return { ok: false, status: 404 };
   const parsed = noteCreateSchema.safeParse(body);
   if (!parsed.success) return invalid(parsed.error);
   const res = guarded(() => insertNote(db, recipeId, actor, parsed.data, readGuard(actor)));
@@ -123,7 +123,7 @@ export function updateNoteFor(
   body: unknown,
 ): { ok: true; note: ApiNote } | Failure {
   const row = getRecipeRow(db, recipeId);
-  if (!row || !canRead(actor, row)) return { ok: false, status: 404 };
+  if (!row || !canView(actor, row)) return { ok: false, status: 404 };
   const parsed = noteUpdateSchema.safeParse(body);
   if (!parsed.success) return invalid(parsed.error);
   const res = guarded(() => updateNote(db, recipeId, noteId, actor, parsed.data, readGuard(actor)));
@@ -138,9 +138,9 @@ export function deleteNoteFor(
   noteId: string,
 ): { ok: true } | Failure {
   const row = getRecipeRow(db, recipeId);
-  if (!row || !canRead(actor, row)) return { ok: false, status: 404 };
+  if (!row || !canView(actor, row)) return { ok: false, status: 404 };
   const res = guarded(() =>
-    deleteNote(db, recipeId, noteId, actor.id, readGuard(actor), (r) => canWrite(actor, r)),
+    deleteNote(db, recipeId, noteId, actor.id, readGuard(actor), (r) => canEdit(actor, r)),
   );
   if (!res.ok) return res;
   return res.value ? { ok: true } : { ok: false, status: 404 };
