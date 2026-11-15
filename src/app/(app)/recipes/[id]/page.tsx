@@ -1,16 +1,17 @@
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
-import { OwnerActions, SaveCopyButton, VisibilityControl } from '@/components/recipe/RecipeActions';
+import { RecipeActionSlot } from '@/components/recipe/RecipeActions';
 import { RecipeMeta } from '@/components/recipe/RecipeMeta';
 import { RecipeView } from '@/components/recipe/RecipeView';
 import { Notes } from '@/components/recipe/notes/Notes';
 import { PhotosPanel } from '@/components/recipe/photos/PhotosPanel';
-import { PhotosProvider, PhotosToggle } from '@/components/recipe/photos/PhotosProvider';
+import { PhotosProvider } from '@/components/recipe/photos/PhotosProvider';
 import { RatingPanel } from '@/components/recipe/rating/RatingPanel';
 import { getCurrentUser } from '@/lib/auth/current-user';
 import { getDb } from '@/lib/db';
 import { getUserById } from '@/lib/db/users';
 import { listNotesFor } from '@/lib/recipes/notes';
+import { isImportedUnedited } from '@/lib/recipes/access';
 import { shareContext } from '@/lib/recipes/http';
 import { getRecipeFor } from '@/lib/recipes/service';
 
@@ -78,14 +79,24 @@ export default async function Page({
           userId={user.id}
           unitPref={user.unitPref}
           actions={
-            <>
-              {recipe.can_edit && <OwnerActions id={recipe.id} />}
-              {recipe.can_edit && <PhotosToggle />}
-              {recipe.can_edit && (
-                <VisibilityControl id={recipe.id} visibility={recipe.visibility} />
-              )}
-              {!isOwner && <SaveCopyButton id={recipe.id} />}
-            </>
+            <RecipeActionSlot
+              recipe={{
+                id: recipe.id,
+                title: recipe.title,
+                can_edit: recipe.can_edit,
+                visibility: recipe.visibility,
+                share: recipe.share ? { url: recipe.share.url } : null,
+                public_links_enabled: recipe.public_links_enabled,
+                source_url: recipe.source_url,
+                source_name: recipe.source_name,
+              }}
+              isOwner={isOwner}
+              importedUnedited={isImportedUnedited({
+                sourceUrl: recipe.source_url,
+                createdAt: recipe.created_at,
+                updatedAt: recipe.updated_at,
+              })}
+            />
           }
         />
         <Notes

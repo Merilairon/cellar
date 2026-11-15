@@ -6,6 +6,9 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import type { Visibility } from '@/lib/recipes/schemas';
 import { call } from './api';
+import { PhotosToggle } from './photos/PhotosProvider';
+import { ShareButton } from './share/ShareButton';
+import { warningSource } from './share/share-state';
 import { btn, btnDanger } from './styles';
 
 /** Save a copy: any reader who is not the owner. Creates a private, independent recipe. */
@@ -43,40 +46,48 @@ export function SaveCopyButton({ id }: { id: string }) {
   );
 }
 
-/** Owner/admin only: share read-only with all signed-in users, or keep private. */
-export function VisibilityControl({ id, visibility }: { id: string; visibility: Visibility }) {
-  const t = useTranslations();
-  const router = useRouter();
-  const [current, setCurrent] = useState<Visibility>(visibility);
-  const [status, setStatus] = useState<'idle' | 'saved' | 'failed'>('idle');
+/**
+ * The recipe page's action slot (after Cook): owner tools and Share for `can_edit` actors, Save a
+ * copy for any reader who is not the owner. Readers never get the Share button (UX spec 1.1).
+ */
+export function RecipeActionSlot({
+  recipe,
+  isOwner,
+  importedUnedited,
+}: {
+  recipe: {
+    id: string;
+    title: string;
+    can_edit: boolean;
+    visibility: Visibility;
+    share: { url: string | null } | null;
+    public_links_enabled: boolean;
+    source_url: string | null;
+    source_name: string | null;
+  };
+  isOwner: boolean;
+  importedUnedited: boolean;
+}) {
   return (
-    <div className="flex items-center gap-2">
-      <label className="flex min-h-11 items-center gap-2">
-        <input
-          type="checkbox"
-          className="size-5"
-          checked={current === 'users'}
-          onChange={async (e) => {
-            const next: Visibility = e.target.checked ? 'users' : 'private';
-            setCurrent(next); // optimistic; reverted below if the request fails
-            const res = await call(`/api/recipes/${id}/visibility`, 'PUT', { visibility: next });
-            if (res?.ok) {
-              setStatus('saved');
-              router.refresh();
-            } else {
-              setCurrent(next === 'users' ? 'private' : 'users');
-              setStatus('failed');
-            }
-          }}
+    <>
+      {recipe.can_edit && <OwnerActions id={recipe.id} />}
+      {recipe.can_edit && <PhotosToggle />}
+      {recipe.can_edit && (
+        <ShareButton
+          id={recipe.id}
+          title={recipe.title}
+          visibility={recipe.visibility}
+          shareUrl={recipe.share?.url ?? null}
+          publicLinksEnabled={recipe.public_links_enabled}
+          warningSource={
+            importedUnedited
+              ? { source: warningSource(recipe.source_url, recipe.source_name) }
+              : null
+          }
         />
-        {t('recipe.visibility.shareLabel')}
-      </label>
-      <span role="status" className="text-sm text-neutral-700 dark:text-neutral-300">
-        {status === 'saved' &&
-          t(current === 'users' ? 'recipe.visibility.nowShared' : 'recipe.visibility.nowPrivate')}
-        {status === 'failed' && t('recipe.errors.saveFailed')}
-      </span>
-    </div>
+      )}
+      {!isOwner && <SaveCopyButton id={recipe.id} />}
+    </>
   );
 }
 
