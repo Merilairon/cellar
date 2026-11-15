@@ -81,13 +81,28 @@ async function open(
   return { page, close: () => ctx.close() };
 }
 
-const dates = (p: Page) => [p.getByText(/^[A-Z][a-z]{2} \d{1,2}, \d{4}$/)];
-const shot = (page: Page, name: string, target = page.locator('main')) =>
-  expect(target).toHaveScreenshot(name, {
-    animations: 'disabled',
-    caret: 'hide',
-    mask: dates(page),
-  });
+const DATE_RE = /[A-Z][a-z]{2} \d{1,2}, \d{4}/;
+
+/**
+ * Dates come from the server clock ("Updated Nov 15, 2026" on cards, "Nov 15, 2026" on notes), so
+ * they change daily. Masking is not enough: the note date is inline, so its mask box follows the
+ * text width and "Nov 8" vs "Nov 15" still differ. Replace the text with a fixed date instead.
+ */
+async function freezeDates(page: Page) {
+  await page.getByText(DATE_RE).evaluateAll((els, src) => {
+    const re = new RegExp(src, 'g');
+    for (const el of els) {
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      for (let n = walker.nextNode(); n; n = walker.nextNode())
+        n.textContent = (n.textContent ?? '').replace(re, 'Jan 1, 2000');
+    }
+  }, DATE_RE.source);
+}
+
+async function shot(page: Page, name: string, target = page.locator('main')) {
+  await freezeDates(page);
+  await expect(target).toHaveScreenshot(name, { animations: 'disabled', caret: 'hide' });
+}
 
 async function noOverflow(page: Page) {
   const over = await page.evaluate(
