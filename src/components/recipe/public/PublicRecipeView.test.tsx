@@ -65,6 +65,13 @@ describe('PublicRecipeView', () => {
     expect(html).toMatch(/aria-label="View"|role="group"/);
   });
 
+  it('has the Print button and its hint but no notes option (G12)', () => {
+    expect(html).toContain('Landscape fits the grid on one page.');
+    expect(html).toMatch(/<button type="button"[^>]*aria-describedby[^>]*>.*?Print<\/button>/);
+    expect(text).not.toContain('Include notes when printing');
+    expect(html).not.toContain('type="checkbox"');
+  });
+
   it('has none of the owner, edit or private controls and strings', () => {
     // Controls: the only buttons are scale presets, unit, reset and the grid/list toggle.
     const buttons = [...html.matchAll(/<button([^>]*)>(.*?)<\/button>/g)]
@@ -72,7 +79,7 @@ describe('PublicRecipeView', () => {
       .map((m) => m[2].replace(/<[^>]+>/g, ''));
     expect(buttons.length).toBeGreaterThan(5);
     for (const b of buttons) {
-      expect(b).toMatch(/^(1\/2x|1x|2x|Custom|Show in US units|Reset|Grid|List)$/);
+      expect(b).toMatch(/^(1\/2x|1x|2x|Custom|Show in US units|Reset|Grid|List|Print)$/);
     }
     for (const forbidden of [
       /\bEdit\b/,

@@ -250,6 +250,63 @@
       "password": "Password must be 12 to 128 characters."
     }
   },
+  "share": {
+    "open": "Share",
+    "title": "Share recipe",
+    "close": "Close",
+    "chip": {
+      "private": "Private",
+      "users": "All users",
+      "link": "Public link",
+      "usersAndLink": "All users · Public link"
+    },
+    "summary": {
+      "private": "Only you can see this recipe.",
+      "users": "All users of this Cellar can read this recipe.",
+      "link": "You and anyone with the public link can read this recipe.",
+      "usersAndLink": "All users of this Cellar and anyone with the public link can read this recipe."
+    },
+    "who": {
+      "legend": "Who can see this",
+      "private": "Private",
+      "privateHelp": "Only you. It does not appear for other users.",
+      "users": "All users (read-only)",
+      "usersHelp": "Everyone signed in to this Cellar can read it and save their own copy, not edit it."
+    },
+    "link": {
+      "heading": "Public link",
+      "on": "On",
+      "off": "Off",
+      "turningOn": "Turning on…",
+      "help": "Anyone with the link can read this recipe without signing in.",
+      "field": "Public link",
+      "copy": "Copy link",
+      "copied": "Copied",
+      "copiedStatus": "Link copied.",
+      "copyManual": "Select the link and copy it with Ctrl+C.",
+      "copyManualTouch": "Select the link and copy it.",
+      "rotate": "New link",
+      "rotateConfirm": "Make a new link? The old one stops working immediately.",
+      "rotateYes": "Make new link",
+      "rotated": "New link ready. The old link no longer works.",
+      "offConfirm": "Turn off the public link? Anyone who has it will no longer be able to open it.",
+      "offYes": "Turn off",
+      "keep": "Keep",
+      "disabled": "Public links are turned off on this Cellar by its admin."
+    },
+    "warning": {
+      "title": "This recipe was imported and not edited",
+      "body": "It came from {source}. The text of a recipe (descriptions, steps) may be protected by copyright, even when the ingredient list is not. Publishing it republishes that text, and you are responsible for it. The public page names the source and links to the original, but anyone with the link can read it. Search engines are asked not to index it. Rewriting the recipe in your own words removes this warning.",
+      "bodyNoSource": "It was imported from another website. The text of a recipe (descriptions, steps) may be protected by copyright, even when the ingredient list is not. Publishing it republishes that text, and you are responsible for it. Anyone with the link can read it. Search engines are asked not to index it. Rewriting the recipe in your own words removes this warning."
+    },
+    "error": {
+      "save": "Could not save. Try again.",
+      "forbidden": "You can no longer change sharing for this recipe.",
+      "turnOn": "Could not turn on the public link. Try again.",
+      "rotate": "Could not make a new link. The old link still works.",
+      "turnOff": "Could not turn off the link. It still works. Try again."
+    }
+  },
   "nav": {
     "main": "Main",
     "recipes": "Recipes",
@@ -506,10 +563,7 @@
     },
     "visibility": {
       "private": "Private (only me)",
-      "users": "Shared with all users (read-only)",
-      "shareLabel": "Share with all users (read-only)",
-      "nowShared": "Shared with all users.",
-      "nowPrivate": "Now private."
+      "users": "Shared with all users (read-only)"
     },
     "form": {
       "newTitle": "New recipe",
@@ -917,6 +971,14 @@
       "ingredients": "Ingredients",
       "steps": "Steps"
     }
+  },
+  "print": {
+    "open": "Print",
+    "hint": "Landscape fits the grid on one page.",
+    "includeNotes": "Include notes when printing",
+    "notesHeading": "Notes",
+    "noteLine": "{author} · {date} · {marker}",
+    "tags": "Tags: {list}"
   },
   "publicPage": {
     "banner": "Recipe from {source}. Shared read-only via Cellar, not affiliated with the source.",

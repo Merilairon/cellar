@@ -9,6 +9,7 @@ import { RecipeGrid } from '../RecipeGrid';
 import { RecipeList } from '../RecipeList';
 import { RecipeMeta } from '../RecipeMeta';
 import { ScaleControls, useScale } from '../ScaleControls';
+import { PrintButton } from '../print/PrintButton';
 import { StepSheet } from '../StepDetail';
 import { PHONE_QUERY, useMediaQuery } from '../useViewPreference';
 import { SourceBanner } from './SourceBanner';
@@ -73,7 +74,7 @@ export function PublicRecipeView({ recipe }: { recipe: PublicRecipe }) {
       <div className="mt-4">
         <ScaleControls scale={scale} servings={recipe.servings} />
       </div>
-      <div className="mb-4 flex flex-wrap items-center gap-3">
+      <div className="mb-4 flex flex-wrap items-center gap-3 print:hidden">
         <div
           role="group"
           aria-label={t('recipe.view.label')}
@@ -87,7 +88,7 @@ export function PublicRecipeView({ recipe }: { recipe: PublicRecipe }) {
             {t('recipe.view.gridUnavailable')}
           </p>
         )}
-        {/* T6 adds the Print button and its hint here. */}
+        <PrintButton />
       </div>
 
       {mode === 'grid' ? (
@@ -105,7 +106,7 @@ export function PublicRecipeView({ recipe }: { recipe: PublicRecipe }) {
       ) : (
         <RecipeList sections={recipe.sections} display={scale.display} />
       )}
-      <p className="mt-8 border-t border-neutral-500 pt-4 text-center text-neutral-700 dark:text-neutral-300">
+      <p className="mt-8 border-t print:hidden border-neutral-500 pt-4 text-center text-neutral-700 dark:text-neutral-300">
         {t('publicPage.footer')}
       </p>
     </div>

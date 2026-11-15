@@ -143,6 +143,9 @@ export function Notes({
   );
   const [editError, setEditError] = useState<NoteErrorKey | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  // Print option (UX spec 4.3): component state, default off, never persisted.
+  const [printNotes, setPrintNotes] = useState(false);
+  const printId = useId();
   const root = useRef<HTMLElement>(null);
   const addArea = useRef<HTMLTextAreaElement>(null);
   const uid = useId();
@@ -225,241 +228,276 @@ export function Notes({
   };
 
   return (
-    <section ref={root} aria-labelledby={`${uid}-h`} className="mt-8 max-w-prose">
-      <h2 id={`${uid}-h`} className="text-xl font-semibold">
-        {t('notes.heading')} ({notes.length})
-      </h2>
-      <p role="status" aria-live="polite" className="min-h-5 text-sm">
-        {status}
-      </p>
+    <>
+      <section ref={root} aria-labelledby={`${uid}-h`} className="mt-8 max-w-prose print:hidden">
+        <div className="flex flex-wrap items-center justify-between gap-x-4">
+          <h2 id={`${uid}-h`} className="text-xl font-semibold">
+            {t('notes.heading')} ({notes.length})
+          </h2>
+          {notes.length > 0 && (
+            <label htmlFor={printId} className="flex min-h-11 items-center gap-2">
+              <input
+                id={printId}
+                type="checkbox"
+                className="size-5"
+                checked={printNotes}
+                onChange={(e) => setPrintNotes(e.target.checked)}
+              />
+              {t('print.includeNotes')}
+            </label>
+          )}
+        </div>
+        <p role="status" aria-live="polite" className="min-h-5 text-sm">
+          {status}
+        </p>
 
-      {notes.length === 0 ? (
-        <p className="mt-2">{t('notes.empty')}</p>
-      ) : (
-        <ul aria-label={t('notes.list.label')} className="mt-2 flex flex-col gap-3">
-          {notes.map((n) => {
-            const isEditing = editing?.id === n.id;
-            const canDelete = n.mine || (canManage && n.shared);
-            return (
-              <li key={n.id} data-note={n.id} className="rounded border border-neutral-400 p-3">
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <span className="font-semibold">{n.mine ? t('notes.you') : n.author}</span>
-                  <span className="text-sm text-neutral-700 dark:text-neutral-300">
-                    {format.dateTime(new Date(n.created_at), { dateStyle: 'medium' })}
-                  </span>
-                  <Marker shared={n.shared} />
-                </div>
-                {isEditing ? (
-                  <div
-                    onKeyDown={(e) => {
-                      if (e.key === 'Escape') {
-                        e.stopPropagation();
-                        setEditing(null);
-                        setEditError(null);
-                        focusLater(noteSel(n.id, 'edit'));
-                      }
-                    }}
-                  >
-                    <label htmlFor={`${uid}-e-${n.id}`} className="sr-only">
-                      {t('notes.edit')}
-                    </label>
-                    <textarea
-                      id={`${uid}-e-${n.id}`}
-                      ref={(el) => {
-                        if (el && !el.dataset.ready) {
-                          el.dataset.ready = '1';
-                          el.focus();
-                          el.setSelectionRange(el.value.length, el.value.length);
-                          autoGrow(el);
-                        }
-                      }}
-                      rows={3}
-                      value={editing.body}
-                      aria-invalid={editError === 'empty' || editError === 'tooLong' || undefined}
-                      aria-describedby={editError ? `${uid}-ee` : undefined}
-                      className={`${input} mt-2`}
-                      onChange={(e) => {
-                        autoGrow(e.target);
-                        setEditing({ ...editing, body: e.target.value });
-                      }}
-                    />
-                    <Visibility
-                      shared={editing.shared}
-                      onChange={(v) => setEditing({ ...editing, shared: v })}
-                      help={
-                        editing.shared === n.shared
-                          ? editing.shared
-                            ? t('notes.visibility.sharedHelp')
-                            : t('notes.visibility.privateHelp')
-                          : editing.shared
-                            ? t('notes.visibility.nowShared')
-                            : t('notes.visibility.nowPrivate')
-                      }
-                    />
-                    {editError && (
-                      <p id={`${uid}-ee`} className={errorText}>
-                        {noteError(t, editError)}
-                      </p>
-                    )}
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        className={btnPrimary}
-                        disabled={busy}
-                        onClick={() => void save()}
-                      >
-                        {t('notes.save')}
-                      </button>
-                      <button
-                        type="button"
-                        className={btn}
-                        onClick={() => {
+        {notes.length === 0 ? (
+          <p className="mt-2">{t('notes.empty')}</p>
+        ) : (
+          <ul aria-label={t('notes.list.label')} className="mt-2 flex flex-col gap-3">
+            {notes.map((n) => {
+              const isEditing = editing?.id === n.id;
+              const canDelete = n.mine || (canManage && n.shared);
+              return (
+                <li key={n.id} data-note={n.id} className="rounded border border-neutral-400 p-3">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <span className="font-semibold">{n.mine ? t('notes.you') : n.author}</span>
+                    <span className="text-sm text-neutral-700 dark:text-neutral-300">
+                      {format.dateTime(new Date(n.created_at), { dateStyle: 'medium' })}
+                    </span>
+                    <Marker shared={n.shared} />
+                  </div>
+                  {isEditing ? (
+                    <div
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') {
+                          e.stopPropagation();
                           setEditing(null);
                           setEditError(null);
                           focusLater(noteSel(n.id, 'edit'));
-                        }}
-                      >
-                        {t('notes.cancel')}
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <p className="mt-2 whitespace-pre-wrap [overflow-wrap:anywhere]">{n.body}</p>
-                    {confirmId === n.id ? (
-                      <div
-                        role="group"
-                        aria-label={t('notes.deleteConfirm')}
-                        className="mt-2"
-                        onKeyDown={(e) => {
-                          if (e.key === 'Escape') {
-                            e.stopPropagation();
-                            setConfirmId(null);
-                            focusLater(noteSel(n.id, 'delete'));
+                        }
+                      }}
+                    >
+                      <label htmlFor={`${uid}-e-${n.id}`} className="sr-only">
+                        {t('notes.edit')}
+                      </label>
+                      <textarea
+                        id={`${uid}-e-${n.id}`}
+                        ref={(el) => {
+                          if (el && !el.dataset.ready) {
+                            el.dataset.ready = '1';
+                            el.focus();
+                            el.setSelectionRange(el.value.length, el.value.length);
+                            autoGrow(el);
                           }
                         }}
-                      >
-                        <p>{t('notes.deleteConfirm')}</p>
-                        <div className="mt-1 flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            className={btnDanger}
-                            onClick={() => void remove(n.id)}
-                          >
-                            {t('notes.deleteYes')}
-                          </button>
-                          <button
-                            type="button"
-                            className={btn}
-                            autoFocus
-                            onClick={() => {
+                        rows={3}
+                        value={editing.body}
+                        aria-invalid={editError === 'empty' || editError === 'tooLong' || undefined}
+                        aria-describedby={editError ? `${uid}-ee` : undefined}
+                        className={`${input} mt-2`}
+                        onChange={(e) => {
+                          autoGrow(e.target);
+                          setEditing({ ...editing, body: e.target.value });
+                        }}
+                      />
+                      <Visibility
+                        shared={editing.shared}
+                        onChange={(v) => setEditing({ ...editing, shared: v })}
+                        help={
+                          editing.shared === n.shared
+                            ? editing.shared
+                              ? t('notes.visibility.sharedHelp')
+                              : t('notes.visibility.privateHelp')
+                            : editing.shared
+                              ? t('notes.visibility.nowShared')
+                              : t('notes.visibility.nowPrivate')
+                        }
+                      />
+                      {editError && (
+                        <p id={`${uid}-ee`} className={errorText}>
+                          {noteError(t, editError)}
+                        </p>
+                      )}
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          className={btnPrimary}
+                          disabled={busy}
+                          onClick={() => void save()}
+                        >
+                          {t('notes.save')}
+                        </button>
+                        <button
+                          type="button"
+                          className={btn}
+                          onClick={() => {
+                            setEditing(null);
+                            setEditError(null);
+                            focusLater(noteSel(n.id, 'edit'));
+                          }}
+                        >
+                          {t('notes.cancel')}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="mt-2 whitespace-pre-wrap [overflow-wrap:anywhere]">{n.body}</p>
+                      {confirmId === n.id ? (
+                        <div
+                          role="group"
+                          aria-label={t('notes.deleteConfirm')}
+                          className="mt-2"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Escape') {
+                              e.stopPropagation();
                               setConfirmId(null);
                               focusLater(noteSel(n.id, 'delete'));
-                            }}
-                          >
-                            {t('notes.deleteKeep')}
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      canDelete && (
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {n.mine && (
+                            }
+                          }}
+                        >
+                          <p>{t('notes.deleteConfirm')}</p>
+                          <div className="mt-1 flex flex-wrap gap-2">
                             <button
                               type="button"
-                              data-act="edit"
+                              className={btnDanger}
+                              onClick={() => void remove(n.id)}
+                            >
+                              {t('notes.deleteYes')}
+                            </button>
+                            <button
+                              type="button"
                               className={btn}
+                              autoFocus
                               onClick={() => {
-                                setEditError(null);
-                                setEditing({ id: n.id, body: n.body, shared: n.shared });
+                                setConfirmId(null);
+                                focusLater(noteSel(n.id, 'delete'));
                               }}
                             >
-                              {t('notes.edit')}
+                              {t('notes.deleteKeep')}
                             </button>
-                          )}
-                          {canDelete && (
-                            <button
-                              type="button"
-                              data-act="delete"
-                              className={btnDanger}
-                              onClick={() => setConfirmId(n.id)}
-                            >
-                              {t('notes.delete')}
-                            </button>
-                          )}
+                          </div>
                         </div>
-                      )
-                    )}
-                  </>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-
-      <div className="mt-4">
-        <label htmlFor={`${uid}-add`} className="font-semibold">
-          {t('notes.add.label')}
-        </label>
-        <textarea
-          id={`${uid}-add`}
-          ref={addArea}
-          data-add-note
-          rows={3}
-          value={draft}
-          aria-invalid={addError === 'empty' || addError === 'tooLong' || undefined}
-          aria-describedby={addError ? `${uid}-ae` : undefined}
-          className={`${input} mt-1`}
-          onChange={(e) => {
-            autoGrow(e.target);
-            const ann = counterAnnouncement(draft.length, e.target.value.length);
-            if (ann) {
-              setStatus(
-                ann.key === 'limit'
-                  ? t('notes.counter.limit')
-                  : t('notes.counter.left', { n: ann.n }),
+                      ) : (
+                        canDelete && (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {n.mine && (
+                              <button
+                                type="button"
+                                data-act="edit"
+                                className={btn}
+                                onClick={() => {
+                                  setEditError(null);
+                                  setEditing({ id: n.id, body: n.body, shared: n.shared });
+                                }}
+                              >
+                                {t('notes.edit')}
+                              </button>
+                            )}
+                            {canDelete && (
+                              <button
+                                type="button"
+                                data-act="delete"
+                                className={btnDanger}
+                                onClick={() => setConfirmId(n.id)}
+                              >
+                                {t('notes.delete')}
+                              </button>
+                            )}
+                          </div>
+                        )
+                      )}
+                    </>
+                  )}
+                </li>
               );
-            }
-            setDraft(e.target.value);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-              e.preventDefault();
-              void add();
-            }
-          }}
-        />
-        <p className="text-sm text-neutral-700 dark:text-neutral-300">
-          {t('notes.counter.value', { n: draft.length, max: NOTE_MAX })}{' '}
-          {t('notes.add.hintCtrlEnter')}
-        </p>
-        {addError && (
-          <p id={`${uid}-ae`} className={errorText}>
-            {noteError(t, addError)}
-          </p>
+            })}
+          </ul>
         )}
-        <Visibility
-          shared={shared}
-          onChange={setShared}
-          help={shared ? t('notes.visibility.sharedHelp') : t('notes.visibility.privateHelp')}
-        />
-        <button
-          type="button"
-          className={`${btnPrimary} mt-2 aria-disabled:opacity-60`}
-          aria-disabled={reasonText ? 'true' : undefined}
-          aria-describedby={reasonText ? reasonId : undefined}
-          disabled={busy}
-          onClick={() => void add()}
-        >
-          {t('notes.add.submit')}
-        </button>
-        {reasonText && (
-          <p id={reasonId} className="mt-1 text-sm text-neutral-700 dark:text-neutral-300">
-            {reasonText}
+
+        <div className="mt-4">
+          <label htmlFor={`${uid}-add`} className="font-semibold">
+            {t('notes.add.label')}
+          </label>
+          <textarea
+            id={`${uid}-add`}
+            ref={addArea}
+            data-add-note
+            rows={3}
+            value={draft}
+            aria-invalid={addError === 'empty' || addError === 'tooLong' || undefined}
+            aria-describedby={addError ? `${uid}-ae` : undefined}
+            className={`${input} mt-1`}
+            onChange={(e) => {
+              autoGrow(e.target);
+              const ann = counterAnnouncement(draft.length, e.target.value.length);
+              if (ann) {
+                setStatus(
+                  ann.key === 'limit'
+                    ? t('notes.counter.limit')
+                    : t('notes.counter.left', { n: ann.n }),
+                );
+              }
+              setDraft(e.target.value);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                void add();
+              }
+            }}
+          />
+          <p className="text-sm text-neutral-700 dark:text-neutral-300">
+            {t('notes.counter.value', { n: draft.length, max: NOTE_MAX })}{' '}
+            {t('notes.add.hintCtrlEnter')}
           </p>
-        )}
-      </div>
-    </section>
+          {addError && (
+            <p id={`${uid}-ae`} className={errorText}>
+              {noteError(t, addError)}
+            </p>
+          )}
+          <Visibility
+            shared={shared}
+            onChange={setShared}
+            help={shared ? t('notes.visibility.sharedHelp') : t('notes.visibility.privateHelp')}
+          />
+          <button
+            type="button"
+            className={`${btnPrimary} mt-2 aria-disabled:opacity-60`}
+            aria-disabled={reasonText ? 'true' : undefined}
+            aria-describedby={reasonText ? reasonId : undefined}
+            disabled={busy}
+            onClick={() => void add()}
+          >
+            {t('notes.add.submit')}
+          </button>
+          {reasonText && (
+            <p id={reasonId} className="mt-1 text-sm text-neutral-700 dark:text-neutral-300">
+              {reasonText}
+            </p>
+          )}
+        </div>
+      </section>
+      {printNotes && notes.length > 0 && (
+        <section data-print-notes className="mt-6 hidden print:block">
+          <h2 className="text-lg font-semibold">{t('print.notesHeading')}</h2>
+          <ul className="mt-2 flex flex-col gap-3">
+            {notes.map((n) => (
+              <li key={n.id} className="break-inside-avoid">
+                <p className="font-semibold">
+                  {t('print.noteLine', {
+                    author: n.mine ? t('notes.you') : n.author,
+                    date: format.dateTime(new Date(n.created_at), { dateStyle: 'medium' }),
+                    marker: n.shared ? t('notes.marker.shared') : t('notes.marker.private'),
+                  })}
+                </p>
+                <p className="whitespace-pre-wrap [overflow-wrap:anywhere]">{n.body}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </>
   );
 }

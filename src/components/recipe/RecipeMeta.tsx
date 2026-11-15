@@ -55,7 +55,7 @@ export function RecipeMeta({
         <p>
           {t('recipe.meta.source')}{' '}
           {safeUrl ? (
-            <a href={safeUrl} rel="noopener noreferrer" className="underline">
+            <a href={safeUrl} rel="noopener noreferrer" className="print-url underline">
               {sourceText}
             </a>
           ) : (
@@ -64,7 +64,7 @@ export function RecipeMeta({
         </p>
       )}
       {recipe.tags.length > 0 && (
-        <ul aria-label={t('tags.view.label')} className="mt-2 flex flex-wrap gap-2">
+        <ul aria-label={t('tags.view.label')} className="mt-2 flex flex-wrap gap-2 print:hidden">
           {recipe.tags.map((name) => (
             <li key={name}>
               {linkTags ? (
@@ -82,6 +82,9 @@ export function RecipeMeta({
             </li>
           ))}
         </ul>
+      )}
+      {recipe.tags.length > 0 && (
+        <p className="hidden print:block">{t('print.tags', { list: recipe.tags.join(', ') })}</p>
       )}
       {recipe.description && <p className="mt-2 whitespace-pre-line">{recipe.description}</p>}
     </div>

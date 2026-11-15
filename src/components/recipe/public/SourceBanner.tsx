@@ -25,7 +25,7 @@ export function SourceBanner({
       href={url}
       rel="noopener noreferrer"
       aria-label={name ? undefined : t('publicPage.bannerSourceLabel', { source: label })}
-      className="underline"
+      className="print-url underline"
     >
       {label}
       <svg
@@ -54,7 +54,7 @@ export function SourceBanner({
   const SLOT = '\u0000';
   const [before, after = ''] = t('publicPage.banner', { source: SLOT }).split(SLOT);
   return (
-    <p className="my-3 rounded-md border border-[var(--rg-line)] bg-[var(--rg-banner)] p-3 text-[var(--rg-ink)]">
+    <p className="my-3 rounded-md border border-[var(--rg-line)] bg-[var(--rg-banner)] p-3 text-[var(--rg-ink)] print:rounded-none print:border-0 print:p-0">
       {before}
       {source}
       {after}

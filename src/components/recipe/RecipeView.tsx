@@ -15,6 +15,7 @@ import { StepSheet } from './StepDetail';
 import type { ApiRecipe } from './types';
 import type { QuantityDisplay } from './IngredientCell';
 import type { CookMode as CookModeComponent } from './cook/CookMode';
+import { PrintButton } from './print/PrintButton';
 import { btn, btnPrimary } from './styles';
 import { PHONE_QUERY, useMediaQuery, useViewPreference } from './useViewPreference';
 
@@ -153,7 +154,7 @@ export function RecipeView({
   return (
     <div ref={root}>
       {actions !== undefined && (
-        <div className="my-4 flex flex-wrap items-center gap-2">
+        <div className="my-4 flex flex-wrap items-center gap-2 print:hidden">
           <button
             ref={cookButton}
             type="button"
@@ -181,6 +182,7 @@ export function RecipeView({
             {t('cook.open')}
           </button>
           {actions}
+          <PrintButton />
           {canEditGrid && (
             <button ref={entry} type="button" className={btn} onClick={openEditor}>
               {t('gridEditor.entry.edit')}
@@ -197,7 +199,7 @@ export function RecipeView({
         </p>
       )}
       <ScaleControls scale={scale} servings={recipe.servings} />
-      <div className="mb-4 flex flex-wrap items-center gap-3">
+      <div className="mb-4 flex flex-wrap items-center gap-3 print:hidden">
         <div
           role="group"
           aria-label={t('recipe.view.label')}

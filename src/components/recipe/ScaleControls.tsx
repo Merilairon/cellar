@@ -102,7 +102,7 @@ export function ScaleControls({
 
   return (
     <section aria-label={t('recipe.scale.label')} className="mb-4 flex flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3 print:hidden">
         <div
           role="group"
           aria-label={t('recipe.scale.group')}
@@ -150,7 +150,11 @@ export function ScaleControls({
           {t('recipe.scale.invalid', { max: MAX_FACTOR })}
         </p>
       )}
-      <p role="status" aria-live="polite" className="text-neutral-700 dark:text-neutral-300">
+      <p
+        role="status"
+        aria-live="polite"
+        className={`text-neutral-700 dark:text-neutral-300${s.changed ? '' : ' print:hidden'}`}
+      >
         {summary}
       </p>
     </section>
