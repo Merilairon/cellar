@@ -413,13 +413,9 @@ test('keyboard path through the dialog (UX spec 1.6): open, radios, switch, conf
   await expect(share).toBeFocused();
 
   // Reopened: the confirm is gone, the link is still on, and focus stays trapped inside.
-  // Closing triggers a router.refresh(); an Enter that lands while it re-renders can be lost,
-  // so retry the open until the dialog shows (recorded in the T7 report as a watch item).
-  await expect(async () => {
-    await share.focus();
-    await page.keyboard.press('Enter');
-    await expect(dialog).toBeVisible({ timeout: 1500 });
-  }).toPass({ timeout: 15_000 });
+  await share.focus();
+  await page.keyboard.press('Enter');
+  await expect(dialog).toBeVisible();
   await expect(dialog.getByRole('group', { name: /Turn off/ })).toHaveCount(0);
   await expect(sw(dialog)).toBeChecked();
   for (let i = 0; i < 14; i++) {

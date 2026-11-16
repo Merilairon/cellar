@@ -59,6 +59,8 @@ export function SheetDialog({
         // React bubbles `close` through the component tree, so a sheet nested in another dialog
         // (the step sheet inside cook mode) must not close its parent.
         if (e.target !== e.currentTarget) return;
+        // A `close` that arrives after the sheet was reopened is stale (Escape, then a quick click).
+        if (e.currentTarget.open) return;
         if (!tearingDown.current) onClose();
       }}
       // A click on the dialog element itself (not its body) is a click on the backdrop.

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import type { Visibility } from '@/lib/recipes/schemas';
@@ -59,6 +60,9 @@ export function ShareButton({
         className={`${btn} gap-2`}
         aria-haspopup="dialog"
         onClick={() => {
+          // After Escape the native dialog is closed before React hears the `close` event. A click
+          // in that gap finds `open` still true, so finish the pending close first, then reopen.
+          if (openRef.current) flushSync(close);
           openRef.current = true;
           setOpen(true);
         }}

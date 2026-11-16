@@ -1030,8 +1030,9 @@ dialog.rg-sheet.ck-dialog {
   color: var(--rg-muted);
   font-size: 0.8em;
 }
-.ck-wake:empty {
-  display: none;
+.ck-wake:empty::before {
+  /* Reserve the notice line before the wake-lock result arrives so the grid below never shifts. */
+  content: '\200b';
 }
 .ck-body {
   padding: 12px 16px 24px;
