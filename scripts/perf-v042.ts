@@ -11,6 +11,8 @@ import { insertPhoto } from '@/lib/db/photos';
 import { createRecipeFor, listRecipes, updateGridFor } from '@/lib/recipes/service';
 import { processImage } from '@/lib/images/process';
 
+const SHARE = { baseUrl: '', publicLinksEnabled: false };
+
 // v0.4.2 T14 measurements. Printed, never asserted. Developer-machine numbers unless run inside a
 // constrained container/cgroup (see docs). Usage:
 //   npx tsx scripts/perf-v042.ts db <dir> <recipeCount>
@@ -71,7 +73,7 @@ function runDb(dir: string, N: number) {
   const t0 = process.hrtime.bigint();
   for (let i = 0; i < N; i++) {
     let t = process.hrtime.bigint();
-    const r = createRecipeFor(db, me, body(i));
+    const r = createRecipeFor(db, me, body(i), SHARE);
     create.push(ms(t));
     if (!r.ok) throw new Error('create');
     recs.push(r.recipe as never);
@@ -235,14 +237,20 @@ function runDb(dir: string, N: number) {
   let base = recs[0]!.updated_at;
   for (let i = 0; i < 7; i++) {
     const t = process.hrtime.bigint();
-    const g = updateGridFor(db, me, recs[0]!.id, {
-      base_updated_at: base,
-      sections: Array.from({ length: 20 }, (_, k) => ({
-        title: `S${k}`,
-        ingredients: ing,
-        steps: [],
-      })),
-    });
+    const g = updateGridFor(
+      db,
+      me,
+      recs[0]!.id,
+      {
+        base_updated_at: base,
+        sections: Array.from({ length: 20 }, (_, k) => ({
+          title: `S${k}`,
+          ingredients: ing,
+          steps: [],
+        })),
+      },
+      SHARE,
+    );
     gs.push(ms(t));
     if (!g.ok) throw new Error(`grid ${g.status}`);
     base = g.recipe.updated_at;
@@ -253,10 +261,16 @@ function runDb(dir: string, N: number) {
   const plain: number[] = [];
   for (let i = 1; i < 40; i++) {
     const t = process.hrtime.bigint();
-    const g = updateGridFor(db, me, recs[i]!.id, {
-      base_updated_at: recs[i]!.updated_at,
-      sections: body(1).sections,
-    });
+    const g = updateGridFor(
+      db,
+      me,
+      recs[i]!.id,
+      {
+        base_updated_at: recs[i]!.updated_at,
+        sections: body(1).sections,
+      },
+      SHARE,
+    );
     plain.push(ms(t));
     if (!g.ok) throw new Error('grid');
   }
@@ -274,20 +288,26 @@ function runDb(dir: string, N: number) {
       .values({ email: 'm@x.test', displayName: 'm', passwordHash: 'h', role: 'member' })
       .returning()
       .get();
-    const r = createRecipeFor(m, mu, body(0));
+    const r = createRecipeFor(m, mu, body(0), SHARE);
     if (!r.ok) throw new Error('cal');
     let b = r.recipe.updated_at;
     const cal: number[] = [];
     for (let i = 0; i < 5; i++) {
       const t = process.hrtime.bigint();
-      const g = updateGridFor(m, mu, r.recipe.id, {
-        base_updated_at: b,
-        sections: Array.from({ length: 20 }, (_, k) => ({
-          title: `S${k}`,
-          ingredients: ing,
-          steps: [],
-        })),
-      });
+      const g = updateGridFor(
+        m,
+        mu,
+        r.recipe.id,
+        {
+          base_updated_at: b,
+          sections: Array.from({ length: 20 }, (_, k) => ({
+            title: `S${k}`,
+            ingredients: ing,
+            steps: [],
+          })),
+        },
+        SHARE,
+      );
       cal.push(ms(t));
       if (!g.ok) throw new Error('cal');
       b = g.recipe.updated_at;
@@ -401,14 +421,20 @@ function runGrid(dir: string, runs: number) {
   const ts: number[] = [];
   for (let i = 0; i < runs; i++) {
     const t = process.hrtime.bigint();
-    const g = updateGridFor(db, me, rec.id, {
-      base_updated_at: base,
-      sections: Array.from({ length: 20 }, (_, k) => ({
-        title: `S${k}`,
-        ingredients: ing,
-        steps: [],
-      })),
-    });
+    const g = updateGridFor(
+      db,
+      me,
+      rec.id,
+      {
+        base_updated_at: base,
+        sections: Array.from({ length: 20 }, (_, k) => ({
+          title: `S${k}`,
+          ingredients: ing,
+          steps: [],
+        })),
+      },
+      SHARE,
+    );
     ts.push(ms(t));
     if (!g.ok) throw new Error(`grid ${g.status}`);
     base = g.recipe.updated_at;

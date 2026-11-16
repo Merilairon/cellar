@@ -276,7 +276,7 @@ export function createRecipeFor(
   db: Db,
   actor: Actor,
   body: unknown,
-  share?: ShareContext,
+  share: ShareContext,
 ): Result<{ recipe: ApiRecipe }> {
   const prepared = prepareRecipe(body);
   if (!prepared.ok) return prepared;
@@ -292,7 +292,7 @@ export function getRecipeFor(
   db: Db,
   actor: Actor,
   id: string,
-  share?: ShareContext,
+  share: ShareContext,
 ): Result<{ recipe: ApiRecipe }> {
   const r = getRecipeFull(db, id);
   if (!r || !canView(actor, r)) return { ok: false, status: 404 };
@@ -313,7 +313,7 @@ export function updateRecipeFor(
   actor: Actor,
   id: string,
   body: unknown,
-  share?: ShareContext,
+  share: ShareContext,
 ): Result<{ recipe: ApiRecipe }> {
   // Cheap pre-checks for status ordering; the authoritative check re-runs in the transaction.
   const row = getRecipeRow(db, id);
@@ -355,7 +355,7 @@ export function updateGridFor(
   actor: Actor,
   id: string,
   body: unknown,
-  share?: ShareContext,
+  share: ShareContext,
 ): Result<{ recipe: ApiRecipe }> {
   const row = getRecipeRow(db, id);
   if (!row || !canView(actor, row)) return { ok: false, status: 404 };

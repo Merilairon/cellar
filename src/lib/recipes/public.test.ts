@@ -11,6 +11,8 @@ import { createRecipeFor } from './service';
 import { SAMPLE_SKILLET_COOKIES } from './samples';
 import { generateShareToken } from './share';
 
+const SHARE = { baseUrl: '', publicLinksEnabled: false };
+
 const ON = { PUBLIC_LINKS_ENABLED: true };
 const OFF = { PUBLIC_LINKS_ENABLED: false };
 
@@ -33,7 +35,12 @@ beforeEach(() => {
     .returning()
     .get();
   ownerId = owner.id;
-  const created = createRecipeFor(db, { id: ownerId, role: 'member' }, SAMPLE_SKILLET_COOKIES);
+  const created = createRecipeFor(
+    db,
+    { id: ownerId, role: 'member' },
+    SAMPLE_SKILLET_COOKIES,
+    SHARE,
+  );
   if (!created.ok) throw new Error('seed failed');
   id = created.recipe.id;
   token = generateShareToken();

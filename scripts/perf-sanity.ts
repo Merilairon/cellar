@@ -8,6 +8,8 @@ import {
   updateRecipeFor,
 } from '@/lib/recipes/service';
 
+const SHARE = { baseUrl: '', publicLinksEnabled: false };
+
 // C11 sanity timings, printed and never asserted (no gate): 1000 recipes x 15 ingredients x
 // 3 tags in an in-memory database, then update, grid save and search on that volume.
 // Usage: npx tsx scripts/perf-sanity.ts [recipeCount]. Developer-machine numbers only.
@@ -49,7 +51,7 @@ const create: number[] = [];
 const ids: { id: string; updated_at: string; sections: never[] }[] = [];
 for (let i = 0; i < N; i++) {
   const t = process.hrtime.bigint();
-  const r = createRecipeFor(db, u, body(i));
+  const r = createRecipeFor(db, u, body(i), SHARE);
   create.push(ms(t));
   if (!r.ok) throw new Error(`create ${i} failed: ${r.status}`);
   ids.push(r.recipe as never);
@@ -61,14 +63,20 @@ const update: number[] = [];
 const grid: number[] = [];
 for (const r of probes) {
   let t = process.hrtime.bigint();
-  const up = updateRecipeFor(db, u, r.id, { ...body(1), title: 'Renamed' });
+  const up = updateRecipeFor(db, u, r.id, { ...body(1), title: 'Renamed' }, SHARE);
   update.push(ms(t));
   if (!up.ok) throw new Error('update failed');
   t = process.hrtime.bigint();
-  const g = updateGridFor(db, u, r.id, {
-    base_updated_at: up.recipe.updated_at,
-    sections: body(2).sections,
-  });
+  const g = updateGridFor(
+    db,
+    u,
+    r.id,
+    {
+      base_updated_at: up.recipe.updated_at,
+      sections: body(2).sections,
+    },
+    SHARE,
+  );
   grid.push(ms(t));
   if (!g.ok) throw new Error(`grid failed: ${g.status}`);
 }

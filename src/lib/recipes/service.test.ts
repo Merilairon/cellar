@@ -16,6 +16,8 @@ import {
   updateRecipeFor,
 } from './service';
 
+const SHARE = { baseUrl: '', publicLinksEnabled: false };
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Loose = Record<string, any>;
 
@@ -37,17 +39,21 @@ const okRecipe = (r: ReturnType<typeof createRecipeFor>) => {
 describe('owner deactivation', () => {
   it('keeps users-visible recipes readable and copyable; admins still read and write any recipe', () => {
     const { owner, other, admin } = setup();
-    const shared = okRecipe(createRecipeFor(db, owner, { ...clone(), visibility: 'users' })).id;
-    const priv = okRecipe(createRecipeFor(db, owner, { ...clone(), visibility: 'private' })).id;
+    const shared = okRecipe(
+      createRecipeFor(db, owner, { ...clone(), visibility: 'users' }, SHARE),
+    ).id;
+    const priv = okRecipe(
+      createRecipeFor(db, owner, { ...clone(), visibility: 'private' }, SHARE),
+    ).id;
     expect(deactivateUser(db, owner.id)).toBe('ok');
 
-    expect(getRecipeFor(db, other, shared)).toMatchObject({ ok: true });
+    expect(getRecipeFor(db, other, shared, SHARE)).toMatchObject({ ok: true });
     expect(listRecipes(db, other).map((r) => r.id)).toContain(shared);
     expect(copyRecipeFor(db, other, shared)).toMatchObject({ ok: true });
-    expect(getRecipeFor(db, other, priv)).toEqual({ ok: false, status: 404 });
+    expect(getRecipeFor(db, other, priv, SHARE)).toEqual({ ok: false, status: 404 });
 
-    expect(getRecipeFor(db, admin, priv)).toMatchObject({ ok: true });
-    expect(updateRecipeFor(db, admin, priv, { ...clone(), title: 'Edited' })).toMatchObject({
+    expect(getRecipeFor(db, admin, priv, SHARE)).toMatchObject({ ok: true });
+    expect(updateRecipeFor(db, admin, priv, { ...clone(), title: 'Edited' }, SHARE)).toMatchObject({
       ok: true,
     });
     expect(deleteRecipeFor(db, admin, priv)).toMatchObject({ ok: true });
@@ -70,7 +76,7 @@ describe('ingredient ranges', () => {
         },
       ],
     };
-    const made = okRecipe(createRecipeFor(db, owner, body));
+    const made = okRecipe(createRecipeFor(db, owner, body, SHARE));
     const [honey, flour, salt] = made.sections[0]!.ingredients;
     // T7: the missing metric side is derived (honey is weight-measured), both bounds.
     expect(honey).toMatchObject({ us_qty: 2, us_qty_max: 3, metric_unit: 'g' });
@@ -80,11 +86,11 @@ describe('ingredient ranges', () => {
     expect(salt).toMatchObject({ metric_qty_max: null, us_qty: null, us_qty_max: null });
     expect(honey!.raw_text).toBe('2-3 tbsp honey');
 
-    const upd = updateRecipeFor(db, owner, made.id, { ...body, title: 'Glaze 2' });
+    const upd = updateRecipeFor(db, owner, made.id, { ...body, title: 'Glaze 2' }, SHARE);
     expect(upd.ok && upd.recipe.sections[0]!.ingredients[0]).toMatchObject({ us_qty_max: 3 });
 
     const copy = copyRecipeFor(db, owner, made.id) as { id: string };
-    const got = getRecipeFor(db, owner, copy.id);
+    const got = getRecipeFor(db, owner, copy.id, SHARE);
     expect(got.ok && got.recipe.sections[0]!.ingredients[1]).toMatchObject({
       metric_qty_max: 150,
     });
@@ -95,7 +101,7 @@ describe('create', () => {
   it('defaults to private, owner = caller, grid for valid samples', () => {
     const { owner } = setup();
     const body = { ...clone(), visibility: undefined, view_mode: undefined };
-    const r = okRecipe(createRecipeFor(db, owner, body));
+    const r = okRecipe(createRecipeFor(db, owner, body, SHARE));
     expect(r).toMatchObject({
       visibility: 'private',
       owner_id: owner.id,
@@ -108,7 +114,7 @@ describe('create', () => {
 
   it('two-section sample round-trips with split ids rewritten', () => {
     const { owner } = setup();
-    const r = okRecipe(createRecipeFor(db, owner, SAMPLE_VANILLA_CAKE));
+    const r = okRecipe(createRecipeFor(db, owner, SAMPLE_VANILLA_CAKE, SHARE));
     const split = r.sections[0]!.ingredients.filter((i) => i.split_group_id);
     expect(split).toHaveLength(2);
     expect(split[0]!.split_group_id).toBe(split[1]!.split_group_id);
@@ -120,7 +126,7 @@ describe('create', () => {
     const { owner } = setup();
     const body = clone();
     body.sections[0].steps[3].row_end = 20;
-    const res = createRecipeFor(db, owner, body);
+    const res = createRecipeFor(db, owner, body, SHARE);
     expect(res).toEqual({
       ok: false,
       status: 422,
@@ -134,7 +140,7 @@ describe('create', () => {
     const body = clone();
     body.sections[0].steps[3].row_end = 20;
     body.view_mode = 'list';
-    expect(okRecipe(createRecipeFor(db, owner, body)).view_mode).toBe('list');
+    expect(okRecipe(createRecipeFor(db, owner, body, SHARE)).view_mode).toBe('list');
   });
 
   it('omitted view_mode falls back to list when a span is invalid or missing', () => {
@@ -175,7 +181,7 @@ describe('create', () => {
 
   it('zod errors become 422 field errors', () => {
     const { owner } = setup();
-    const res = createRecipeFor(db, owner, { title: '', sections: [] });
+    const res = createRecipeFor(db, owner, { title: '', sections: [] }, SHARE);
     expect(res).toMatchObject({ ok: false, status: 422 });
     expect((res as { errors: { path: string }[] }).errors.map((e) => e.path).sort()).toEqual([
       'sections',
@@ -186,15 +192,20 @@ describe('create', () => {
   it('fills raw_text when absent', () => {
     const { owner } = setup();
     const r = okRecipe(
-      createRecipeFor(db, owner, {
-        title: 'T',
-        sections: [
-          {
-            ingredients: [{ name: 'flour', us_qty: 2, us_unit: 'cup', display_primary: 'us' }],
-            steps: [],
-          },
-        ],
-      }),
+      createRecipeFor(
+        db,
+        owner,
+        {
+          title: 'T',
+          sections: [
+            {
+              ingredients: [{ name: 'flour', us_qty: 2, us_unit: 'cup', display_primary: 'us' }],
+              steps: [],
+            },
+          ],
+        },
+        SHARE,
+      ),
     );
     expect(r.sections[0]!.ingredients[0]!.raw_text).toBe('2 cup flour');
   });
@@ -207,9 +218,9 @@ function prepareRecipeInput(body: Loose) {
 describe('authorization matrix', () => {
   it('private recipe: other gets 404 everywhere, admin can read and write', () => {
     const { owner, other, admin } = setup();
-    const id = okRecipe(createRecipeFor(db, owner, clone())).id;
-    expect(getRecipeFor(db, other, id)).toEqual({ ok: false, status: 404 });
-    expect(updateRecipeFor(db, other, id, clone())).toEqual({ ok: false, status: 404 });
+    const id = okRecipe(createRecipeFor(db, owner, clone(), SHARE)).id;
+    expect(getRecipeFor(db, other, id, SHARE)).toEqual({ ok: false, status: 404 });
+    expect(updateRecipeFor(db, other, id, clone(), SHARE)).toEqual({ ok: false, status: 404 });
     expect(deleteRecipeFor(db, other, id)).toEqual({ ok: false, status: 404 });
     expect(setVisibilityFor(db, other, id, { visibility: 'users' })).toEqual({
       ok: false,
@@ -217,33 +228,33 @@ describe('authorization matrix', () => {
     });
     expect(copyRecipeFor(db, other, id)).toEqual({ ok: false, status: 404 });
 
-    const asAdmin = getRecipeFor(db, admin, id);
+    const asAdmin = getRecipeFor(db, admin, id, SHARE);
     expect(asAdmin.ok && asAdmin.recipe.can_edit).toBe(true);
-    const upd = updateRecipeFor(db, admin, id, { ...clone(), title: 'By admin' });
+    const upd = updateRecipeFor(db, admin, id, { ...clone(), title: 'By admin' }, SHARE);
     expect(upd.ok && upd.recipe.title).toBe('By admin');
     expect(upd.ok && upd.recipe.owner_id).toBe(owner.id);
   });
 
   it('users-visible recipe is read-only for non-owners (403 on write), 404 for nonexistent', () => {
     const { owner, other, admin } = setup();
-    const id = okRecipe(createRecipeFor(db, owner, { ...clone(), visibility: 'users' })).id;
-    const read = getRecipeFor(db, other, id);
+    const id = okRecipe(createRecipeFor(db, owner, { ...clone(), visibility: 'users' }, SHARE)).id;
+    const read = getRecipeFor(db, other, id, SHARE);
     expect(read.ok && read.recipe.can_edit).toBe(false);
-    expect(updateRecipeFor(db, other, id, clone())).toEqual({ ok: false, status: 403 });
+    expect(updateRecipeFor(db, other, id, clone(), SHARE)).toEqual({ ok: false, status: 403 });
     expect(deleteRecipeFor(db, other, id)).toEqual({ ok: false, status: 403 });
     expect(setVisibilityFor(db, other, id, { visibility: 'private' })).toEqual({
       ok: false,
       status: 403,
     });
-    expect(getRecipeFor(db, other, 'missing')).toEqual({ ok: false, status: 404 });
+    expect(getRecipeFor(db, other, 'missing', SHARE)).toEqual({ ok: false, status: 404 });
     expect(deleteRecipeFor(db, admin, id).ok).toBe(true);
-    expect(getRecipeFor(db, owner, id)).toEqual({ ok: false, status: 404 });
+    expect(getRecipeFor(db, owner, id, SHARE)).toEqual({ ok: false, status: 404 });
   });
 
   it('list: own + users-visible of others; admin gets no extra rows', () => {
     const { owner, other, admin } = setup();
-    createRecipeFor(db, owner, clone());
-    createRecipeFor(db, owner, { ...clone(), title: 'shared', visibility: 'users' });
+    createRecipeFor(db, owner, clone(), SHARE);
+    createRecipeFor(db, owner, { ...clone(), title: 'shared', visibility: 'users' }, SHARE);
     expect(listRecipes(db, other).map((r) => r.title)).toEqual(['shared']);
     expect(listRecipes(db, admin).map((r) => r.title)).toEqual(['shared']);
     expect(listRecipes(db, owner)).toHaveLength(2);
@@ -257,44 +268,44 @@ describe('authorization matrix', () => {
 describe('update', () => {
   it('replaces children; 422 leaves the stored recipe untouched', () => {
     const { owner } = setup();
-    const id = okRecipe(createRecipeFor(db, owner, clone())).id;
+    const id = okRecipe(createRecipeFor(db, owner, clone(), SHARE)).id;
     const bad = clone();
     bad.title = 'Changed';
     bad.sections[0].steps[4].row_start = 5;
     bad.sections[0].steps[4].row_end = 2;
-    expect(updateRecipeFor(db, owner, id, bad)).toMatchObject({ ok: false, status: 422 });
-    const same = getRecipeFor(db, owner, id);
+    expect(updateRecipeFor(db, owner, id, bad, SHARE)).toMatchObject({ ok: false, status: 422 });
+    const same = getRecipeFor(db, owner, id, SHARE);
     expect(same.ok && same.recipe.title).toBe('Mocha Skillet Cookie');
 
     const next = clone();
     next.sections = [{ ingredients: [{ name: 'only' }], steps: [] }];
     next.view_mode = undefined;
-    const upd = updateRecipeFor(db, owner, id, next);
+    const upd = updateRecipeFor(db, owner, id, next, SHARE);
     expect(upd.ok && upd.recipe.sections[0]!.ingredients).toHaveLength(1);
     expect(upd.ok && upd.recipe.view_mode).toBe('list');
   });
 
   it('omitting visibility on update keeps the stored value', () => {
     const { owner } = setup();
-    const id = okRecipe(createRecipeFor(db, owner, { ...clone(), visibility: 'users' })).id;
-    const upd = updateRecipeFor(db, owner, id, { ...clone(), visibility: undefined });
+    const id = okRecipe(createRecipeFor(db, owner, { ...clone(), visibility: 'users' }, SHARE)).id;
+    const upd = updateRecipeFor(db, owner, id, { ...clone(), visibility: undefined }, SHARE);
     expect(upd.ok && upd.recipe.visibility).toBe('users');
   });
 
   it('omitted view_mode keeps a stored list, and recomputes a stored grid', () => {
     const { owner } = setup();
     const listBody = { ...clone(), view_mode: 'list' };
-    const listId = okRecipe(createRecipeFor(db, owner, listBody)).id;
-    const keep = updateRecipeFor(db, owner, listId, { ...clone(), view_mode: undefined });
+    const listId = okRecipe(createRecipeFor(db, owner, listBody, SHARE)).id;
+    const keep = updateRecipeFor(db, owner, listId, { ...clone(), view_mode: undefined }, SHARE);
     expect(keep.ok && keep.recipe.view_mode).toBe('list');
-    const explicit = updateRecipeFor(db, owner, listId, { ...clone(), view_mode: 'grid' });
+    const explicit = updateRecipeFor(db, owner, listId, { ...clone(), view_mode: 'grid' }, SHARE);
     expect(explicit.ok && explicit.recipe.view_mode).toBe('grid');
-    const stays = updateRecipeFor(db, owner, listId, { ...clone(), view_mode: undefined });
+    const stays = updateRecipeFor(db, owner, listId, { ...clone(), view_mode: undefined }, SHARE);
     expect(stays.ok && stays.recipe.view_mode).toBe('grid');
     const broken = clone();
     broken.view_mode = undefined;
     broken.sections[0].steps[3].row_end = 99;
-    const demoted = updateRecipeFor(db, owner, listId, broken);
+    const demoted = updateRecipeFor(db, owner, listId, broken, SHARE);
     expect(demoted.ok && demoted.recipe.view_mode).toBe('list');
   });
 
@@ -303,8 +314,8 @@ describe('update', () => {
     const body = clone();
     body.view_mode = 'list';
     body.sections[0].steps[3].row_end = 99;
-    const id = okRecipe(createRecipeFor(db, owner, body)).id;
-    expect(updateRecipeFor(db, owner, id, { ...body, view_mode: 'grid' })).toMatchObject({
+    const id = okRecipe(createRecipeFor(db, owner, body, SHARE)).id;
+    expect(updateRecipeFor(db, owner, id, { ...body, view_mode: 'grid' }, SHARE)).toMatchObject({
       ok: false,
       status: 422,
     });
@@ -314,7 +325,7 @@ describe('update', () => {
 describe('visibility and copy', () => {
   it('owner sets visibility; bad value is 422', () => {
     const { owner } = setup();
-    const id = okRecipe(createRecipeFor(db, owner, clone())).id;
+    const id = okRecipe(createRecipeFor(db, owner, clone(), SHARE)).id;
     expect(setVisibilityFor(db, owner, id, { visibility: 'users' })).toEqual({
       ok: true,
       visibility: 'users',
@@ -328,30 +339,30 @@ describe('visibility and copy', () => {
 
   it('any reader can copy: private, owned by caller, copied_from set, independent', () => {
     const { owner, other } = setup();
-    const id = okRecipe(createRecipeFor(db, owner, { ...clone(), visibility: 'users' })).id;
+    const id = okRecipe(createRecipeFor(db, owner, { ...clone(), visibility: 'users' }, SHARE)).id;
     const res = copyRecipeFor(db, other, id);
     expect(res.ok).toBe(true);
     const copyId = (res as { id: string }).id;
-    const copy = getRecipeFor(db, other, copyId);
+    const copy = getRecipeFor(db, other, copyId, SHARE);
     expect(copy.ok && copy.recipe).toMatchObject({
       owner_id: other.id,
       visibility: 'private',
       copied_from_id: id,
       can_edit: true,
     });
-    updateRecipeFor(db, other, copyId, { ...clone(), title: 'Mine now' });
-    const orig = getRecipeFor(db, owner, id);
+    updateRecipeFor(db, other, copyId, { ...clone(), title: 'Mine now' }, SHARE);
+    const orig = getRecipeFor(db, owner, id, SHARE);
     expect(orig.ok && orig.recipe.title).toBe('Mocha Skillet Cookie');
     // The owner cannot see the copy (private).
-    expect(getRecipeFor(db, owner, copyId)).toEqual({ ok: false, status: 404 });
+    expect(getRecipeFor(db, owner, copyId, SHARE)).toEqual({ ok: false, status: 404 });
   });
 
   it('deleting the original keeps the copy with copied_from_id null', () => {
     const { owner, other } = setup();
-    const id = okRecipe(createRecipeFor(db, owner, { ...clone(), visibility: 'users' })).id;
+    const id = okRecipe(createRecipeFor(db, owner, { ...clone(), visibility: 'users' }, SHARE)).id;
     const copyId = (copyRecipeFor(db, other, id) as { id: string }).id;
     deleteRecipeFor(db, owner, id);
-    const copy = getRecipeFor(db, other, copyId);
+    const copy = getRecipeFor(db, other, copyId, SHARE);
     expect(copy.ok && copy.recipe.copied_from_id).toBeNull();
   });
 });
@@ -364,7 +375,7 @@ describe('deleteRecipeFor photo cleanup', () => {
     const { insertCoverPhoto } = await import('@/lib/db/photos');
     const { photo } = await import('@/lib/db/schema');
     const { owner } = setup();
-    const id = okRecipe(createRecipeFor(db, owner, clone())).id;
+    const id = okRecipe(createRecipeFor(db, owner, clone(), SHARE)).id;
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'uploads-'));
     const outside = path.join(path.dirname(dir), `outside-${path.basename(dir)}.txt`);
     try {
@@ -400,9 +411,10 @@ describe('derived alternate measure (T7)', () => {
         db,
         owner,
         withIngredients([ing({ name: 'unsalted butter', us_qty: 4, us_unit: 'oz' })]),
+        SHARE,
       ),
     );
-    const got = okRecipe(getRecipeFor(db, owner, created.id) as never);
+    const got = okRecipe(getRecipeFor(db, owner, created.id, SHARE) as never);
     const i = got.sections[0].ingredients[0];
     expect([i.metric_qty, i.metric_unit, i.us_qty, i.us_unit, i.display_primary]).toEqual([
       115,
@@ -421,6 +433,7 @@ describe('derived alternate measure (T7)', () => {
         withIngredients([
           ing({ name: 'butter', us_qty: 4, us_unit: 'oz', metric_qty: 113, metric_unit: 'g' }),
         ]),
+        SHARE,
       ),
     );
     expect(r.sections[0].ingredients[0].metric_qty).toBe(113);
@@ -432,6 +445,7 @@ describe('derived alternate measure (T7)', () => {
         db,
         owner,
         withIngredients([ing({ name: 'butter', us_qty: 4, us_unit: 'oz' })]),
+        SHARE,
       ),
     );
     const edit = (q: number) =>
@@ -441,6 +455,7 @@ describe('derived alternate measure (T7)', () => {
           owner,
           r.id,
           withIngredients([ing({ name: 'butter', us_qty: q, us_unit: 'oz' })]),
+          SHARE,
         ) as never,
       ).sections[0].ingredients[0];
     expect(edit(6).metric_qty).toBe(170);
@@ -457,6 +472,7 @@ describe('derived alternate measure (T7)', () => {
           ing({ name: 'large eggs', us_qty: 2 }),
           ing({ name: 'garlic', us_qty: 1, us_unit: 'clove' }),
         ]),
+        SHARE,
       ),
     );
     for (const i of r.sections[0].ingredients) {
