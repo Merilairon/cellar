@@ -66,7 +66,15 @@
 3. Copies link (`/r/<token>`); can **rotate/revoke** it.
 4. Guest opens link, sees read-only grid view without notes or ratings from others, no edit controls.
 
-**Edge cases:** revoked link shows "not available"; turning the link off invalidates the token; guests can print; making an imported, unedited recipe public shows a copyright/attribution warning; a signed-in user viewing a shared recipe sees **Save a copy**, which creates their own editable recipe with `copied_from` and the source attribution kept.
+**Edge cases:** revoked link shows the uniform "This link is invalid or has expired." page (the same page a mistyped link, a replaced link and a deleted recipe show); turning the link off invalidates the token; guests can print; making an imported, unedited recipe public shows a copyright/attribution warning; a signed-in user viewing a recipe shared with all users sees **Save a copy**, which creates their own editable recipe with `copied_from` and the source attribution kept.
+
+*As built in v0.5.0:*
+
+- **Step 1.** **Share** is on the recipe page for the owner and for admins (readers see no Share button). Next to it a label shows the current state: Private, All users, Public link, or All users · Public link.
+- **Step 2.** The dialog has two independent settings: **Who can see this** (Private or All users) and a **Public link** switch. The old "Share with all users" checkbox is gone. Changing visibility saves at once and, since v0.5.0, no longer changes the recipe's last-edited time.
+- **Step 3.** Turning the switch on creates the link and shows it with **Copy link** and **New link**. **New link** asks first, then replaces the link; the old one stops working at once. Turning the switch off asks first ("Turn off the public link?") and makes the link stop working. If an admin has set `PUBLIC_LINKS_ENABLED=false`, the dialog says public links are turned off and offers no switch.
+- **Step 4.** The guest page shows the title, description, servings and times, tags, a banner naming the source (when there is one, with a link to the original), the grid or list with scale and unit controls, and a **Print** button. It shows no photos, notes, ratings, owner name or navigation, and a footer says it is a read-only link from a private recipe book. A signed-in user who opens a `/r/` link sees the same guest page; there is no **Save a copy** on it.
+- **Edge cases.** An invalid, mistyped, replaced or turned-off link, and every link while public links are disabled, show the same page: "This link is invalid or has expired." (the text of the "not available" page that earlier drafts of this journey described). The copyright notice is one block in the dialog, shown whenever the recipe was imported and has not been edited since; it appears before both sharing settings, warns only, and goes away once you edit the recipe. Too many requests from one address to `/r/*` get a plain "Too many attempts. Try again later." with status 429 (only when the proxy forwards the client address; see the README). Guests print from the **Print** button on the guest page; the page asks for landscape and fits both sample recipes on one landscape page in Chromium (other browsers and real printers were not tested).
 
 ## Journey 5 — Search and organize (Marie)
 
