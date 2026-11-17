@@ -37,6 +37,7 @@ services:
       PUBLIC_LINKS_ENABLED: ${PUBLIC_LINKS_ENABLED:-true}
       RATE_LIMIT_PUBLIC_MAX: ${RATE_LIMIT_PUBLIC_MAX:-120}
       RATE_LIMIT_PUBLIC_WINDOW_SEC: ${RATE_LIMIT_PUBLIC_WINDOW_SEC:-60}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
       # Headless import (v0.3.2). Empty = feature off, no sidecar call is ever made.
       HEADLESS_URL: ${HEADLESS_URL:-}
       HEADLESS_TOKEN: ${HEADLESS_TOKEN:-}

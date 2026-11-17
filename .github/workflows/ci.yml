@@ -36,6 +36,18 @@ jobs:
           path: test-results/
           retention-days: 7
 
+  # Q11: upstream advisories must not block a PR, so this runs on the nightly schedule and
+  # manual runs only. A High advisory in a production dependency fails the job.
+  audit:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - run: npm audit --omit=dev --audit-level=high
+
   docker:
     runs-on: ubuntu-latest
     steps:

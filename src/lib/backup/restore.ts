@@ -12,6 +12,7 @@ import { LimiterBusyError, limitDecode } from '@/lib/import/limiter';
 import type { BackupRecipe, BackupV1 } from './schema';
 import { backupRecipeToTree } from './toTree';
 import type { OpenedZip } from './unzip';
+import { errCode, log } from '@/lib/log';
 
 // Restore planning and apply (T11, G15 to G17). Owner and author identity never come from the
 // file's own claims about who is allowed to do what: a member restore targets the caller for
@@ -338,7 +339,7 @@ export async function applyRestore(
         { behavior: 'immediate' },
       );
     } catch (e) {
-      console.error('[restore] recipe failed', k, (e as Error).message);
+      log('error', 'restore.recipe_failed', { index: k, code: errCode(e) });
       res.failed_at = k;
       break;
     }
@@ -372,7 +373,7 @@ export async function applyRestore(
           stored.push(id);
           res.photos_restored++;
         } catch (e) {
-          console.warn('[restore] photo skipped', (e as Error).message);
+          log('warn', 'restore.photo_skipped', { code: errCode(e) });
           res.photos_failed++;
         }
       }
@@ -381,7 +382,7 @@ export async function applyRestore(
         try {
           setCover(db, recipeId, stored[0]!);
         } catch (e) {
-          console.warn('[restore] cover not set', (e as Error).message);
+          log('warn', 'restore.cover_not_set', { code: errCode(e) });
         }
       }
     }

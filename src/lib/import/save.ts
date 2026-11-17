@@ -9,6 +9,7 @@ import { sanitizeText } from './sanitize';
 import { storedSourceUrl } from './source-url';
 import { parseStoredDraft } from './service';
 import { saveRequestSchema } from './schemas';
+import { log } from '@/lib/log';
 
 export type SaveResult =
   { ok: true; id: string; warnings: string[] } | Failure | { ok: false; status: 409 };
@@ -129,7 +130,7 @@ export async function saveImport(
     try {
       await fetchAndStoreCover(db, coverUrl, recipeId, deps);
     } catch (e) {
-      console.warn('[import] cover failed:', e instanceof Error ? e.message : 'unknown');
+      log('warn', 'recipe_import.cover_failed', { err: e });
       warnings.push('cover_failed');
     }
   }

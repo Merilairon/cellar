@@ -1,4 +1,5 @@
 import { getEnv } from '@/lib/env';
+import { log } from '@/lib/log';
 import messages from '../../../messages/en.json';
 import { getClientIp, UNKNOWN_CLIENT } from './request-client';
 import { getRateLimiter } from './rate-limit';
@@ -16,19 +17,38 @@ export function isPublicSharePath(pathname: string): boolean {
   }
 }
 
-/** IPv6 clients are keyed on their /64, so rotating addresses inside one prefix cannot dodge the limit. */
+/**
+ * IPv6 clients are keyed on their /64, so rotating addresses inside one prefix cannot dodge the
+ * limit. The notation is canonicalised first (`::` expanded, leading zeros and case dropped), so
+ * `2001:0DB8:0:0:...` and `2001:db8::...` share one bucket.
+ */
 export function limiterKey(ip: string): string {
   if (!ip.includes(':')) return ip;
-  const [head] = ip.split('::');
-  const groups = head.split(':').filter(Boolean);
-  if (ip.includes('::') ? groups.length > 4 : false) return groups.slice(0, 4).join(':') + '::/64';
-  const full = ip.includes('::') ? [...groups, '0', '0', '0', '0'] : groups;
-  return (
-    full
-      .slice(0, 4)
-      .map((g) => g || '0')
-      .join(':') + '::/64'
-  );
+  const [head = '', tail = ''] = ip.split('%')[0]!.split('::');
+  const hs = head ? head.split(':') : [];
+  const ts = tail ? tail.split(':') : [];
+  const groups = ip.includes('::')
+    ? [...hs, ...Array<string>(Math.max(0, 8 - hs.length - ts.length)).fill('0'), ...ts]
+    : hs;
+  const prefix = groups.slice(0, 4).map((g) => parseInt(g || '0', 16));
+  if (prefix.some(Number.isNaN)) return ip.toLowerCase();
+  return prefix.map((n) => n.toString(16)).join(':') + '::/64';
+}
+
+let blockedSinceLog = 0;
+let lastBlockedLog = 0;
+export const BLOCKED_LOG_INTERVAL_MS = 60_000;
+
+/**
+ * `public_page.rate_limited`: a count only, no client address (not even hashed), and at most
+ * one line per minute so a flood cannot also flood the log.
+ */
+function noteBlocked(now = Date.now()): void {
+  blockedSinceLog++;
+  if (now - lastBlockedLog < BLOCKED_LOG_INTERVAL_MS) return;
+  lastBlockedLog = now;
+  log('warn', 'public_page.rate_limited', { count: blockedSinceLog });
+  blockedSinceLog = 0;
 }
 
 /**
@@ -51,7 +71,9 @@ export function publicRateLimit(headers: { get(name: string): string | null }): 
       limit: e.RATE_LIMIT_PUBLIC_MAX,
       windowMs: e.RATE_LIMIT_PUBLIC_WINDOW_SEC * 1000,
     }).hit(limiterKey(ip));
-    return r.allowed ? null : r.retryAfterSec;
+    if (r.allowed) return null;
+    noteBlocked();
+    return r.retryAfterSec;
   } catch {
     return null;
   }

@@ -431,7 +431,7 @@ export function createOrRotateLinkFor(
   actor: Actor,
   id: string,
   opts: { baseUrl: string },
-): Result<{ token: string; url: string }> {
+): Result<{ token: string; url: string; rotated: boolean }> {
   const row = getRecipeRow(db, id);
   if (!row || !canView(actor, row)) return { ok: false, status: 404 };
   if (!canEdit(actor, row)) return { ok: false, status: 403 };
@@ -439,7 +439,7 @@ export function createOrRotateLinkFor(
   const res = guarded(() => setShareToken(db, id, token, writeGuard(actor)));
   if (!res.ok) return res;
   if (!res.value) return { ok: false, status: 404 };
-  return { ok: true, token, url: shareUrl(opts.baseUrl, token) };
+  return { ok: true, token, url: shareUrl(opts.baseUrl, token), rotated: row.shareToken !== null };
 }
 
 /** Clear the share token. Idempotent: revoking an already revoked link succeeds. */

@@ -2,6 +2,7 @@ import { getDb } from '@/lib/db';
 import { getEnv } from '@/lib/env';
 import { applyRestore, RestoreForbiddenError, type Strategy } from '@/lib/backup/restore';
 import { beginApply, discardStage, getStage, pruneStaging } from '@/lib/backup/staging';
+import { errCode, log } from '@/lib/log';
 import { authenticate } from '@/lib/recipes/http';
 import { fail, hardened, loadBackup, msg, readIdle } from '../../shared';
 
@@ -66,7 +67,14 @@ export async function POST(request: Request, { params }: Ctx) {
   if (lease === 'busy') return fail(409, 'restore_in_progress', msg.inProgress);
   try {
     const loaded = await loadBackup(staged.path, staged.kind);
-    if (!loaded.ok) return loaded.response;
+    if (!loaded.ok) {
+      log('warn', 'restore.failed', {
+        user_id: user.id,
+        phase: 'apply',
+        status: loaded.response.status,
+      });
+      return loaded.response;
+    }
     try {
       const result = await applyRestore(
         getDb(),
@@ -76,13 +84,23 @@ export async function POST(request: Request, { params }: Ctx) {
         strategy,
         env.UPLOADS_DIR,
       );
+      log(result.failed_at === null ? 'info' : 'warn', 'restore.applied', {
+        user_id: user.id,
+        strategy,
+        imported: result.imported,
+        skipped: result.skipped,
+        renamed: result.renamed,
+        photos_restored: result.photos_restored,
+        photos_failed: result.photos_failed,
+        failed_at: result.failed_at,
+      });
       return hardened(Response.json(result, { status: 200 }));
     } finally {
       await loaded.archive?.close();
     }
   } catch (e) {
     if (e instanceof RestoreForbiddenError) return fail(403, 'forbidden', msg.forbidden);
-    console.error('[restore] apply failed', (e as Error).message);
+    log('error', 'restore.failed', { user_id: user.id, phase: 'apply', code: errCode(e) });
     return fail(500, 'restore_failed', msg.failed);
   } finally {
     lease.end();

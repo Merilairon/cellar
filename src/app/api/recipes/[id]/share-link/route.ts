@@ -1,5 +1,6 @@
 import { getDb } from '@/lib/db';
 import { getEnv } from '@/lib/env';
+import { log } from '@/lib/log';
 import { authenticate, failure, json, noStore } from '@/lib/recipes/http';
 import { createOrRotateLinkFor, revokeLinkFor } from '@/lib/recipes/service';
 
@@ -15,9 +16,16 @@ export async function POST(request: Request, { params }: Ctx) {
   if (auth instanceof Response) return noStore(auth);
   const env = getEnv();
   if (!env.PUBLIC_LINKS_ENABLED) return noStore(disabled());
-  const result = createOrRotateLinkFor(getDb(), auth.user, (await params).id, {
-    baseUrl: env.BASE_URL,
-  });
+  const id = (await params).id;
+  const db = getDb();
+  const result = createOrRotateLinkFor(db, auth.user, id, { baseUrl: env.BASE_URL });
+  // Recipe id and actor only: never the token or the URL (it contains the token).
+  if (result.ok) {
+    log('info', result.rotated ? 'share_link.rotated' : 'share_link.created', {
+      recipe_id: id,
+      actor_id: auth.user.id,
+    });
+  }
   return noStore(
     result.ok
       ? json(201, { share: { enabled: true, token: result.token, url: result.url } })
@@ -29,7 +37,10 @@ export async function POST(request: Request, { params }: Ctx) {
 export async function DELETE(request: Request, { params }: Ctx) {
   const auth = await authenticate(request);
   if (auth instanceof Response) return noStore(auth);
-  if (!getEnv().PUBLIC_LINKS_ENABLED) return noStore(disabled());
-  const result = revokeLinkFor(getDb(), auth.user, (await params).id);
+  // Revoke is always safe, also while links are disabled: the token is cleared, so turning the
+  // feature back on cannot revive a link the owner revoked.
+  const id = (await params).id;
+  const result = revokeLinkFor(getDb(), auth.user, id);
+  if (result.ok) log('info', 'share_link.revoked', { recipe_id: id, actor_id: auth.user.id });
   return noStore(result.ok ? new Response(null, { status: 204 }) : failure(result));
 }

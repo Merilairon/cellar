@@ -70,6 +70,12 @@ function isValidHeadlessUrl(v: string): boolean {
 }
 
 const schema = z.object({
+  // Structured log threshold (src/lib/log.ts); debug also adds error stacks.
+  LOG_LEVEL: z
+    .enum(['debug', 'info', 'warn', 'error'], {
+      error: 'LOG_LEVEL must be debug, info, warn or error',
+    })
+    .default('info'),
   DATABASE_PATH: z.string().min(1).default('/data/app.db'),
   SESSION_SECRET: z
     .string()

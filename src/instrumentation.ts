@@ -5,6 +5,7 @@ export async function register() {
   // Validate env at boot so a bad config (e.g. the SSRF seam outside dev/test) fails startup.
   const { getEnv } = await import('@/lib/env');
   getEnv();
+  const { log } = await import('@/lib/log');
   const { getDb } = await import('@/lib/db');
   const { runMigrations, assertFts5Available } = await import('@/lib/db/migrate');
   const { cleanupExpiredSessions } = await import('@/lib/auth/session');
@@ -18,7 +19,7 @@ export async function register() {
     try {
       cleanupExpiredSessions(db);
     } catch (err) {
-      console.error('expired-session cleanup failed', err);
+      log('error', 'session.cleanup_failed', { err });
     }
   };
   sweep();

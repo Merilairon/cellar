@@ -22,6 +22,7 @@ import { canView, canEdit } from './access';
 import { failure } from './http';
 import type { FieldError } from './schemas';
 import type { Actor, Failure } from './service';
+import { log } from '@/lib/log';
 
 // Photo write rules. Reads: canView (else 404). Writes (upload, delete, cover): canEdit, so a
 // reader of a `users` recipe gets 403 and a recipe the actor cannot read is a plain 404. Every
@@ -213,7 +214,7 @@ export function copyPhotosTo(db: Db, uploadsDir: string, fromId: string, toId: s
     try {
       copyFileSync(src, dst, 1 /* COPYFILE_EXCL */);
     } catch (e) {
-      console.warn('[photos] could not copy file for recipe copy', (e as Error).message);
+      log('warn', 'photo_files.copy_file_failed', { err: e });
       return null;
     }
     made.push(name);
@@ -231,7 +232,7 @@ export function copyPhotosTo(db: Db, uploadsDir: string, fromId: string, toId: s
     if (copied.length === 0) return;
     insertPhotoRows(db, toId, copied, coverIndex >= 0 ? coverIndex : 0);
   } catch (e) {
-    console.warn('[photos] could not copy photos for recipe copy', (e as Error).message);
+    log('warn', 'photo_files.copy_failed', { err: e });
     removeUploadFiles(uploadsDir, made);
   }
 }

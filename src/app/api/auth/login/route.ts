@@ -6,6 +6,7 @@ import { createSession } from '@/lib/auth/session';
 import { getDb } from '@/lib/db';
 import { getUserByEmail } from '@/lib/db/users';
 import { getEnv } from '@/lib/env';
+import { log } from '@/lib/log';
 import {
   authLimiters,
   getClientIp,
@@ -40,7 +41,11 @@ export async function POST(request: Request) {
   const ok = found
     ? await verifyPassword(found.passwordHash, parsed.data.password)
     : (await verifyDummy(parsed.data.password), false);
-  if (!found || !ok || found.deactivatedAt) return redirect('/login?error=invalid');
+  if (!found || !ok || found.deactivatedAt) {
+    // The user id when the account exists, else 'unknown'. Never the email.
+    log('warn', 'auth.login_failed', { user_id: found?.id ?? 'unknown' });
+    return redirect('/login?error=invalid');
+  }
 
   // Only failed attempts count: a successful login gives its budget back.
   limits.loginEmail.reset(emailKey);

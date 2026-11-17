@@ -75,6 +75,20 @@ describe('PUBLIC_LINKS_ENABLED', () => {
   );
 });
 
+describe('LOG_LEVEL', () => {
+  it('defaults to info', () => {
+    expect(parseEnv(base).LOG_LEVEL).toBe('info');
+  });
+
+  it.each(['debug', 'info', 'warn', 'error'])('accepts %s', (v) => {
+    expect(parseEnv({ ...base, LOG_LEVEL: v }).LOG_LEVEL).toBe(v);
+  });
+
+  it.each(['trace', 'INFO', 'verbose', ''])('rejects %j naming the variable', (v) => {
+    expect(() => parseEnv({ ...base, LOG_LEVEL: v })).toThrow(/LOG_LEVEL must be/);
+  });
+});
+
 describe('restore rate limit env', () => {
   it('defaults to 10 per 3600 seconds', () => {
     const e = parseEnv(base);
