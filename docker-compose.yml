@@ -24,6 +24,19 @@ services:
       IMPORT_JOB_TTL_DAYS: ${IMPORT_JOB_TTL_DAYS:-30}
       RATE_LIMIT_IMPORT_MAX: ${RATE_LIMIT_IMPORT_MAX:-20}
       RATE_LIMIT_IMPORT_WINDOW_SEC: ${RATE_LIMIT_IMPORT_WINDOW_SEC:-3600}
+      # Backup export and restore (v0.5.1). Defaults match src/lib/env.ts. RESTORE_DIR must stay
+      # on the /data volume (default: next to the uploads, <dir of UPLOADS_DIR>/restore). When you
+      # raise RESTORE_BODY_MAX, raise the proxy body limit too (Caddyfile, docs/deployment.md).
+      RESTORE_BODY_MAX: ${RESTORE_BODY_MAX:-268435456}
+      RESTORE_DIR: ${RESTORE_DIR:-/data/restore}
+      RATE_LIMIT_EXPORT_MAX: ${RATE_LIMIT_EXPORT_MAX:-10}
+      RATE_LIMIT_EXPORT_WINDOW_SEC: ${RATE_LIMIT_EXPORT_WINDOW_SEC:-3600}
+      RATE_LIMIT_RESTORE_MAX: ${RATE_LIMIT_RESTORE_MAX:-10}
+      RATE_LIMIT_RESTORE_WINDOW_SEC: ${RATE_LIMIT_RESTORE_WINDOW_SEC:-3600}
+      # Public share links (v0.5.0). "false" makes every /r/<token> link inert.
+      PUBLIC_LINKS_ENABLED: ${PUBLIC_LINKS_ENABLED:-true}
+      RATE_LIMIT_PUBLIC_MAX: ${RATE_LIMIT_PUBLIC_MAX:-120}
+      RATE_LIMIT_PUBLIC_WINDOW_SEC: ${RATE_LIMIT_PUBLIC_WINDOW_SEC:-60}
       # Headless import (v0.3.2). Empty = feature off, no sidecar call is ever made.
       HEADLESS_URL: ${HEADLESS_URL:-}
       HEADLESS_TOKEN: ${HEADLESS_TOKEN:-}

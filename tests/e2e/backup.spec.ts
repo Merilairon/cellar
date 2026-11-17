@@ -2,6 +2,7 @@ import { expect, test, type BrowserContext } from '@playwright/test';
 import { readdirSync } from 'node:fs';
 import sharp from 'sharp';
 import { rawZip } from '@/lib/backup/unzip-test-util';
+import en from '../../messages/en.json';
 import { account, ADMIN, createRecipe, registerViaInvite, SAMPLES, signIn } from './helpers';
 import {
   backupReady,
@@ -11,6 +12,7 @@ import {
   countsOf,
   getNotes,
   getTree,
+  icuPlural,
   inviteAt,
   listTitles,
   newContextAt,
@@ -428,7 +430,7 @@ test("B: another member restores A's member zip through /backup; only own recipe
   await page.getByRole('button', { name: 'Restore 2 recipes' }).click();
   await expect(page.getByRole('heading', { name: 'Restore finished' })).toBeFocused();
   await expect(page.getByText('2 recipes restored')).toBeVisible();
-  await expect(page.getByText('1 note left out')).toBeVisible();
+  await expect(page.getByText(icuPlural(en.backup.result.notesSkippedOwn, 1))).toBeVisible();
   await page.close();
 
   // The list also shows other users' shared recipes; the restore must have added only the mover's own.
@@ -499,7 +501,10 @@ test('B: a version 2 file, a zip with a traversal entry, garbage and an oversize
   ]);
   await page.getByRole('button', { name: 'Check the file' }).waitFor();
   await chooseAndCheck(page, { name: 'evil.zip', mimeType: 'application/zip', buffer: evil });
-  await expect(restoreAlert(page)).toContainText(/zip file/i);
+  // The refusal names the entry (b4a779c); the sentence itself is API text, not a catalog key.
+  await expect(restoreAlert(page)).toContainText(
+    /This zip contains a file Cellar does not accept: "\.\.\/\.\.\/evil\.webp"/,
+  );
   const z = await post(evil, 'application/zip');
   expect(z.status()).toBe(422);
   expect((await z.json()).error).toBe('backup_zip_invalid');

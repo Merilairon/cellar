@@ -1,5 +1,6 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { rawZip } from '@/lib/backup/unzip-test-util';
+import en from '../../messages/en.json';
 import {
   account,
   ADMIN,
@@ -10,6 +11,7 @@ import {
   signIn,
 } from './helpers';
 import {
+  abortHeld,
   allDoc,
   backupReady,
   chooseAndCheck,
@@ -17,6 +19,7 @@ import {
   docRecipe,
   freshDoc,
   holdOnce,
+  icuPlural,
   jsonFile,
   mockOnce,
   ownDoc,
@@ -81,6 +84,10 @@ test.afterAll(async () => {
   await adminCtx?.close();
 });
 
+test.afterEach(() => {
+  abortHeld();
+});
+
 test.beforeEach(async () => {
   await page?.close();
   page = await memberCtx.newPage();
@@ -133,13 +140,22 @@ test('restore: upload in flight (busy region, status, Cancel)', async () => {
     .setInputFiles(jsonFile('cellar-backup-2026-11-15.json', freshDoc(`${PREFIX} Busy`)));
   await page.getByRole('button', { name: 'Check the file' }).click();
   const region = page.getByRole('region', { name: 'Restore' });
-  await expect(region).toHaveAttribute('aria-busy', 'true');
-  await expect(region.getByRole('status')).toContainText(/Uploading… \d+ %|Checking the file…/);
+  const live = region.getByRole('status');
+  // Structure of a11y fix a3bd92c: aria-busy lives on the content wrapper of the current state,
+  // never on the <section>, and the one always-mounted live region sits outside every busy element.
+  await expect(region.locator('[aria-busy="true"]')).toHaveCount(1);
+  await expect(region).not.toHaveAttribute('aria-busy', /.*/);
+  await expect(live).toHaveCount(1);
+  await expect(region.locator('[aria-busy="true"] [role="status"]')).toHaveCount(0);
+  await expect(live).toHaveText(
+    new RegExp(`^(${en.backup.restore.live.uploading}|${en.backup.restore.checking})$`),
+  );
   await expect(region.getByRole('button', { name: 'Cancel' })).toBeVisible();
   await audit(page);
   release();
   await expect(page.getByText('Backup contents', { exact: true })).toBeFocused();
-  await expect(region).toHaveAttribute('aria-busy', 'false');
+  await expect(region.locator('[aria-busy="true"]')).toHaveCount(0);
+  await expect(live).toHaveText(en.backup.restore.live.checked);
 });
 
 test('restore: preview with no conflicts (skip and rename selected), notes of others left out', async () => {
@@ -216,8 +232,14 @@ test('restore: restoring (busy, status) then the result with photos, copies and 
   const release = await holdOnce(page, /\/api\/import\/backup\/[^/]+\/apply$/, 'POST');
   await page.getByRole('button', { name: 'Restore 2 recipes' }).click();
   const region = page.getByRole('region', { name: 'Restore' });
-  await expect(region.getByText(/Restoring…/)).toBeVisible();
-  await expect(region).toHaveAttribute('aria-busy', 'true');
+  // The live region and the visible line both say "Restoring…": assert each by role, not by text.
+  await expect(region.getByRole('status')).toHaveText(en.backup.restore.restoring);
+  await expect(
+    region.getByRole('progressbar', { name: en.backup.restore.restoring }),
+  ).toBeVisible();
+  await expect(region.locator('[aria-busy="true"]')).toHaveCount(1);
+  await expect(region.locator('[aria-busy="true"] [role="status"]')).toHaveCount(0);
+  await expect(region).not.toHaveAttribute('aria-busy', /.*/);
   await expect(page.getByRole('button', { name: 'Restore 2 recipes' })).toBeDisabled();
   await audit(page);
   release();
@@ -231,7 +253,7 @@ test('restore: result after a fresh file and after copies', async () => {
   await stage(page, jsonFile('f.json', freshDoc(`${PREFIX} Result`)));
   await page.getByRole('button', { name: 'Restore 2 recipes' }).click();
   await expect(page.getByRole('heading', { name: 'Restore finished' })).toBeFocused();
-  await expect(page.getByText('1 note left out')).toBeVisible();
+  await expect(page.getByText(icuPlural(en.backup.result.notesSkippedOwn, 1))).toBeVisible();
   await audit(page);
   await page.getByRole('button', { name: 'Restore another file' }).click();
   await expect(page.locator(PICK)).toBeFocused();
@@ -259,12 +281,14 @@ test('restore: partial failure result (server stopped at recipe 2 of 3)', async 
     ratings_skipped: 0,
     photos_restored: 0,
     photos_failed: 0,
-    failed_at: 2,
+    failed_at: 1, // 0-based in the API; the page shows it 1-based
   });
   await page.getByRole('button', { name: 'Restore 3 recipes' }).click();
   await expect(page.getByRole('heading', { name: 'Restore stopped' })).toBeFocused();
   await expect(page.getByText('1 recipe restored before the problem')).toBeVisible();
-  await expect(page.getByText('Stopped at recipe 2 of 3.', { exact: false })).toBeVisible();
+  await expect(
+    page.getByText(en.backup.result.stoppedAt.replace('{index}', '2').replace('{total}', '3')),
+  ).toBeVisible();
   await audit(page);
 });
 
@@ -295,7 +319,7 @@ test.describe('restore errors (spec 5.4)', () => {
       { name: '../evil.webp', data: Buffer.from('x') },
     ]);
     await chooseAndCheck(page, { name: 'evil.zip', mimeType: 'application/zip', buffer: zip });
-    await alertText(/zip file is not a valid Cellar backup archive/);
+    await alertText(/This zip contains a file Cellar does not accept: "\.\.\/evil\.webp"/);
   });
   test('a member uploads an all-users file (only an admin can restore it)', async () => {
     const doc = allDoc(

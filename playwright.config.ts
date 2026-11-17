@@ -32,6 +32,12 @@ export default defineConfig({
         // Small per-IP cap so public-page.spec.ts can reach the 429 with a few requests. Only
         // requests carrying x-forwarded-for are limited (the loopback peer is an unknown client).
         RATE_LIMIT_PUBLIC_MAX: '20',
+        // 7f7b050 added a restore limiter (10 stage uploads per hour per user). The backup specs
+        // (backup-a11y and backup-visual run against this server, backup.spec against :3103) stage
+        // far more than that, so lift it on both. The 429 path is covered at unit level with a low
+        // limit (src/lib/backup/restore-route.test.ts); no e2e starts a server for it.
+        RATE_LIMIT_RESTORE_MAX: '1000',
+        RATE_LIMIT_RESTORE_WINDOW_SEC: '3600',
       },
     },
     {
@@ -54,6 +60,8 @@ export default defineConfig({
         UPLOADS_DIR: './data/e2e-b-uploads',
         RESTORE_DIR: './data/e2e-b-restore',
         RESTORE_BODY_MAX: '2097152',
+        RATE_LIMIT_RESTORE_MAX: '1000', // see the :3100 server above
+        RATE_LIMIT_RESTORE_WINDOW_SEC: '3600',
         TRUSTED_PROXIES: '127.0.0.1,::1',
       },
     },

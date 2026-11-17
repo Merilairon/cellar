@@ -13,6 +13,16 @@ export const BASE_B = 'http://localhost:3103';
 export const ORIGIN_A = { origin: BASE_A };
 export const ORIGIN_B = { origin: BASE_B };
 
+/**
+ * The text of an ICU plural message from messages/en.json for a given count, so specs assert the
+ * catalog and not a copy of it. Only handles `{count, plural, one {...} other {...}}` with `#`.
+ */
+export function icuPlural(template: string, n: number): string {
+  const branch = new RegExp(`${n === 1 ? 'one' : 'other'} \\{([^{}]*)\\}`).exec(template);
+  if (!branch) throw new Error(`no plural branch for ${n} in ${template}`);
+  return branch[1].replace('#', String(n));
+}
+
 /** Both servers are on `localhost`, and cookies ignore ports: A and B never share a context. */
 export const newContextAt = (browser: Browser, baseURL: string) => browser.newContext({ baseURL });
 
@@ -320,20 +330,34 @@ export async function mockOnce(
   );
 }
 
+/** Gates of held requests that were not released yet; see abortHeld. */
+const heldGates: Array<(proceed: boolean) => void> = [];
+
 /** Hold the next matching request until `release()` is called, then let it through. */
 export async function holdOnce(page: Page, pattern: RegExp, method: string) {
-  let release!: () => void;
-  const gate = new Promise<void>((r) => (release = r));
+  let settle!: (proceed: boolean) => void;
+  const gate = new Promise<boolean>((r) => (settle = r));
+  heldGates.push(settle);
   await page.route(
     pattern,
     async (route) => {
       if (route.request().method() !== method) return route.fallback();
-      await gate;
-      await route.continue();
+      if (await gate) await route.continue();
+      else await route.abort();
     },
     { times: 1 },
   );
-  return release;
+  return () => settle(true);
+}
+
+/**
+ * Call from afterEach in a spec that uses holdOnce. A test that fails before it releases would
+ * otherwise leave the request pending, and it could reach the server after the spec's cleanup
+ * (a held restore then adds recipes and photos that the next spec's admin export counts). An
+ * already released gate is unaffected.
+ */
+export function abortHeld() {
+  for (const settle of heldGates.splice(0)) settle(false);
 }
 
 /** The Restore section's alert (Next's route announcer is a second role=alert on every page). */
