@@ -9,6 +9,7 @@ import {
   replaceRecipe,
   GridConflictError,
   setRecipeVisibility,
+  setShareToken,
   RecipeGuardError,
   type RecipeFull,
   type RecipeGuard,
@@ -27,7 +28,8 @@ import { removeUploadFiles } from '@/lib/import/uploads';
 import { joinQtyRange } from '@/lib/import/ingredient-parser';
 import { validateRecipeGrid } from '@/lib/grid/validate';
 import { completeMeasures } from '@/lib/units/complete';
-import { canRead, canWrite } from './access';
+import { generateShareToken, shareUrl } from './share';
+import { canView, canEdit, type Actor as AccessActor } from './access';
 import { toApiRating } from './ratings';
 import { copyPhotosTo, toApiPhoto } from './photos';
 import {
@@ -40,7 +42,8 @@ import {
   type ViewMode,
 } from './schemas';
 
-export type Actor = { id: string; role: 'admin' | 'member' };
+/** A signed-in caller: the non-null half of the access-layer `Actor` (anonymous is `null`). */
+export type Actor = NonNullable<AccessActor>;
 
 export type Failure =
   | { ok: false; status: 404 | 403 }
@@ -121,11 +124,11 @@ export function toTree(input: RecipeInput, viewMode: ViewMode): RecipeTree {
 const readGuard =
   (actor: Actor): RecipeGuard =>
   (row) =>
-    canRead(actor, row) ? 'ok' : 'not_found';
+    canView(actor, row) ? 'ok' : 'not_found';
 const writeGuard =
   (actor: Actor): RecipeGuard =>
   (row) =>
-    !canRead(actor, row) ? 'not_found' : canWrite(actor, row) ? 'ok' : 'forbidden';
+    !canView(actor, row) ? 'not_found' : canEdit(actor, row) ? 'ok' : 'forbidden';
 
 /** Run a guarded db write; a guard refusal inside the transaction becomes a 404/403 failure. */
 function guarded<T>(fn: () => T): { ok: true; value: T } | Failure {
@@ -163,12 +166,33 @@ export function prepareRecipe(
   };
 }
 
+/** Share-link settings from the environment; every route and page passes them. */
+export type ShareContext = { baseUrl: string; publicLinksEnabled: boolean };
+/** Fail-closed fallback for pure-service callers (tests): links off, so no token is exposed. */
+const NO_SHARE_CONTEXT: ShareContext = { baseUrl: '', publicLinksEnabled: false };
+
+/**
+ * Owner-only share state (G10). The token is secret: it is serialized here and nowhere else
+ * (never in lists or search), and only for a caller who can edit.
+ */
+function toApiShare(r: Pick<RecipeFull, 'shareToken'>, ctx: ShareContext) {
+  // Links off: a stored token is inert (Q5), so it is not exposed either.
+  const token = ctx.publicLinksEnabled ? r.shareToken : null;
+  return {
+    enabled: token !== null,
+    token,
+    url: token === null ? null : shareUrl(ctx.baseUrl, token),
+  };
+}
+
 export function toApiRecipe(
   r: RecipeFull,
   canEdit: boolean,
   photos: PhotoRow[] = [],
   rating: RatingSummary = { avg: null, count: 0, mine: null },
+  shareCtx?: ShareContext,
 ) {
+  const ctx = shareCtx ?? NO_SHARE_CONTEXT;
   return {
     id: r.id,
     owner_id: r.ownerId,
@@ -187,6 +211,8 @@ export function toApiRecipe(
     created_at: r.createdAt,
     updated_at: r.updatedAt,
     can_edit: canEdit,
+    share: canEdit ? toApiShare(r, ctx) : null,
+    public_links_enabled: ctx.publicLinksEnabled,
     photos: photos.map(toApiPhoto),
     ...toApiRating(rating),
     sections: r.sections.map((s) => ({
@@ -250,20 +276,35 @@ export function createRecipeFor(
   db: Db,
   actor: Actor,
   body: unknown,
+  share: ShareContext,
 ): Result<{ recipe: ApiRecipe }> {
   const prepared = prepareRecipe(body);
   if (!prepared.ok) return prepared;
   const res = guarded(() => createRecipe(db, actor.id, prepared.tree));
   if (!res.ok) return res;
-  return { ok: true, recipe: toApiRecipe(getRecipeFull(db, res.value)!, true) };
-}
-
-export function getRecipeFor(db: Db, actor: Actor, id: string): Result<{ recipe: ApiRecipe }> {
-  const r = getRecipeFull(db, id);
-  if (!r || !canRead(actor, r)) return { ok: false, status: 404 };
   return {
     ok: true,
-    recipe: toApiRecipe(r, canWrite(actor, r), listPhotos(db, id), ratingSummary(db, id, actor.id)),
+    recipe: toApiRecipe(getRecipeFull(db, res.value)!, true, [], undefined, share),
+  };
+}
+
+export function getRecipeFor(
+  db: Db,
+  actor: Actor,
+  id: string,
+  share: ShareContext,
+): Result<{ recipe: ApiRecipe }> {
+  const r = getRecipeFull(db, id);
+  if (!r || !canView(actor, r)) return { ok: false, status: 404 };
+  return {
+    ok: true,
+    recipe: toApiRecipe(
+      r,
+      canEdit(actor, r),
+      listPhotos(db, id),
+      ratingSummary(db, id, actor.id),
+      share,
+    ),
   };
 }
 
@@ -272,11 +313,12 @@ export function updateRecipeFor(
   actor: Actor,
   id: string,
   body: unknown,
+  share: ShareContext,
 ): Result<{ recipe: ApiRecipe }> {
   // Cheap pre-checks for status ordering; the authoritative check re-runs in the transaction.
   const row = getRecipeRow(db, id);
-  if (!row || !canRead(actor, row)) return { ok: false, status: 404 };
-  if (!canWrite(actor, row)) return { ok: false, status: 403 };
+  if (!row || !canView(actor, row)) return { ok: false, status: 404 };
+  if (!canEdit(actor, row)) return { ok: false, status: 403 };
   const prepared = prepareRecipe(body);
   if (!prepared.ok) return prepared;
   // View mode omitted: a stored list stays list; a stored grid stays grid only while it is
@@ -296,6 +338,7 @@ export function updateRecipeFor(
       true,
       listPhotos(db, id),
       ratingSummary(db, id, actor.id),
+      share,
     ),
   };
 }
@@ -312,10 +355,11 @@ export function updateGridFor(
   actor: Actor,
   id: string,
   body: unknown,
+  share: ShareContext,
 ): Result<{ recipe: ApiRecipe }> {
   const row = getRecipeRow(db, id);
-  if (!row || !canRead(actor, row)) return { ok: false, status: 404 };
-  if (!canWrite(actor, row)) return { ok: false, status: 403 };
+  if (!row || !canView(actor, row)) return { ok: false, status: 404 };
+  if (!canEdit(actor, row)) return { ok: false, status: 403 };
   const parsed = gridInputSchema.safeParse(body);
   if (!parsed.success) return { ok: false, status: 422, errors: zodIssuesToErrors(parsed.error) };
   const { errors } = validateRecipeGrid(parsed.data);
@@ -336,6 +380,7 @@ export function updateGridFor(
       true,
       listPhotos(db, id),
       ratingSummary(db, id, actor.id),
+      share,
     ),
   };
 }
@@ -367,13 +412,44 @@ export function setVisibilityFor(
   body: unknown,
 ): Result<{ visibility: 'private' | 'users' }> {
   const row = getRecipeRow(db, id);
-  if (!row || !canRead(actor, row)) return { ok: false, status: 404 };
-  if (!canWrite(actor, row)) return { ok: false, status: 403 };
+  if (!row || !canView(actor, row)) return { ok: false, status: 404 };
+  if (!canEdit(actor, row)) return { ok: false, status: 403 };
   const parsed = visibilityInputSchema.safeParse(body);
   if (!parsed.success) return { ok: false, status: 422, errors: zodIssuesToErrors(parsed.error) };
   const res = guarded(() => setRecipeVisibility(db, id, parsed.data.visibility, writeGuard(actor)));
   if (!res.ok) return res;
   return res.value ? { ok: true, visibility: parsed.data.visibility } : { ok: false, status: 404 };
+}
+
+/**
+ * Create the public share link, or rotate it when one exists (the old token stops working at
+ * once). Same 404-vs-403 ordering as visibility. Does not touch `updated_at` (R5). The caller
+ * (route) refuses first when `PUBLIC_LINKS_ENABLED` is false.
+ */
+export function createOrRotateLinkFor(
+  db: Db,
+  actor: Actor,
+  id: string,
+  opts: { baseUrl: string },
+): Result<{ token: string; url: string }> {
+  const row = getRecipeRow(db, id);
+  if (!row || !canView(actor, row)) return { ok: false, status: 404 };
+  if (!canEdit(actor, row)) return { ok: false, status: 403 };
+  const token = generateShareToken();
+  const res = guarded(() => setShareToken(db, id, token, writeGuard(actor)));
+  if (!res.ok) return res;
+  if (!res.value) return { ok: false, status: 404 };
+  return { ok: true, token, url: shareUrl(opts.baseUrl, token) };
+}
+
+/** Clear the share token. Idempotent: revoking an already revoked link succeeds. */
+export function revokeLinkFor(db: Db, actor: Actor, id: string): Result<object> {
+  const row = getRecipeRow(db, id);
+  if (!row || !canView(actor, row)) return { ok: false, status: 404 };
+  if (!canEdit(actor, row)) return { ok: false, status: 403 };
+  const res = guarded(() => setShareToken(db, id, null, writeGuard(actor)));
+  if (!res.ok) return res;
+  return res.value ? { ok: true } : { ok: false, status: 404 };
 }
 
 /**

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { getDb } from '@/lib/db';
-import { authenticate, failure, json, noStore, readJson } from '@/lib/recipes/http';
+import { authenticate, failure, json, noStore, readJson, shareContext } from '@/lib/recipes/http';
 import { createRecipeFor, listRecipes } from '@/lib/recipes/service';
 import { MAX_TAG_LEN } from '@/lib/recipes/tag-name';
 
@@ -55,6 +55,6 @@ export async function POST(request: Request) {
   if (auth instanceof Response) return auth;
   const parsed = await readJson(request);
   if (parsed instanceof Response) return parsed;
-  const result = createRecipeFor(getDb(), auth.user, parsed.body);
-  return result.ok ? json(201, result.recipe) : failure(result);
+  const result = createRecipeFor(getDb(), auth.user, parsed.body, shareContext());
+  return noStore(result.ok ? json(201, result.recipe) : failure(result));
 }

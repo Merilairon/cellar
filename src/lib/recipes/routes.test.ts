@@ -6,10 +6,16 @@ import type { User } from '@/lib/db/users';
 import { SAMPLE_SKILLET_COOKIES } from './samples';
 import { GRID_BODY_MAX } from './http';
 
-const state = vi.hoisted(() => ({ db: undefined as unknown, current: null as unknown }));
+const state = vi.hoisted(() => ({
+  db: undefined as unknown,
+  current: null as unknown,
+  linksEnabled: true,
+}));
 vi.mock('@/lib/db', () => ({ getDb: () => state.db }));
 vi.mock('@/lib/auth/current-user', () => ({ getCurrentUser: async () => state.current }));
-vi.mock('@/lib/env', () => ({ getEnv: () => ({ BASE_URL: 'http://localhost:3100' }) }));
+vi.mock('@/lib/env', () => ({
+  getEnv: () => ({ BASE_URL: 'http://localhost:3100', PUBLIC_LINKS_ENABLED: state.linksEnabled }),
+}));
 
 import { GET as listGet, POST as createPost } from '@/app/api/recipes/route';
 import { DELETE, GET, PUT } from '@/app/api/recipes/[id]/route';
@@ -21,6 +27,7 @@ import {
 } from '@/app/api/recipes/[id]/grid/route';
 import { GET as tagsGet } from '@/app/api/tags/route';
 import { PUT as visPut } from '@/app/api/recipes/[id]/visibility/route';
+import { POST as linkPost, DELETE as linkDelete } from '@/app/api/recipes/[id]/share-link/route';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Loose = Record<string, any>;
@@ -38,6 +45,7 @@ beforeEach(() => {
   owner = mk('o@x.test');
   other = mk('x@x.test');
   state.current = owner;
+  state.linksEnabled = true;
 });
 afterEach(() => db.$client.close());
 
@@ -288,6 +296,27 @@ describe('PUT /api/recipes/:id/grid', () => {
       (await PUT(req('PUT', { ...SAMPLE_SKILLET_COOKIES, title: 'Renamed' }), ctx(r.id))).status,
     ).toBe(200);
     expect((await put(r.id, body)).status).toBe(409);
+  });
+
+  it('a visibility change between load and save is not a conflict: grid save 200 (v1.0 Q3, R5)', async () => {
+    const r = await created();
+    const body = gridBody(r); // base_updated_at captured before the visibility change
+    expect((await visPut(req('PUT', { visibility: 'users' }), ctx(r.id))).status).toBe(200);
+    expect((await visPut(req('PUT', { visibility: 'private' }), ctx(r.id))).status).toBe(200);
+    const stored = (await (await GET(req('GET', undefined, {}), ctx(r.id))).json()) as Loose;
+    expect(stored.updated_at).toBe(r.updated_at);
+    const res = await put(r.id, body);
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as Loose).updated_at > r.updated_at).toBe(true);
+  });
+
+  it('sharing actions between load and save are not a conflict: grid save 200 (v1.0 G9, R5)', async () => {
+    const r = await created();
+    const body = gridBody(r); // stale base captured before any sharing action
+    expect((await linkPost(req('POST'), ctx(r.id))).status).toBe(201);
+    expect((await linkPost(req('POST'), ctx(r.id))).status).toBe(201); // rotate
+    expect((await linkDelete(req('DELETE'), ctx(r.id))).status).toBe(204);
+    expect((await put(r.id, body)).status).toBe(200);
   });
 
   it('422 with validator paths; an uncovered row is 200; unknown keys 422', async () => {

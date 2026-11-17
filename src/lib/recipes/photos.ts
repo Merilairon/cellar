@@ -18,12 +18,12 @@ import { getRecipeRow, RecipeGuardError, type RecipeGuard } from '@/lib/db/recip
 import { processImage } from '@/lib/images/process';
 import { LimiterBusyError, busyResponse, limitDecode } from '@/lib/import/limiter';
 import { removeUploadFiles, resolveUploadPath } from '@/lib/import/uploads';
-import { canRead, canWrite } from './access';
+import { canView, canEdit } from './access';
 import { failure } from './http';
 import type { FieldError } from './schemas';
 import type { Actor, Failure } from './service';
 
-// Photo write rules. Reads: canRead (else 404). Writes (upload, delete, cover): canWrite, so a
+// Photo write rules. Reads: canView (else 404). Writes (upload, delete, cover): canEdit, so a
 // reader of a `users` recipe gets 403 and a recipe the actor cannot read is a plain 404. Every
 // write re-checks the guard inside its transaction. None of this touches the recipe updated_at stamp
 // (G5), so a grid editor open on a stale base still saves without a 409.
@@ -48,7 +48,7 @@ export function photoFailure(f: PhotoFailure): Response {
 const writeGuard =
   (actor: Actor): RecipeGuard =>
   (row) =>
-    !canRead(actor, row) ? 'not_found' : canWrite(actor, row) ? 'ok' : 'forbidden';
+    !canView(actor, row) ? 'not_found' : canEdit(actor, row) ? 'ok' : 'forbidden';
 
 const code = (c: string): PhotoFailure => ({
   ok: false,
@@ -71,8 +71,8 @@ function guarded<T>(fn: () => T): { ok: true; value: T } | PhotoFailure {
 /** Cheap pre-check shared by the routes (before the body is read); the real check is in the tx. */
 export function checkPhotoWrite(db: Db, actor: Actor, recipeId: string): { ok: true } | Failure {
   const row = getRecipeRow(db, recipeId);
-  if (!row || !canRead(actor, row)) return { ok: false, status: 404 };
-  if (!canWrite(actor, row)) return { ok: false, status: 403 };
+  if (!row || !canView(actor, row)) return { ok: false, status: 404 };
+  if (!canEdit(actor, row)) return { ok: false, status: 403 };
   return { ok: true };
 }
 
@@ -82,7 +82,7 @@ export function listPhotosFor(
   recipeId: string,
 ): { ok: true; photos: ApiPhoto[] } | Failure {
   const row = getRecipeRow(db, recipeId);
-  if (!row || !canRead(actor, row)) return { ok: false, status: 404 };
+  if (!row || !canView(actor, row)) return { ok: false, status: 404 };
   return { ok: true, photos: listPhotos(db, recipeId).map(toApiPhoto) };
 }
 

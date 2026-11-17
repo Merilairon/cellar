@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { Db } from '@/lib/db/connection';
 import { deleteRating, ratingSummary, upsertRating, type RatingSummary } from '@/lib/db/ratings';
 import { getRecipeRow, RecipeGuardError, type RecipeGuard } from '@/lib/db/recipes';
-import { canRead } from './access';
+import { canView } from './access';
 import { zodIssuesToErrors, type FieldError } from './schemas';
 import type { Actor } from './service';
 
@@ -30,7 +30,7 @@ export const toApiRating = (s: RatingSummary): ApiRating => ({
 const readGuard =
   (actor: Actor): RecipeGuard =>
   (row) =>
-    canRead(actor, row) ? 'ok' : 'not_found';
+    canView(actor, row) ? 'ok' : 'not_found';
 
 function guarded<T>(fn: () => T): { ok: true; value: T } | { ok: false; status: 404 } {
   try {
@@ -48,7 +48,7 @@ export function setRatingFor(
   body: unknown,
 ): { ok: true; rating: ApiRating } | Failure {
   const row = getRecipeRow(db, recipeId);
-  if (!row || !canRead(actor, row)) return { ok: false, status: 404 };
+  if (!row || !canView(actor, row)) return { ok: false, status: 404 };
   const parsed = ratingSchema.safeParse(body);
   if (!parsed.success) {
     return { ok: false, status: 422, errors: zodIssuesToErrors(parsed.error) };
@@ -66,7 +66,7 @@ export function clearRatingFor(
   recipeId: string,
 ): { ok: true } | { ok: false; status: 404 } {
   const row = getRecipeRow(db, recipeId);
-  if (!row || !canRead(actor, row)) return { ok: false, status: 404 };
+  if (!row || !canView(actor, row)) return { ok: false, status: 404 };
   const res = guarded(() => deleteRating(db, recipeId, actor.id, readGuard(actor)));
   return res.ok && res.value ? { ok: true } : { ok: false, status: 404 };
 }

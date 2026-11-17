@@ -12,6 +12,8 @@ import {
   updateRecipeFor,
 } from './service';
 
+const SHARE = { baseUrl: '', publicLinksEnabled: false };
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Loose = Record<string, any>;
 
@@ -29,7 +31,7 @@ const setup = () => {
 };
 const clone = () => structuredClone(SAMPLE_SKILLET_COOKIES) as Loose;
 const make = (actor: Loose, over: Loose = {}) => {
-  const r = createRecipeFor(db, actor as never, { ...clone(), ...over });
+  const r = createRecipeFor(db, actor as never, { ...clone(), ...over }, SHARE);
   if (!r.ok) throw new Error(JSON.stringify(r));
   return r.recipe;
 };
@@ -60,10 +62,10 @@ describe('updateGridFor: authorization', () => {
   it('owner 200, admin on another recipe 200', () => {
     const { owner, admin } = setup();
     const r = make(owner);
-    expect(updateGridFor(db, owner, r.id, bodyFrom(r))).toMatchObject({ ok: true });
-    const r2 = getRecipeFor(db, owner, r.id);
+    expect(updateGridFor(db, owner, r.id, bodyFrom(r), SHARE)).toMatchObject({ ok: true });
+    const r2 = getRecipeFor(db, owner, r.id, SHARE);
     if (!r2.ok) throw new Error();
-    expect(updateGridFor(db, admin, r.id, bodyFrom(r2.recipe))).toMatchObject({ ok: true });
+    expect(updateGridFor(db, admin, r.id, bodyFrom(r2.recipe), SHARE)).toMatchObject({ ok: true });
   });
 
   it('member on another users-visible recipe is 403, private is 404, missing is 404; nothing written', () => {
@@ -71,12 +73,15 @@ describe('updateGridFor: authorization', () => {
     const shared = make(owner, { visibility: 'users' });
     const priv = make(owner, { visibility: 'private' });
     const before = snapshot('');
-    expect(updateGridFor(db, other, shared.id, bodyFrom(shared))).toEqual({
+    expect(updateGridFor(db, other, shared.id, bodyFrom(shared), SHARE)).toEqual({
       ok: false,
       status: 403,
     });
-    expect(updateGridFor(db, other, priv.id, bodyFrom(priv))).toEqual({ ok: false, status: 404 });
-    expect(updateGridFor(db, other, 'MISSING', bodyFrom(priv))).toEqual({
+    expect(updateGridFor(db, other, priv.id, bodyFrom(priv), SHARE)).toEqual({
+      ok: false,
+      status: 404,
+    });
+    expect(updateGridFor(db, other, 'MISSING', bodyFrom(priv), SHARE)).toEqual({
       ok: false,
       status: 404,
     });
@@ -87,8 +92,13 @@ describe('updateGridFor: authorization', () => {
     const { owner, other } = setup();
     const shared = make(owner, { visibility: 'users' });
     const priv = make(owner, { visibility: 'private' });
-    expect(updateGridFor(db, other, shared.id, { nope: 1 })).toEqual({ ok: false, status: 403 });
-    expect(updateGridFor(db, other, priv.id, { base_updated_at: 'stale', sections: [] })).toEqual({
+    expect(updateGridFor(db, other, shared.id, { nope: 1 }, SHARE)).toEqual({
+      ok: false,
+      status: 403,
+    });
+    expect(
+      updateGridFor(db, other, priv.id, { base_updated_at: 'stale', sections: [] }, SHARE),
+    ).toEqual({
       ok: false,
       status: 404,
     });
@@ -107,6 +117,7 @@ describe('updateGridFor: persistence', () => {
         bodyFrom(r, (s) => {
           s[0].ingredients[0].name = 'cultured butter';
         }),
+        SHARE,
       ),
     );
     expect(out.sections[0]!.ingredients[0]!.name).toBe('cultured butter');
@@ -134,7 +145,7 @@ describe('updateGridFor: persistence', () => {
       { view_mode: 'list' },
       { id: r.id },
     ]) {
-      const res = updateGridFor(db, owner, r.id, { ...bodyFrom(r), ...extra });
+      const res = updateGridFor(db, owner, r.id, { ...bodyFrom(r), ...extra }, SHARE);
       expect(res).toMatchObject({ ok: false, status: 422 });
       expect(JSON.stringify(res)).toContain('unrecognized_keys');
     }
@@ -145,7 +156,9 @@ describe('updateGridFor: persistence', () => {
     const r = make(owner);
     // The full stored shape (with ids and positions) is accepted and ids are not trusted.
     const sections = structuredClone(r.sections);
-    const out = ok(updateGridFor(db, owner, r.id, { base_updated_at: r.updated_at, sections }));
+    const out = ok(
+      updateGridFor(db, owner, r.id, { base_updated_at: r.updated_at, sections }, SHARE),
+    );
     expect(out.sections[0]!.ingredients[0]!.id).not.toBe(r.sections[0]!.ingredients[0]!.id);
   });
 
@@ -164,6 +177,7 @@ describe('updateGridFor: persistence', () => {
           s[0].ingredients[1].portion_label = 'rest';
           s[0].ingredients[2].split_group_id = 'other-key';
         }),
+        SHARE,
       ),
     );
     const [a, b, c, d] = out.sections[0]!.ingredients;
@@ -188,9 +202,10 @@ describe('updateGridFor: persistence', () => {
           s[0].ingredients[0].name = evil;
           s[0].steps[0].label = evil;
         }),
+        SHARE,
       ),
     );
-    const got = getRecipeFor(db, owner, r.id);
+    const got = getRecipeFor(db, owner, r.id, SHARE);
     if (!got.ok) throw new Error();
     expect(got.recipe.sections[0]!.ingredients[0]!.name).toBe(evil);
     expect(got.recipe.sections[0]!.steps[0]!.label).toBe(evil);
@@ -207,6 +222,7 @@ describe('updateGridFor: persistence', () => {
         bodyFrom(r, (s) => {
           s[0].ingredients[0].name = 'quinceblossom';
         }),
+        SHARE,
       ),
     );
     const read = () => db.$client.prepare('select * from recipe_fts where recipe_id = ?').all(r.id);
@@ -262,7 +278,7 @@ describe('updateGridFor: validation (422) and warnings', () => {
       const { owner } = setup();
       const r = make(owner);
       const before = snapshot('');
-      const res = updateGridFor(db, owner, r.id, bodyFrom(r, edit));
+      const res = updateGridFor(db, owner, r.id, bodyFrom(r, edit), SHARE);
       expect(res).toMatchObject({ ok: false, status: 422 });
       if (res.ok || res.status !== 422) throw new Error();
       expect(res.errors).toContainEqual({ path, code });
@@ -274,7 +290,7 @@ describe('updateGridFor: validation (422) and warnings', () => {
     const { owner } = setup();
     const r = make(owner);
     for (const base of [undefined, 5, '', 'yesterday']) {
-      const res = updateGridFor(db, owner, r.id, { ...bodyFrom(r), base_updated_at: base });
+      const res = updateGridFor(db, owner, r.id, { ...bodyFrom(r), base_updated_at: base }, SHARE);
       expect(res).toMatchObject({ ok: false, status: 422 });
       if (res.ok || res.status !== 422) throw new Error();
       expect(res.errors[0]!.path).toBe('base_updated_at');
@@ -285,7 +301,7 @@ describe('updateGridFor: validation (422) and warnings', () => {
     const { owner } = setup();
     const r = make(owner);
     const e = (b: Loose) => {
-      const res = updateGridFor(db, owner, r.id, b);
+      const res = updateGridFor(db, owner, r.id, b, SHARE);
       if (res.ok || res.status !== 422) throw new Error(JSON.stringify(res));
       return res.errors;
     };
@@ -327,6 +343,7 @@ describe('updateGridFor: validation (422) and warnings', () => {
         bodyFrom(r, (s) => {
           s[0].steps = s[0].steps.slice(0, 3); // banners + melt (row 0 only)
         }),
+        SHARE,
       ),
     );
     expect(out.view_mode).toBe('grid');
@@ -345,6 +362,7 @@ describe('updateGridFor: view_mode (G3)', () => {
         bodyFrom(r, (s) => {
           s[0].steps = s[0].steps.filter((x: Loose) => x.kind !== 'column');
         }),
+        SHARE,
       ),
     );
     expect(noCols.view_mode).toBe('list');
@@ -356,6 +374,7 @@ describe('updateGridFor: view_mode (G3)', () => {
         bodyFrom(noCols, (s) => {
           s[0].steps.push({ kind: 'column', label: 'all', detail: '', row_start: 0, row_end: 8 });
         }),
+        SHARE,
       ),
     );
     expect(again.view_mode).toBe('grid');
@@ -364,7 +383,7 @@ describe('updateGridFor: view_mode (G3)', () => {
   it('keeps a stored list recipe valid: a list recipe with a good column becomes grid (editor decides entry)', () => {
     const { owner } = setup();
     const r = make(owner, { view_mode: 'list' });
-    expect(ok(updateGridFor(db, owner, r.id, bodyFrom(r))).view_mode).toBe('grid');
+    expect(ok(updateGridFor(db, owner, r.id, bodyFrom(r), SHARE)).view_mode).toBe('grid');
   });
 });
 
@@ -373,9 +392,9 @@ describe('updateGridFor: conflicts (409)', () => {
     const { owner } = setup();
     const r = make(owner);
     const body = bodyFrom(r);
-    const first = ok(updateGridFor(db, owner, r.id, body));
+    const first = ok(updateGridFor(db, owner, r.id, body, SHARE));
     const before = snapshot('');
-    expect(updateGridFor(db, owner, r.id, body)).toEqual({
+    expect(updateGridFor(db, owner, r.id, body, SHARE)).toEqual({
       ok: false,
       status: 409,
       currentUpdatedAt: first.updated_at,
@@ -383,53 +402,61 @@ describe('updateGridFor: conflicts (409)', () => {
     expect(snapshot('')).toEqual(before);
     // Save mine anyway: resend with the stamp from the 409.
     expect(
-      updateGridFor(db, owner, r.id, { ...body, base_updated_at: first.updated_at }),
+      updateGridFor(db, owner, r.id, { ...body, base_updated_at: first.updated_at }, SHARE),
     ).toMatchObject({ ok: true });
   });
 
-  it('a recipe-form PUT or a visibility change between load and save conflicts (G13)', () => {
+  it('a recipe-form PUT between load and save conflicts (G13); a visibility change does not (v1.0 Q3)', () => {
     const { owner } = setup();
     const r = make(owner);
     const body = bodyFrom(r);
-    expect(updateRecipeFor(db, owner, r.id, { ...clone(), title: 'Renamed' })).toMatchObject({
-      ok: true,
-    });
-    expect(updateGridFor(db, owner, r.id, body)).toMatchObject({ ok: false, status: 409 });
-    const r2 = getRecipeFor(db, owner, r.id);
+    expect(updateRecipeFor(db, owner, r.id, { ...clone(), title: 'Renamed' }, SHARE)).toMatchObject(
+      {
+        ok: true,
+      },
+    );
+    expect(updateGridFor(db, owner, r.id, body, SHARE)).toMatchObject({ ok: false, status: 409 });
+    const r2 = getRecipeFor(db, owner, r.id, SHARE);
     if (!r2.ok) throw new Error();
     const body2 = bodyFrom(r2.recipe);
+    // Visibility is not a content write (R5): the stale base stays valid and the save lands.
     setVisibilityFor(db, owner, r.id, { visibility: 'users' });
-    expect(updateGridFor(db, owner, r.id, body2)).toMatchObject({ ok: false, status: 409 });
+    expect(updateGridFor(db, owner, r.id, body2, SHARE)).toMatchObject({ ok: true });
   });
 
-  // L1: with the clock frozen, a write in the same millisecond as the load must still move the
-  // stamp, or a stale base would pass the compare.
-  it('a recipe-form PUT or a visibility change in the same millisecond still conflicts (L1)', () => {
+  // L1: with the clock frozen, a content write in the same millisecond as the load must still
+  // move the stamp, or a stale base would pass the compare. A visibility change never moves it.
+  it('a recipe-form PUT in the same millisecond still conflicts (L1); a visibility change leaves the stamp', () => {
     const { owner } = setup();
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2030-01-01T00:00:00.000Z'));
     const r = make(owner);
     const body = bodyFrom(r);
-    expect(updateRecipeFor(db, owner, r.id, { ...clone(), title: 'Same ms' })).toMatchObject({
-      ok: true,
-    });
-    expect(updateGridFor(db, owner, r.id, body)).toMatchObject({ ok: false, status: 409 });
-    const r2 = getRecipeFor(db, owner, r.id);
+    expect(updateRecipeFor(db, owner, r.id, { ...clone(), title: 'Same ms' }, SHARE)).toMatchObject(
+      {
+        ok: true,
+      },
+    );
+    expect(updateGridFor(db, owner, r.id, body, SHARE)).toMatchObject({ ok: false, status: 409 });
+    const r2 = getRecipeFor(db, owner, r.id, SHARE);
     if (!r2.ok) throw new Error();
-    const body2 = bodyFrom(r2.recipe);
     setVisibilityFor(db, owner, r.id, { visibility: 'users' });
-    expect(updateGridFor(db, owner, r.id, body2)).toMatchObject({ ok: false, status: 409 });
-    const r3 = getRecipeFor(db, owner, r.id);
+    const r3 = getRecipeFor(db, owner, r.id, SHARE);
     if (!r3.ok) throw new Error();
-    expect(r3.recipe.updated_at > r2.recipe.updated_at).toBe(true);
+    expect(r3.recipe.updated_at).toBe(r2.recipe.updated_at);
+    // The grid save after it is a content write and does move the stamp, even in the same ms.
+    expect(updateGridFor(db, owner, r.id, bodyFrom(r3.recipe), SHARE)).toMatchObject({ ok: true });
+    const r4 = getRecipeFor(db, owner, r.id, SHARE);
+    if (!r4.ok) throw new Error();
+    expect(r4.recipe.updated_at > r3.recipe.updated_at).toBe(true);
   });
 
   it('a tag-only change on the recipe form also conflicts (the form PUT bumps updated_at)', () => {
     const { owner } = setup();
     const r = make(owner);
     const body = bodyFrom(r);
-    updateRecipeFor(db, owner, r.id, { ...clone(), tags: ['new'] });
-    expect(updateGridFor(db, owner, r.id, body)).toMatchObject({ ok: false, status: 409 });
+    updateRecipeFor(db, owner, r.id, { ...clone(), tags: ['new'] }, SHARE);
+    expect(updateGridFor(db, owner, r.id, body, SHARE)).toMatchObject({ ok: false, status: 409 });
   });
 });
 
@@ -441,10 +468,16 @@ describe('updateGridFor: derived measures (C7)', () => {
   });
   const put = (owner: Loose, r: ReturnType<typeof make>, ing: Loose) =>
     ok(
-      updateGridFor(db, owner as never, r.id, {
-        base_updated_at: r.updated_at,
-        sections: [one(ing)],
-      }),
+      updateGridFor(
+        db,
+        owner as never,
+        r.id,
+        {
+          base_updated_at: r.updated_at,
+          sections: [one(ing)],
+        },
+        SHARE,
+      ),
     );
 
   it('re-derives the cleared side after a primary quantity change, never touching the primary', () => {
@@ -492,6 +525,7 @@ describe('updateGridFor: shape of 422 errors is mappable to editor paths', () =>
         s[0].ingredients[1].name = '';
         s[0].steps[2].label = '';
       }),
+      SHARE,
     );
     if (res.ok || res.status !== 422) throw new Error();
     expect(res.errors).toEqual(
@@ -512,14 +546,14 @@ describe('open item O2 (schema facts)', () => {
       base_updated_at: r.updated_at,
       sections: [{ title: null, ingredients: [], steps: [] }],
     };
-    const out = ok(updateGridFor(db, owner, r.id, empty));
+    const out = ok(updateGridFor(db, owner, r.id, empty, SHARE));
     expect(out.view_mode).toBe('list');
     expect(out.sections[0]).toMatchObject({ ingredients: [], steps: [] });
     const noLabel = {
       base_updated_at: out.updated_at,
       sections: [{ title: null, ingredients: [], steps: [{ kind: 'banner_top', label: '  ' }] }],
     };
-    const res = updateGridFor(db, owner, r.id, noLabel);
+    const res = updateGridFor(db, owner, r.id, noLabel, SHARE);
     if (res.ok || res.status !== 422) throw new Error();
     expect(res.errors).toEqual([{ path: 'sections.0.steps.0.label', code: 'too_small' }]);
   });

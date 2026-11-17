@@ -15,6 +15,8 @@ import {
 import { SAMPLE_SKILLET_COOKIES } from '@/lib/recipes/samples';
 import type { RecipeInput } from '@/lib/recipes/schemas';
 
+const SHARE = { baseUrl: '', publicLinksEnabled: false };
+
 // Security checkpoint T8 (v0.4.0): regression tests for the visibility and cost findings.
 
 let db: Db;
@@ -47,7 +49,7 @@ const body = (over: Partial<RecipeInput> = {}, names?: string[][]): RecipeInput 
       : SAMPLE_SKILLET_COOKIES.sections,
   }) as RecipeInput;
 const make = (actor: Actor, over: Partial<RecipeInput> = {}, names?: string[][]) => {
-  const r = createRecipeFor(db, actor, body(over, names));
+  const r = createRecipeFor(db, actor, body(over, names), SHARE);
   if (!r.ok) throw new Error(JSON.stringify(r));
   return r.recipe.id;
 };
@@ -113,7 +115,13 @@ describe('FTS trigger cost is linear (F1)', () => {
     const names = sections(200);
     const id = make(a, { tags: ['big', 'bulk'], visibility: 'users' }, names);
     expect(ftsRow(id)!.ingredients.split(' ').length).toBeGreaterThan(8000);
-    const upd = updateRecipeFor(db, a, id, body({ tags: ['big'], visibility: 'users' }, names));
+    const upd = updateRecipeFor(
+      db,
+      a,
+      id,
+      body({ tags: ['big'], visibility: 'users' }, names),
+      SHARE,
+    );
     expect(upd.ok).toBe(true);
     const copied = copyRecipeFor(db, b, id);
     if (!copied.ok) throw new Error('copy failed');
@@ -135,11 +143,12 @@ describe('FTS trigger cost is linear (F1)', () => {
       a,
       id,
       body({ tags: Array.from({ length: 21 }, (_, i) => `t${i}`) }, [['beta']]),
+      SHARE,
     );
     expect(bad.ok).toBe(false);
     expect(db.$client.prepare('select count(*) n from recipe_fts_defer').get()).toEqual({ n: 0 });
     expect(ftsRow(id)!.ingredients).toBe('alpha');
-    expect(updateRecipeFor(db, a, id, body({ tags: ['t'] }, [['beta']])).ok).toBe(true);
+    expect(updateRecipeFor(db, a, id, body({ tags: ['t'] }, [['beta']]), SHARE).ok).toBe(true);
     expect(ftsRow(id)).toMatchObject({ ingredients: 'beta', tags: 't' });
   });
 

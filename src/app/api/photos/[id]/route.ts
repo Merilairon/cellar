@@ -4,7 +4,7 @@ import { getPhoto } from '@/lib/db/photos';
 import { getRecipeRow } from '@/lib/db/recipes';
 import { getEnv } from '@/lib/env';
 import { resolveUploadPath } from '@/lib/import/uploads';
-import { canRead } from '@/lib/recipes/access';
+import { canView } from '@/lib/recipes/access';
 import { authenticate, failure, json, noStore } from '@/lib/recipes/http';
 import { deletePhotoFor } from '@/lib/recipes/photos';
 
@@ -46,7 +46,7 @@ export async function GET(request: Request, { params }: Ctx) {
   const db = getDb();
   const p = getPhoto(db, (await params).id);
   const recipe = p ? getRecipeRow(db, p.recipeId) : undefined;
-  if (!p || !recipe || !canRead(auth.user, recipe))
+  if (!p || !recipe || !canView(auth.user, recipe))
     return noStore(new Response(null, { status: 404 }));
   const useThumb = sizes.length === 1 && p.thumbPath !== null;
   const rel = useThumb ? p.thumbPath! : p.filePath;
@@ -64,7 +64,7 @@ export async function GET(request: Request, { params }: Ctx) {
   }
 }
 
-/** canWrite (owner or admin): 403 for a reader of a `users` recipe, 404 when unreadable. */
+/** canEdit (owner or admin): 403 for a reader of a `users` recipe, 404 when unreadable. */
 export async function DELETE(request: Request, { params }: Ctx) {
   const auth = await authenticate(request);
   if (auth instanceof Response) return noStore(auth);

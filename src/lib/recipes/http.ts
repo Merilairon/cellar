@@ -35,6 +35,12 @@ export async function authenticate(request: Request): Promise<{ user: User } | R
   return { user };
 }
 
+/** Share-link settings for `toApiRecipe` (token URL base, links on/off). */
+export function shareContext(): { baseUrl: string; publicLinksEnabled: boolean } {
+  const env = getEnv();
+  return { baseUrl: env.BASE_URL, publicLinksEnabled: env.PUBLIC_LINKS_ENABLED };
+}
+
 /** Body caps (bytes) for JSON endpoints that accept free text. */
 export const IMPORT_BODY_MAX = 1024 * 1024;
 export const SAVE_BODY_MAX = 256 * 1024;

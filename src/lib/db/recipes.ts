@@ -232,6 +232,11 @@ export function getRecipeRow(db: Db, id: string): RecipeRow | undefined {
   return db.select().from(recipe).where(eq(recipe.id, id)).get();
 }
 
+/** Exact lookup by share token (unique index). The caller still runs `canView` on the row. */
+export function getRecipeRowByShareToken(db: Db, token: string): RecipeRow | undefined {
+  return db.select().from(recipe).where(eq(recipe.shareToken, token)).get();
+}
+
 function loadFull(conn: Conn, id: string): RecipeFull | undefined {
   const r = conn.select().from(recipe).where(eq(recipe.id, id)).get();
   if (!r) return undefined;
@@ -288,6 +293,11 @@ export function deleteRecipe(db: Db, id: string, guard?: RecipeGuard): boolean {
   );
 }
 
+/**
+ * Visibility is not a content write: `updated_at` is left alone (v1.0 Q3, R5), so an open grid
+ * editor's `base_updated_at` stays valid, the newest-first order does not move, and
+ * `isImportedUnedited` keeps detecting an untouched import.
+ */
 export function setRecipeVisibility(
   db: Db,
   id: string,
@@ -299,10 +309,30 @@ export function setRecipeVisibility(
       const row = tx.select().from(recipe).where(eq(recipe.id, id)).get();
       if (!row) return false;
       enforce(guard, row);
-      tx.update(recipe)
-        .set({ visibility, updatedAt: stampAfter(row.updatedAt) })
-        .where(eq(recipe.id, id))
-        .run();
+      tx.update(recipe).set({ visibility }).where(eq(recipe.id, id)).run();
+      return true;
+    },
+    { behavior: 'immediate' },
+  );
+}
+
+/**
+ * Set or clear the public share token (`null` revokes). One UPDATE that does NOT touch
+ * `updated_at` (v1.0 R5: sharing is not a content write), guard checked in the same
+ * transaction. Returns false when the recipe does not exist.
+ */
+export function setShareToken(
+  db: Db,
+  id: string,
+  token: string | null,
+  guard?: RecipeGuard,
+): boolean {
+  return db.transaction(
+    (tx) => {
+      const row = tx.select().from(recipe).where(eq(recipe.id, id)).get();
+      if (!row) return false;
+      enforce(guard, row);
+      tx.update(recipe).set({ shareToken: token }).where(eq(recipe.id, id)).run();
       return true;
     },
     { behavior: 'immediate' },

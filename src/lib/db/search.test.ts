@@ -12,6 +12,8 @@ import {
 import { SAMPLE_SKILLET_COOKIES } from '@/lib/recipes/samples';
 import type { RecipeInput } from '@/lib/recipes/schemas';
 
+const SHARE = { baseUrl: '', publicLinksEnabled: false };
+
 let db: Db;
 let a: Actor;
 let b: Actor;
@@ -44,7 +46,7 @@ function add(actor: Actor, over: Partial<RecipeInput> & { names?: string[] }): s
       ? [{ title: null, ingredients: names.map(ingr), steps: [] }]
       : SAMPLE_SKILLET_COOKIES.sections,
   };
-  const r = createRecipeFor(db, actor, body);
+  const r = createRecipeFor(db, actor, body, SHARE);
   if (!r.ok) throw new Error(JSON.stringify(r));
   return r.recipe.id;
 }
@@ -135,12 +137,18 @@ describe('searchRecipes', () => {
 
   it('stays in sync after an update', () => {
     const id = add(a, { names: ['espresso'] });
-    const upd = updateRecipeFor(db, a, id, {
-      ...SAMPLE_SKILLET_COOKIES,
-      visibility: 'private',
-      tags: [],
-      sections: [{ title: null, ingredients: [ingr('matcha')], steps: [] }],
-    });
+    const upd = updateRecipeFor(
+      db,
+      a,
+      id,
+      {
+        ...SAMPLE_SKILLET_COOKIES,
+        visibility: 'private',
+        tags: [],
+        sections: [{ title: null, ingredients: [ingr('matcha')], steps: [] }],
+      },
+      SHARE,
+    );
     expect(upd.ok).toBe(true);
     expect(ids(a, { q: 'espresso' })).toEqual([]);
     expect(ids(a, { q: 'matcha' })).toEqual([id]);
@@ -237,7 +245,7 @@ describe('searchRecipes', () => {
       ],
     };
     const t2 = performance.now();
-    for (let i = 0; i < 5; i++) expect(updateRecipeFor(db, a, target, body).ok).toBe(true);
+    for (let i = 0; i < 5; i++) expect(updateRecipeFor(db, a, target, body, SHARE).ok).toBe(true);
     const t3 = performance.now();
     for (let i = 0; i < 20; i++) searchRecipes(db, b.id, { q: 'ingredient3 item1' });
     const t4 = performance.now();

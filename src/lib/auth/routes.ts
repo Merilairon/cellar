@@ -7,6 +7,7 @@ const PUBLIC_EXACT = new Set([
   '/login',
   '/setup',
   '/api/health',
+  '/robots.txt',
   '/api/setup',
   '/api/auth/login',
   '/api/auth/register',

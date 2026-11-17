@@ -72,7 +72,7 @@ export function RatingPanel({ recipeId, initial }: { recipeId: string; initial: 
   };
 
   return (
-    <div className="mt-3 flex flex-col gap-2">
+    <div className="mt-3 flex flex-col gap-2 print:hidden">
       <RatingSummary avg={rating.avg} count={rating.count} />
       <StarRating mine={rating.mine} onSelect={select} onClear={() => void clear()} />
       <p role="status" aria-live="polite" className="text-sm">

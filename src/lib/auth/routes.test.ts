@@ -9,6 +9,7 @@ describe('isPublicPath', () => {
     '/reset/abc',
     '/r/abc',
     '/api/health',
+    '/robots.txt',
     '/api/auth/login',
     '/_next/static/x.js',
   ])('allows %s', (p) => expect(isPublicPath(p)).toBe(true));
@@ -27,6 +28,8 @@ describe('isPublicPath', () => {
     '/reset',
     '/r',
     '/api/health/x',
+    '/robots.txt/x',
+    '/robots.txtx',
     '/api/admin/users',
     '/api/auth/logout',
     '/register//x',

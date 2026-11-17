@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 /**
  * Set the cover. Nested under the recipe (chosen over `PUT /api/photos/:id/cover`) so the
  * recipe id in the URL is part of the authorization: a photo id that belongs to another recipe
- * is a 404, never a cross-recipe write. Writes need canWrite (403 for a reader, 404 when the
+ * is a 404, never a cross-recipe write. Writes need canEdit (403 for a reader, 404 when the
  * recipe is unreadable). Responds with the recipe's photos in order.
  */
 export async function PUT(

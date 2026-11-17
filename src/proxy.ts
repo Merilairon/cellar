@@ -2,10 +2,17 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { SESSION_COOKIE } from '@/lib/auth/cookie-name';
 import { isPublicPath } from '@/lib/auth/routes';
 import { generateNonce, securityHeaders } from '@/lib/security/headers';
+import {
+  isPublicSharePath,
+  PUBLIC_RATE_LIMITED_BODY,
+  publicRateLimit,
+} from '@/lib/security/public-limit';
 
 /**
  * Next 16.4.5 file convention: `proxy.ts` (`middleware.ts` is deprecated, same API).
- * Edge-safe on purpose: Web APIs only, no db, argon2 or node:* imports (ESLint-enforced).
+ * Runs on the Node.js runtime (Next 16 default), in the same process as the routes. Keep it
+ * light anyway: no db or argon2 (ESLint-enforced), and no direct node:* imports; the public
+ * limiter reaches `node:net` only through the client-IP helpers.
  *
  * Two jobs:
  * 1. Cheap first gate: a request without a session cookie never reaches a page. A forged
@@ -13,6 +20,9 @@ import { generateNonce, securityHeaders } from '@/lib/security/headers';
  *    requireAdmin: session row, expiry, deactivated user, admin role).
  * 2. Security headers (CSP with per-request nonce, nosniff, frame-ancestors, Referrer-Policy,
  *    X-Frame-Options legacy mirror; no HSTS) on every response, including redirects and 401s.
+ * 3. `/r/*` (public share links): `Referrer-Policy: no-referrer` instead of `same-origin`, so
+ *    the secret token in the URL never leaves in a Referer header, and a per-IP rate limit
+ *    (429 with Retry-After; a page cannot return 429, so it lives here).
  */
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -22,10 +32,28 @@ export function proxy(request: NextRequest) {
     https: (process.env.BASE_URL ?? '').startsWith('https://'),
     dev: process.env.NODE_ENV !== 'production',
   });
+  const sharePath = isPublicSharePath(pathname);
+  if (sharePath) sec['Referrer-Policy'] = 'no-referrer';
   const withHeaders = (res: NextResponse) => {
     for (const [k, v] of Object.entries(sec)) res.headers.set(k, v);
     return res;
   };
+
+  if (sharePath) {
+    const retryAfter = publicRateLimit(request.headers);
+    if (retryAfter !== null) {
+      return withHeaders(
+        new NextResponse(PUBLIC_RATE_LIMITED_BODY, {
+          status: 429,
+          headers: {
+            'Retry-After': String(retryAfter),
+            'Content-Type': 'text/plain; charset=utf-8',
+            'Cache-Control': 'no-store',
+          },
+        }),
+      );
+    }
+  }
 
   if (isPublicPath(pathname) || request.cookies.has(SESSION_COOKIE)) {
     // Next picks the nonce up from the request CSP header and applies it to its scripts.

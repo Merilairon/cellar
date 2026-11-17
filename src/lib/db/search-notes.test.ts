@@ -7,6 +7,8 @@ import { createRecipeFor, type Actor } from '@/lib/recipes/service';
 import { SAMPLE_SKILLET_COOKIES } from '@/lib/recipes/samples';
 import type { RecipeInput } from '@/lib/recipes/schemas';
 
+const SHARE = { baseUrl: '', publicLinksEnabled: false };
+
 // T7 (v0.4.2): notes in search with per-user visibility. Tests tagged [PRIVATE-NOTE] are the
 // ones the recorded negative control (removing `shared = 1 or user_id = me`) must break.
 
@@ -30,13 +32,18 @@ beforeEach(() => {
 afterEach(() => db.$client.close());
 
 const make = (actor: Actor, title: string, over: Partial<RecipeInput> = {}) => {
-  const r = createRecipeFor(db, actor, {
-    ...SAMPLE_SKILLET_COOKIES,
-    title,
-    visibility: 'users',
-    tags: [],
-    ...over,
-  } as RecipeInput);
+  const r = createRecipeFor(
+    db,
+    actor,
+    {
+      ...SAMPLE_SKILLET_COOKIES,
+      title,
+      visibility: 'users',
+      tags: [],
+      ...over,
+    } as RecipeInput,
+    SHARE,
+  );
   if (!r.ok) throw new Error(JSON.stringify(r));
   return r.recipe.id;
 };

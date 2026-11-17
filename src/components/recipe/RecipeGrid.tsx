@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { buildSectionLayout } from '@/lib/grid/layout';
+import { maxColumnsInSection } from '@/lib/recipes/view-mode';
 import { formatStepParams, type StepT } from './formatStep';
 import { IngredientCell, type QuantityDisplay } from './IngredientCell';
 import { ScrollRegion } from './ScrollRegion';
@@ -53,7 +54,7 @@ export function RecipeGrid({
   const multiple = sections.length > 1;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6" data-cols={maxColumnsInSection(sections)}>
       {sections.map((section, si) => {
         const layout = buildSectionLayout(section.ingredients.length, section.steps);
         const title = section.title || (multiple ? t('recipe.section', { n: si + 1 }) : null);

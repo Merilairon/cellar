@@ -1030,8 +1030,9 @@ dialog.rg-sheet.ck-dialog {
   color: var(--rg-muted);
   font-size: 0.8em;
 }
-.ck-wake:empty {
-  display: none;
+.ck-wake:empty::before {
+  /* Reserve the notice line before the wake-lock result arrives so the grid below never shifts. */
+  content: '\200b';
 }
 .ck-body {
   padding: 12px 16px 24px;
@@ -1159,5 +1160,201 @@ li > .ck-item > .ck-strip {
 @media (max-width: 639px) {
   .ck-dialog .rg-table th.rg-ing {
     font-size: 1em;
+  }
+}
+
+/* ---------- Print (v0.5.0 T6, docs/tasks/v1.0-ux-spec.md section 4) ----------
+   Everything below is inside @media print (plus @page), so the screen rendering is unchanged.
+
+   Font steps, measured (T0 spike 2 and T6; Chromium page.pdf, landscape, A4 and Letter, both seed
+   samples from the recipe page and the public page; page count AND no horizontal overflow of the
+   print table, scrollWidth <= clientWidth, because overflow: visible clips instead of paging):
+     data-cols 0 to 6   table 10pt (13.3px), cell padding 4px 8px, ingredient column 62mm
+     data-cols 7 to 10  table 9pt  (12px),   cell padding 3px 5px, ingredient column 52mm
+     data-cols 11+      table 7pt  (9.3px),  cell padding 2px 4px, ingredient column 44mm
+   Only the table scales (not the page root). Thresholds for the two-section cake on the PUBLIC
+   page (the tallest case: source banner on top), A4 landscape: 10.5pt fits, 11pt (the UX spec
+   placeholder) gives 2 pages; 10pt is chosen for headroom with longer real recipes. With the
+   root font scaled instead (spike 2) the cake needed 13px or less (about 9.75pt). The fixed table
+   layout plus overflow-wrap: anywhere means no width overflow was measured for 5 to 16 step
+   columns at these steps. The 7pt floor is never undercut; a grid taller than a page prints on as
+   few pages as possible
+   (rows never split, no forced breaks). */
+@page {
+  size: landscape;
+  margin: 10mm;
+}
+@media print {
+  :root,
+  :root[data-theme='dark'],
+  :root:not([data-theme]) {
+    color-scheme: light;
+    --rg-surface: #ffffff;
+    --rg-ink: #1f2a1f;
+    --rg-muted: #4d5b4d;
+    /* One step darker than the screen line so thin borders survive greyscale printers. */
+    --rg-line: #3f7a25;
+    --rg-banner: #eef5e9;
+    --rg-empty: #f4f7f1;
+    --rg-step: #e3f0da;
+    --rg-accent: #3f7a25;
+  }
+  html,
+  body {
+    background: #ffffff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  /* Beat the Tailwind dark: utilities; the grid fills are re-applied right below. */
+  body,
+  body * {
+    color: #1f2a1f !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+  body a {
+    text-decoration: underline;
+  }
+  /* Source address on paper (UX spec 4.1 item 2). */
+  a.print-url::after {
+    content: ' (' attr(href) ')';
+    overflow-wrap: anywhere;
+  }
+
+  /* Hidden on paper: chrome, controls, photos, notices, decorative icons. */
+  body > header,
+  body header,
+  body nav,
+  body footer,
+  body dialog,
+  .rg-fade,
+  .rg-arrow,
+  .rg-detail,
+  svg[aria-hidden='true'],
+  body button:not(.rg-stepbtn),
+  main > div.lg\:grid > div:nth-child(2),
+  main > div.lg\:grid > div:first-child > p {
+    display: none !important;
+  }
+
+  /* Full page width: the screen max-width and the two-column title/photo layout go away. */
+  body > .max-w-5xl,
+  main.max-w-5xl {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+  main > div.lg\:grid {
+    display: block !important;
+  }
+
+  /* The grid. */
+  .rg-wrap {
+    container-type: normal;
+  }
+  .rg-scroller {
+    overflow: visible;
+    border-radius: 0;
+    border-width: 2px;
+    background-color: var(--rg-surface) !important;
+  }
+  [data-cols] {
+    --p-fs: 10pt;
+    --p-pad: 4px 8px;
+    --p-ing: 62mm;
+    gap: 10px !important;
+  }
+  [data-cols='7'],
+  [data-cols='8'],
+  [data-cols='9'],
+  [data-cols='10'] {
+    --p-fs: 9pt;
+    --p-pad: 3px 5px;
+    --p-ing: 52mm;
+  }
+  [data-cols='11'],
+  [data-cols='12'],
+  [data-cols='13'],
+  [data-cols='14'],
+  [data-cols='15'],
+  [data-cols='16'],
+  [data-cols='17'],
+  [data-cols='18'],
+  [data-cols='19'],
+  [data-cols='20'] {
+    --p-fs: 7pt;
+    --p-pad: 2px 4px;
+    --p-ing: 44mm;
+  }
+  [data-cols] > section {
+    break-inside: avoid;
+  }
+  [data-cols] h2 {
+    margin-bottom: 4px !important;
+  }
+  .rg-table {
+    width: 100%;
+    min-width: 0;
+    table-layout: fixed;
+    font-size: var(--p-fs, 11pt);
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .rg-table tr {
+    break-inside: avoid;
+  }
+  .rg-table th,
+  .rg-table td {
+    padding: var(--p-pad, 4px 6px);
+    overflow-wrap: anywhere;
+  }
+  /* The hidden header row sets the fixed column widths: ingredient column, then equal steps. */
+  .rg-table thead th:first-child {
+    width: var(--p-ing, 62mm);
+  }
+  .rg-table th.rg-ing {
+    position: static;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    font-size: 1em;
+    white-space: normal;
+    line-height: 1.25;
+    background-color: var(--rg-surface) !important;
+  }
+  .rg-table td.rg-step,
+  .rg-table td.rg-empty {
+    min-width: 0;
+    cursor: auto;
+    filter: none;
+  }
+  .rg-table td.rg-step {
+    background-color: var(--rg-step) !important;
+  }
+  .rg-table td.rg-empty {
+    background-color: var(--rg-empty) !important;
+  }
+  .rg-table td.rg-banner {
+    background-color: var(--rg-banner) !important;
+    font-size: 1em;
+  }
+  .rg-table td.rg-banner .rg-bn {
+    position: static;
+    width: auto;
+    max-width: none;
+  }
+  .rg-stepbtn {
+    min-height: 0;
+    cursor: auto;
+  }
+  .rg-par,
+  .rg-parinline,
+  .rg-portion,
+  .rg-note {
+    font-size: 0.9em;
+    color: var(--rg-muted) !important;
+  }
+  .rg-table td.rg-step[data-selected='true'] {
+    outline: 0;
   }
 }
