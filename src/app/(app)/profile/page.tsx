@@ -1,7 +1,10 @@
+import { titleFromCatalog } from '@/lib/page-meta';
 import { getTranslations } from 'next-intl/server';
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth/current-user';
 import { ProfileForm } from './form';
+
+export const generateMetadata = () => titleFromCatalog('profile.title');
 
 export default async function ProfilePage() {
   const t = await getTranslations();

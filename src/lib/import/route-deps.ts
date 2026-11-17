@@ -1,6 +1,7 @@
 import { getEnv } from '@/lib/env';
 import { createHeadless, type Headless } from './headless-client';
 import type { SafeFetchOptions } from './safe-fetch';
+import { log } from '@/lib/log';
 
 /**
  * The ONLY place fetch options are built. They derive from getEnv() alone; nothing from a
@@ -17,7 +18,7 @@ export function serverFetchOptions(): SafeFetchOptions {
 /** Server-side log: stable message plus the error text only, never page content. */
 export function importLog(msg: string, err?: unknown): void {
   const detail = err instanceof Error ? err.message : err === undefined ? '' : 'non-error';
-  console.warn(`[import] ${msg}${detail ? ` (${detail})` : ''}`);
+  log('warn', 'recipe_import.warning', { msg, ...(detail ? { detail } : {}) });
 }
 
 /**

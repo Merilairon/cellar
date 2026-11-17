@@ -15,6 +15,8 @@ const state = vi.hoisted(() => ({
   current: null as unknown,
   linksEnabled: true,
 }));
+const logs = vi.hoisted(() => [] as unknown[][]);
+vi.mock('@/lib/log', () => ({ log: (...a: unknown[]) => logs.push(a) }));
 vi.mock('@/lib/db', () => ({ getDb: () => state.db }));
 vi.mock('@/lib/auth/current-user', () => ({ getCurrentUser: async () => state.current }));
 vi.mock('@/lib/env', () => ({
@@ -39,6 +41,7 @@ beforeEach(() => {
   runMigrations(db);
   state.db = db;
   state.linksEnabled = true;
+  logs.length = 0;
   owner = mk('o@x.test');
   other = mk('x@x.test');
   state.current = owner;
@@ -157,18 +160,32 @@ describe('POST/DELETE /api/recipes/:id/share-link', () => {
     expect(canView(null, stored(id), { token: old, publicLinksEnabled: true })).toBe(false);
   });
 
-  it('PUBLIC_LINKS_ENABLED=false: 403 public_links_disabled on both, tokens untouched', async () => {
+  it('PUBLIC_LINKS_ENABLED=false: POST is 403 public_links_disabled and changes nothing', async () => {
     const id = await make();
     await POST(req('POST'), ctx(id));
     const token = stored(id).shareToken;
     state.linksEnabled = false;
-    for (const res of [await POST(req('POST'), ctx(id)), await DELETE(req('DELETE'), ctx(id))]) {
-      expect(res.status).toBe(403);
-      expect(res.headers.get('cache-control')).toBe(NO_STORE);
-      expect(await res.json()).toEqual({ error: 'public_links_disabled' });
-    }
+    const res = await POST(req('POST'), ctx(id));
+    expect(res.status).toBe(403);
+    expect(res.headers.get('cache-control')).toBe(NO_STORE);
+    expect(await res.json()).toEqual({ error: 'public_links_disabled' });
     expect(stored(id).shareToken).toBe(token);
     expect((await getJson(id)).public_links_enabled).toBe(false);
+  });
+
+  it('PUBLIC_LINKS_ENABLED=false: DELETE still revokes, so re-enabling cannot revive the link (m1)', async () => {
+    const id = await make();
+    await POST(req('POST'), ctx(id));
+    state.linksEnabled = false;
+    const res = await DELETE(req('DELETE'), ctx(id));
+    expect(res.status).toBe(204);
+    expect(res.headers.get('cache-control')).toBe(NO_STORE);
+    expect(stored(id).shareToken).toBeNull();
+    state.linksEnabled = true;
+    expect((await getJson(id)).share).toEqual({ enabled: false, token: null, url: null });
+    // Still authenticated and owned: a stranger is refused even while disabled.
+    state.current = other;
+    expect((await DELETE(req('DELETE'), ctx(id))).status).toBe(404);
   });
 
   it('updated_at is byte-identical across create, rotate and revoke (R5)', async () => {
@@ -248,5 +265,47 @@ describe('share state in responses', () => {
     const row = db.select().from(recipe).where(eq(recipe.id, copy.id)).get()!;
     expect(row.shareToken).toBeNull();
     expect(row.visibility).toBe('private');
+  });
+});
+
+describe('share link log events (G18)', () => {
+  it('created, rotated and revoked carry recipe and actor ids, never the token or url', async () => {
+    const id = await make();
+    logs.length = 0;
+    const first = await POST(req('POST'), ctx(id));
+    const token = ((await first.json()) as Loose).share.token as string;
+    await POST(req('POST'), ctx(id));
+    await DELETE(req('DELETE'), ctx(id));
+    const fields = { recipe_id: id, actor_id: owner.id };
+    expect(logs).toEqual([
+      ['info', 'share_link.created', fields],
+      ['info', 'share_link.rotated', fields],
+      ['info', 'share_link.revoked', fields],
+    ]);
+    expect(JSON.stringify(logs)).not.toContain(token);
+    expect(JSON.stringify(logs)).not.toContain('/r/');
+  });
+
+  it('refused calls (disabled, not allowed, signed out) log nothing', async () => {
+    const id = await make();
+    logs.length = 0;
+    state.linksEnabled = false;
+    await POST(req('POST'), ctx(id));
+    state.linksEnabled = true;
+    state.current = other;
+    await POST(req('POST'), ctx(id));
+    await DELETE(req('DELETE'), ctx(id));
+    state.current = null;
+    await POST(req('POST'), ctx(id));
+    expect(logs).toEqual([]);
+  });
+
+  it('revoking while links are disabled is logged too', async () => {
+    const id = await make();
+    await POST(req('POST'), ctx(id));
+    logs.length = 0;
+    state.linksEnabled = false;
+    await DELETE(req('DELETE'), ctx(id));
+    expect(logs).toEqual([['info', 'share_link.revoked', { recipe_id: id, actor_id: owner.id }]]);
   });
 });

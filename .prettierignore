@@ -13,3 +13,7 @@ milestones
 dist
 tests/fixtures/
 docker/browser/seccomp.base.json
+graphify-out
+.agents
+skills-lock.json
+CLAUDE.md

@@ -171,7 +171,7 @@ export const backupRatingSchema = z.strictObject({
 
 export const backupRecipeSchema = z
   .strictObject({
-    title: str(200).min(1),
+    title: z.string().trim().min(1).max(200),
     description: nstr(5000),
     servings: z.number().finite().positive().max(10_000).nullable(),
     servings_label: nstr(60),
@@ -200,8 +200,8 @@ export const backupRecipeSchema = z
     if (v.source_url !== null) {
       let ok = false;
       try {
-        const p = new URL(v.source_url).protocol;
-        ok = p === 'http:' || p === 'https:';
+        const u = new URL(v.source_url);
+        ok = (u.protocol === 'http:' || u.protocol === 'https:') && !u.username && !u.password;
       } catch {
         ok = false;
       }

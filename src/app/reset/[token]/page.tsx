@@ -1,9 +1,22 @@
+import type { Metadata } from 'next';
+import { notFoundMetadata, titleFromCatalog } from '@/lib/page-meta';
 import { getTranslations } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { isResetTokenUsable } from '@/lib/auth/resets';
 import { getDb } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ token: string }>;
+}): Promise<Metadata> {
+  // An unusable token renders the shared 404, so it must also get the shared 404 title.
+  return isResetTokenUsable(getDb(), (await params).token)
+    ? titleFromCatalog('reset.title')
+    : notFoundMetadata();
+}
 
 export default async function ResetPage({
   params,

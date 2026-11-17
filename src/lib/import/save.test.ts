@@ -447,7 +447,7 @@ describe('saveImport cover (T8)', () => {
   });
 
   it('a failed cover never blocks the save: recipe saved, cover_failed warning', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const id = await start();
     const r = await saveImport(
       db,
@@ -464,7 +464,7 @@ describe('saveImport cover (T8)', () => {
   });
 
   it('a pixel bomb cover (declared 25 MP, tiny on the wire) is refused: saved without cover, no file', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const bomb = await sharp({
       create: { width: 5000, height: 5000, channels: 3, background: '#000' },
     })
@@ -491,7 +491,7 @@ describe('saveImport cover (T8)', () => {
   });
 
   it('a cover whose header lies about its size (undeclared pixels) never produces a file', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const real = await sharp({
       create: { width: 5000, height: 5000, channels: 3, background: '#000' },
     })

@@ -748,11 +748,11 @@ describe('concurrency and atomicity', () => {
     rmSync(join(state.dir, row.filePath));
     mkdirSync(join(state.dir, row.filePath));
     writeFileSync(join(state.dir, row.filePath, 'x'), 'x');
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const warn = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     as(owner);
     expect((await delPhoto(p.id)).status).toBe(204);
     expect(rows()).toBe(0);
-    expect(warn).toHaveBeenCalled();
+    expect(warn.mock.calls.join('')).toContain('"event":"uploads.remove_failed"');
     warn.mockRestore();
   });
 
@@ -871,7 +871,7 @@ describe('Save a copy', () => {
     await add(rid);
     const [first] = listPhotos(db, rid);
     rmSync(join(state.dir, first!.filePath));
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const warn = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const cid = await copy(rid, alice);
     warn.mockRestore();
     const dup = listPhotos(db, cid);

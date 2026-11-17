@@ -156,7 +156,7 @@ export function RestoreView({
             <div className="flex flex-wrap items-center gap-3">
               <button
                 type="button"
-                className={`${btnPrimary} ${state.file ? '' : 'opacity-60'}`}
+                className={btnPrimary}
                 aria-disabled={!state.file}
                 aria-describedby={!state.file ? reasonId : undefined}
                 onClick={() => {
@@ -314,7 +314,7 @@ function ApplyBar({
       <div className="flex flex-wrap items-center gap-3">
         <button
           type="button"
-          className={`${btnPrimary} ${none || applying ? 'opacity-60' : ''}`}
+          className={btnPrimary}
           aria-disabled={none || applying}
           aria-describedby={none ? reasonId : undefined}
           onClick={() => {

@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "skills": {
+    "create-readme": {
+      "source": "registry:github/create-readme",
+      "commit_sha": "e986f49695491311df2774030ebe11efabd0fb77",
+      "digest": "sha256:12092dc125c4cae2f066203e1b45f884bb3d2759ea21dfe439899d1307c721a9",
+      "agents": [
+        "claude-code",
+        "mistral-vibe"
+      ],
+      "mode": {
+        "claude-code": "symlink",
+        "mistral-vibe": "symlink"
+      }
+    }
+  }
+}

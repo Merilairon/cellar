@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -10,13 +10,22 @@ export function UserMenu({ name }: { name: string }) {
   const pathname = usePathname();
   const [open, setOpen] = useState<string | null>(null);
   const isOpen = open === pathname;
+  const toggle = useRef<HTMLButtonElement>(null);
 
   return (
-    <div className="relative">
+    <div
+      className="relative"
+      onKeyDown={(e) => {
+        if (e.key === 'Escape' && isOpen) {
+          setOpen(null);
+          toggle.current?.focus();
+        }
+      }}
+    >
       <button
+        ref={toggle}
         type="button"
         aria-expanded={isOpen}
-        aria-haspopup="true"
         aria-label={`${t('nav.userMenu')}: ${name}`}
         onClick={() => setOpen(isOpen ? null : pathname)}
         className="flex h-10 max-w-40 items-center rounded px-3 hover:bg-neutral-200 dark:hover:bg-neutral-800"

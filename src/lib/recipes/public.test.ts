@@ -174,3 +174,16 @@ describe('getPublicRecipe', () => {
     );
   });
 });
+
+describe('getPublicRecipe onHit (public_page.hit)', () => {
+  it('fires once with the recipe id for a resolved token, never for a failure', () => {
+    const seen: string[] = [];
+    expect(getPublicRecipe(db, token, ON, (rid) => seen.push(rid))).not.toBeNull();
+    expect(seen).toEqual([id]);
+    seen.length = 0;
+    expect(getPublicRecipe(db, 'x'.repeat(22), ON, (rid) => seen.push(rid))).toBeNull();
+    expect(getPublicRecipe(db, 'bad', ON, (rid) => seen.push(rid))).toBeNull();
+    expect(getPublicRecipe(db, token, OFF, (rid) => seen.push(rid))).toBeNull();
+    expect(seen).toEqual([]);
+  });
+});

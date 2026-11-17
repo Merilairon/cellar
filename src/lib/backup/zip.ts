@@ -1,6 +1,7 @@
 import { createReadStream } from 'node:fs';
 import type { Readable } from 'node:stream';
 import { crc32 } from 'node:zlib';
+import { log } from '@/lib/log';
 
 // Stored-entry (method 0) streaming zip writer (T10, G14, Q6). No dependency, no ZIP64.
 //
@@ -41,7 +42,7 @@ export type ZipOptions = {
   /** Test seam: how a file is opened. Defaults to `createReadStream` with 64 KiB chunks. */
   open?: (path: string) => Readable;
   /** Called exactly once when the stream ends, errors or is cancelled. */
-  onClose?: () => void;
+  onClose?: (info: { bytes: number; completed: boolean }) => void;
 };
 
 const SIG_LOCAL = 0x04034b50;
@@ -196,23 +197,27 @@ export function createZipStream(
 
   const gen = generate();
   let closed = false;
+  let bytes = 0;
+  let completed = false;
   const close = () => {
     if (closed) return;
     closed = true;
-    opts.onClose?.();
+    opts.onClose?.({ bytes, completed });
   };
   return new ReadableStream<Uint8Array>({
     async pull(controller) {
       try {
         const r = await gen.next();
         if (r.done) {
+          completed = true;
           close();
           controller.close();
         } else {
+          bytes += r.value.byteLength;
           controller.enqueue(r.value);
         }
       } catch (err) {
-        console.error('[export] stream failed', (err as Error).message);
+        log('error', 'export.stream_failed', { err });
         close();
         controller.error(err);
       }

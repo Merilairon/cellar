@@ -16,6 +16,7 @@ import {
   type StageKind,
 } from '@/lib/backup/staging';
 import { MAX_MANIFEST_BYTES } from '@/lib/backup/unzip';
+import { errCode, log } from '@/lib/log';
 import { authenticate } from '@/lib/recipes/http';
 import { restoreLimiter } from '@/lib/security/export-limits';
 import { fail, hardened, loadBackup, msg, readIdle } from './shared';
@@ -113,11 +114,21 @@ export async function POST(request: Request) {
   let keep = false;
   try {
     const streamed = await streamToFile(request, path, max);
+    if (streamed !== 'ok') {
+      log('warn', 'restore.failed', { user_id: user.id, phase: 'stage', code: streamed });
+    }
     if (streamed === 'too_large') return fail(413, 'backup_too_large', msg.tooLarge);
     if (streamed === 'timeout') return fail(408, 'request_timeout', msg.timeout);
 
     const loaded = await loadBackup(path, kind);
-    if (!loaded.ok) return loaded.response;
+    if (!loaded.ok) {
+      log('warn', 'restore.failed', {
+        user_id: user.id,
+        phase: 'stage',
+        status: loaded.response.status,
+      });
+      return loaded.response;
+    }
     try {
       const actor = { id: user.id, role: user.role };
       const preview = previewRestore(getDb(), actor, loaded.doc, loaded.archive);
@@ -126,6 +137,14 @@ export async function POST(request: Request) {
       const createdAt = Date.now();
       registerStage({ id, ownerId: user.id, kind, path, createdAt });
       keep = true;
+      log('info', 'restore.staged', {
+        user_id: user.id,
+        kind,
+        scope: preview.scope,
+        recipes: preview.recipes,
+        photos: preview.photos,
+        conflicts: preview.conflicts.length,
+      });
       return hardened(
         Response.json(
           {
@@ -144,7 +163,7 @@ export async function POST(request: Request) {
       await loaded.archive?.close();
     }
   } catch (e) {
-    console.error('[restore] stage failed', (e as Error).message);
+    log('error', 'restore.failed', { user_id: user.id, phase: 'stage', code: errCode(e) });
     return fail(500, 'restore_failed', msg.failed);
   } finally {
     release();

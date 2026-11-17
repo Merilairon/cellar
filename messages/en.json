@@ -181,10 +181,16 @@
       "deleteFailed": "Could not delete the photo. Try again."
     }
   },
+  "meta": {
+    "home": "Home",
+    "notFound": "Link not found",
+    "untitledRecipe": "Untitled recipe"
+  },
   "common": {
     "logout": "Sign out",
     "invalidLink": "This link is invalid or has expired.",
     "home": "Cellar",
+    "goHome": "Go to Cellar",
     "loading": "Loading"
   },
   "admin": {
@@ -900,7 +906,8 @@
     "toast": {
       "undo": "Undo",
       "dismiss": "Dismiss",
-      "available": "Undo available."
+      "available": "Undo available.",
+      "region": "Undo last deletion"
     },
     "section": {
       "rename": "Rename",

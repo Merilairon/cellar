@@ -18,6 +18,13 @@ services:
       # Comma-separated IPs/CIDRs whose X-Forwarded-* headers are trusted. Empty = none.
       # With the caddy profile set it to 172.28.0.10 (Caddy's fixed address below).
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+      RATE_LIMIT_LOGIN_MAX: ${RATE_LIMIT_LOGIN_MAX:-20}
+      RATE_LIMIT_LOGIN_EMAIL_MAX: ${RATE_LIMIT_LOGIN_EMAIL_MAX:-10}
+      RATE_LIMIT_LOGIN_WINDOW_SEC: ${RATE_LIMIT_LOGIN_WINDOW_SEC:-900}
+      RATE_LIMIT_REGISTER_MAX: ${RATE_LIMIT_REGISTER_MAX:-10}
+      RATE_LIMIT_REGISTER_WINDOW_SEC: ${RATE_LIMIT_REGISTER_WINDOW_SEC:-3600}
+      # Same as the app default for DATABASE_PATH=/data/app.db; must stay on the /data volume.
+      UPLOADS_DIR: ${UPLOADS_DIR:-/data/uploads}
       # Import (v0.3). Defaults match the app defaults.
       KEEP_RAW_HTML: ${KEEP_RAW_HTML:-false}
       RAW_HTML_DIR: /data/import-raw
@@ -37,9 +44,13 @@ services:
       PUBLIC_LINKS_ENABLED: ${PUBLIC_LINKS_ENABLED:-true}
       RATE_LIMIT_PUBLIC_MAX: ${RATE_LIMIT_PUBLIC_MAX:-120}
       RATE_LIMIT_PUBLIC_WINDOW_SEC: ${RATE_LIMIT_PUBLIC_WINDOW_SEC:-60}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
       # Headless import (v0.3.2). Empty = feature off, no sidecar call is ever made.
       HEADLESS_URL: ${HEADLESS_URL:-}
       HEADLESS_TOKEN: ${HEADLESS_TOKEN:-}
+      HEADLESS_TIMEOUT_MS: ${HEADLESS_TIMEOUT_MS:-35000}
+      # Pass-through with no default: the app accepts only "1" or unset, never an empty string.
+      HEADLESS_ALLOW_NO_TOKEN:
     volumes:
       - app-data:/data
     healthcheck:

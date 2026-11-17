@@ -1,5 +1,8 @@
+import { titleFromCatalog } from '@/lib/page-meta';
 import { getTranslations } from 'next-intl/server';
 import { getCurrentUser } from '@/lib/auth/current-user';
+
+export const generateMetadata = () => titleFromCatalog('meta.home');
 
 export default async function Home() {
   const t = await getTranslations();

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { titleFromCatalog } from '@/lib/page-meta';
 import { getTranslations } from 'next-intl/server';
 import { RecipeCard } from '@/components/recipe/RecipeCard';
 import { btn, btnPrimary } from '@/components/recipe/styles';
@@ -15,6 +16,8 @@ import { parseMinRating } from '@/components/recipe/rating/rating-format';
 export const dynamic = 'force-dynamic';
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+export const generateMetadata = () => titleFromCatalog('recipes.title');
 
 export default async function Page({ searchParams }: { searchParams: SearchParams }) {
   const sp = await searchParams;

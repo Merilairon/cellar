@@ -12,6 +12,7 @@ import { BACKUP_ENTRY, createZipStream, ZipTooLargeError, type ZipEntry } from '
 import { getDb } from '@/lib/db';
 import { getEnv } from '@/lib/env';
 import { resolveUploadPath } from '@/lib/import/uploads';
+import { log } from '@/lib/log';
 import { authenticate, noStore } from '@/lib/recipes/http';
 import { acquireExport, exportLimiter } from '@/lib/security/export-limits';
 import messages from '../../../../messages/en.json';
@@ -33,6 +34,12 @@ const fail = (status: number, error: string, message: string, headers?: Record<s
   noStore(Response.json({ error, message }, { status, headers }));
 
 export async function GET(request: Request) {
+  // GET passes `isCsrfSafe`, but a cross-site navigation carries the Lax cookie and would spend
+  // one of the user's hourly exports on a forced download (v1.0 review L3). Absent, same-origin,
+  // same-site and none (typed URL, bookmark) stay allowed, so curl and scripts work.
+  if (request.headers.get('sec-fetch-site') === 'cross-site') {
+    return noStore(new Response(null, { status: 403 }));
+  }
   const auth = await authenticate(request);
   if (auth instanceof Response) return noStore(auth);
   const { user } = auth;
@@ -62,6 +69,12 @@ export async function GET(request: Request) {
       });
     }
 
+    // `scope: 'all'` is the admin-all audit event (T10 review). Never the file names or content.
+    log('info', 'export.started', {
+      user_id: user.id,
+      scope: all ? 'all' : 'own',
+      photos,
+    });
     const now = new Date();
     const doc = buildBackup(getDb(), { id: user.id, role: user.role }, { all, now });
     const stamp = now.toISOString().slice(0, 10);
@@ -74,6 +87,7 @@ export async function GET(request: Request) {
     // An export that restore would refuse is never produced: the manifest has the same cap on
     // both sides (413 `export_too_large`, no quota used).
     const tooBig = () => {
+      log('warn', 'export.rejected', { user_id: user.id, reason: 'too_large' });
       exportLimiter().refund(user.id);
       return fail(413, 'export_too_large', msg.manifestTooLarge);
     };
@@ -81,6 +95,13 @@ export async function GET(request: Request) {
     if (!photos) {
       const text = JSON.stringify(doc);
       if (Buffer.byteLength(text) > exportCaps.manifestBytes) return tooBig();
+      log('info', 'export.finished', {
+        user_id: user.id,
+        scope: all ? 'all' : 'own',
+        photos,
+        recipes: doc.recipes.length,
+        bytes: Buffer.byteLength(text),
+      });
       return new Response(text, { headers: headers('application/json', 'json') });
     }
 
@@ -99,16 +120,34 @@ export async function GET(request: Request) {
       { name: BACKUP_ENTRY, data: manifest },
       ...listBackupFiles(pruned).map((rel) => ({ name: rel, ...found.get(rel)! })),
     ];
-    const body = createZipStream(entries, { now, onClose: release });
+    const body = createZipStream(entries, {
+      now,
+      onClose: ({ bytes, completed }) => {
+        release();
+        log(completed ? 'info' : 'warn', completed ? 'export.finished' : 'export.aborted', {
+          user_id: user.id,
+          scope: all ? 'all' : 'own',
+          photos,
+          recipes: pruned.recipes.length,
+          bytes,
+        });
+      },
+    });
     const response = new Response(body, { headers: headers('application/zip', 'zip') });
     streaming = true;
     return response;
   } catch (e) {
     exportLimiter().refund(user.id); // a failed export does not use up the quota
-    if (e instanceof ZipTooLargeError) return fail(413, 'export_too_large', msg.tooLarge);
+    if (e instanceof ZipTooLargeError) {
+      log('warn', 'export.rejected', { user_id: user.id, reason: 'too_large' });
+      return fail(413, 'export_too_large', msg.tooLarge);
+    }
     if (e instanceof BackupForbiddenError) return fail(403, 'forbidden', msg.forbidden);
-    if (!(e instanceof BackupExportError)) console.error('[export] failed', (e as Error).message);
-    else console.error('[export] unexportable data', e.message);
+    log('error', 'export.failed', {
+      user_id: user.id,
+      reason: e instanceof BackupExportError ? 'unexportable_data' : 'error',
+      err: e,
+    });
     return fail(500, 'export_failed', msg.failed);
   } finally {
     if (!streaming) release();

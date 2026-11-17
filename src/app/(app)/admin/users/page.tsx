@@ -1,3 +1,4 @@
+import { titleFromCatalog } from '@/lib/page-meta';
 import { getTranslations } from 'next-intl/server';
 import { redirect } from 'next/navigation';
 import { listUsersForAdmin } from '@/lib/auth/admin';
@@ -6,6 +7,8 @@ import { getDb } from '@/lib/db';
 import { DeactivateButton, DeleteButton, InviteForm, ResetButton } from './forms';
 
 export const dynamic = 'force-dynamic';
+
+export const generateMetadata = () => titleFromCatalog('admin.users.title');
 
 export default async function AdminUsersPage() {
   const t = await getTranslations();

@@ -37,6 +37,8 @@ export function getPublicRecipe(
   db: Db,
   token: string,
   env: { PUBLIC_LINKS_ENABLED: boolean },
+  /** Called once with the recipe id of a successful resolve (the id is not part of the result). */
+  onHit?: (recipeId: string) => void,
 ): PublicRecipe | null {
   if (!env.PUBLIC_LINKS_ENABLED) return null;
   if (typeof token !== 'string' || !SHARE_TOKEN_RE.test(token)) return null;
@@ -45,6 +47,11 @@ export function getPublicRecipe(
   if (!canView(null, row, { token, publicLinksEnabled: env.PUBLIC_LINKS_ENABLED })) return null;
   const full = getRecipeFull(db, row.id);
   if (!full) return null;
+  try {
+    onHit?.(row.id);
+  } catch {
+    // A logging hook must never turn the page into a 500.
+  }
   // No photos, rating or share context: the full mapper is reused only for the section tree.
   const api = toApiRecipe(full, false);
   return {

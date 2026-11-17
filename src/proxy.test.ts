@@ -1,12 +1,14 @@
 import { NextRequest } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const state = vi.hoisted(() => ({ trusted: ['127.0.0.1'] as string[] }));
+const state = vi.hoisted(() => ({ trusted: ['127.0.0.1'] as string[], windowSec: 60 }));
+const logs = vi.hoisted(() => [] as unknown[][]);
+vi.mock('@/lib/log', () => ({ log: (...a: unknown[]) => logs.push(a) }));
 vi.mock('@/lib/env', () => ({
   getEnv: () => ({
     TRUSTED_PROXIES: state.trusted,
     RATE_LIMIT_PUBLIC_MAX: 3,
-    RATE_LIMIT_PUBLIC_WINDOW_SEC: 60,
+    RATE_LIMIT_PUBLIC_WINDOW_SEC: state.windowSec,
   }),
 }));
 
@@ -24,6 +26,8 @@ const TOKEN = 'A'.repeat(22);
 
 beforeEach(() => {
   state.trusted = ['127.0.0.1'];
+  state.windowSec = 60;
+  logs.length = 0;
   (globalThis as { __rateLimiters?: unknown }).__rateLimiters = undefined;
 });
 
@@ -87,5 +91,43 @@ describe('proxy: /r/* share links', () => {
     for (let i = 0; i < 3; i++) hit(`2001:db8:1:2::${i + 1}`);
     expect(hit('2001:db8:1:2:aaaa::9').status).toBe(429);
     expect(hit('2001:db8:1:3::1').status).toBe(200);
+  });
+});
+
+describe('proxy: public_page.rate_limited log', () => {
+  it('logs a count only, no address, and at most once per interval', async () => {
+    const { BLOCKED_LOG_INTERVAL_MS } = await import('@/lib/security/public-limit');
+    state.windowSec = 3600; // so the limiter window outlives the log interval
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(Date.now() + 10 * BLOCKED_LOG_INTERVAL_MS); // past any earlier log
+    try {
+      const hit = () => proxy(req(`/r/${TOKEN}`, '203.0.113.99, 127.0.0.1'));
+      for (let i = 0; i < 3; i++) hit();
+      expect(logs).toEqual([]);
+      for (let i = 0; i < 5; i++) expect(hit().status).toBe(429);
+      // Earlier tests in this file may have left blocked requests uncounted in the module.
+      expect(logs).toEqual([['warn', 'public_page.rate_limited', { count: expect.any(Number) }]]);
+      expect((logs[0]![2] as { count: number }).count).toBeGreaterThanOrEqual(1);
+      vi.setSystemTime(Date.now() + BLOCKED_LOG_INTERVAL_MS + 1);
+      hit();
+      expect(logs[1]).toEqual(['warn', 'public_page.rate_limited', { count: 5 }]);
+      expect(JSON.stringify(logs)).not.toMatch(/203\.0\.113|127\.0\.0\.1/);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('limiterKey canonical IPv6 (v0.5.1 Low)', () => {
+  it('leading zeros, case and :: expansion share one bucket', async () => {
+    const { limiterKey } = await import('@/lib/security/public-limit');
+    const key = limiterKey('2001:db8:1:2::1');
+    expect(key).toBe('2001:db8:1:2::/64');
+    expect(limiterKey('2001:0DB8:0001:0002:0:0:0:1')).toBe(key);
+    expect(limiterKey('2001:db8:1:2:aaaa:bbbb:cccc:dddd')).toBe(key);
+    expect(limiterKey('2001:db8::')).toBe('2001:db8:0:0::/64');
+    expect(limiterKey('2001:0db8:0:0::')).toBe('2001:db8:0:0::/64');
+    expect(limiterKey('::1')).toBe('0:0:0:0::/64');
+    expect(limiterKey('198.51.100.7')).toBe('198.51.100.7');
   });
 });

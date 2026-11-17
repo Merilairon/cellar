@@ -1,6 +1,7 @@
 import { mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { join, sep } from 'node:path';
 import { ulid } from 'ulid';
+import { errCode, log } from '@/lib/log';
 
 // Staged restore uploads (T11, G15). A staged file lives in RESTORE_DIR until it is applied,
 // discarded, or one hour old. Single process by design: the registry is in memory (like the
@@ -51,7 +52,7 @@ export function removeFile(path: string): void {
   try {
     rmSync(path, { force: true });
   } catch (e) {
-    console.warn('[restore] could not remove staged file', (e as Error).message);
+    log('warn', 'restore.stage_remove_failed', { code: errCode(e) });
   }
 }
 

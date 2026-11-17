@@ -24,8 +24,9 @@ const httpUrl = z
   .max(2000)
   .refine((v) => {
     try {
-      const p = new URL(v).protocol;
-      return p === 'http:' || p === 'https:';
+      const u = new URL(v);
+      // No userinfo: `http://user:pw@host/` is stored and shown as a link otherwise (L2).
+      return (u.protocol === 'http:' || u.protocol === 'https:') && !u.username && !u.password;
     } catch {
       return false;
     }

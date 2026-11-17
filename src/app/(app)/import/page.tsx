@@ -1,5 +1,8 @@
+import { titleFromCatalog } from '@/lib/page-meta';
 import { getTranslations } from 'next-intl/server';
 import { ImportDialog } from '@/components/import/ImportDialog';
+
+export const generateMetadata = () => titleFromCatalog('import.title');
 
 export default async function Page() {
   const t = await getTranslations();

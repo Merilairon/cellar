@@ -60,7 +60,7 @@ export function useScale(pref: UnitSystem, servings: number | null) {
 export type ScaleState = ReturnType<typeof useScale>;
 
 const seg =
-  'inline-flex min-h-11 min-w-11 items-center justify-center border-r border-neutral-500 px-4 last:border-r-0 aria-pressed:bg-emerald-700 aria-pressed:text-white';
+  'inline-flex min-h-11 min-w-11 items-center justify-center border-r border-neutral-500 px-4 first:rounded-l-[3px] last:rounded-r-[3px] last:border-r-0 aria-pressed:bg-emerald-700 aria-pressed:text-white';
 
 export function ScaleControls({
   scale: s,
@@ -106,7 +106,7 @@ export function ScaleControls({
         <div
           role="group"
           aria-label={t('recipe.scale.group')}
-          className="inline-flex overflow-hidden rounded border border-neutral-500"
+          className="inline-flex max-w-full flex-wrap rounded border border-neutral-500"
         >
           {preset('half', t('recipe.scale.half'))}
           {preset('one', t('recipe.scale.one'))}
