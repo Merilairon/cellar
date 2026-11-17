@@ -3,7 +3,12 @@ import { navItems } from './nav';
 
 describe('navItems', () => {
   it('shows Admin only to admins', () => {
-    expect(navItems('member').map((i) => i.href)).toEqual(['/recipes', '/import']);
-    expect(navItems('admin').map((i) => i.href)).toEqual(['/recipes', '/import', '/admin/users']);
+    expect(navItems('member').map((i) => i.href)).toEqual(['/recipes', '/import', '/backup']);
+    expect(navItems('admin').map((i) => i.href)).toEqual([
+      '/recipes',
+      '/import',
+      '/backup',
+      '/admin/users',
+    ]);
   });
 });
