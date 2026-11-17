@@ -984,5 +984,17 @@
     "banner": "Recipe from {source}. Shared read-only via Cellar, not affiliated with the source.",
     "bannerSourceLabel": "Source: {source}",
     "footer": "Shared read-only link from a private recipe book."
+  },
+  "backup": {
+    "export": {
+      "error": {
+        "forbidden": "Only an admin can export every user's recipes.",
+        "inProgress": "Another export is already running. Wait for it to finish, then try again.",
+        "rateLimited": "Too many exports. Try again later.",
+        "tooLarge": "This export is too large for one zip file. Download it without photos.",
+        "invalidQuery": "This export link is not valid. Go back to the Backup page and try again.",
+        "failed": "The export could not be created. Try again, and check the server log if it keeps failing."
+      }
+    }
   }
 }

@@ -75,6 +75,22 @@ describe('PUBLIC_LINKS_ENABLED', () => {
   );
 });
 
+describe('export rate limit env', () => {
+  it('defaults to 10 per 3600 seconds', () => {
+    const e = parseEnv(base);
+    expect([e.RATE_LIMIT_EXPORT_MAX, e.RATE_LIMIT_EXPORT_WINDOW_SEC]).toEqual([10, 3600]);
+  });
+
+  it('accepts positive integers and rejects zero, negatives and non-numbers', () => {
+    const e = parseEnv({ ...base, RATE_LIMIT_EXPORT_MAX: '2', RATE_LIMIT_EXPORT_WINDOW_SEC: '30' });
+    expect([e.RATE_LIMIT_EXPORT_MAX, e.RATE_LIMIT_EXPORT_WINDOW_SEC]).toEqual([2, 30]);
+    for (const v of ['0', '-1', 'abc', '1.5']) {
+      expect(() => parseEnv({ ...base, RATE_LIMIT_EXPORT_MAX: v })).toThrow();
+      expect(() => parseEnv({ ...base, RATE_LIMIT_EXPORT_WINDOW_SEC: v })).toThrow();
+    }
+  });
+});
+
 describe('public page rate limit env', () => {
   it('defaults to 120 per 60 seconds', () => {
     const e = parseEnv(base);

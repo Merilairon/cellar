@@ -229,6 +229,8 @@ export const backupV1Schema = z
     /** `all` scope only. */
     users: z.array(backupUserSchema).max(MAX_USERS).optional(),
     recipes: z.array(backupRecipeSchema).max(MAX_RECIPES),
+    /** Zip exports only: photo files that were referenced but missing on disk and left out. */
+    photos_missing: z.number().int().min(0).max(100_000).optional(),
   })
   .superRefine((doc, ctx) => {
     // Bounded: a hostile document must not make zod collect millions of issues.
