@@ -1,10 +1,11 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { deflateRawSync } from 'node:zlib';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { ulid } from 'ulid';
-import { openZip, ZipFormatError, type OpenedZip } from './unzip';
+import { MAX_MANIFEST_BYTES, openZip, ZipFormatError, type OpenedZip } from './unzip';
 import { rawZip, type RawEntry } from './unzip-test-util';
 import { BACKUP_ENTRY, createZipStream } from './zip';
 import { collect } from './zip-test-util';
@@ -93,6 +94,145 @@ describe('openZip: valid archives', () => {
   });
 });
 
+describe('openZip: re-zipped archives (M1)', () => {
+  const noise: Array<[string, RawEntry]> = [
+    ['a photos/ directory entry', { name: 'photos/', data: Buffer.alloc(0) }],
+    ['a __MACOSX resource fork', { name: '__MACOSX/._backup.json', data: Buffer.from('fork') }],
+    ['a __MACOSX directory', { name: '__MACOSX/', data: Buffer.alloc(0) }],
+    ['.DS_Store', { name: '.DS_Store', data: Buffer.from('ds') }],
+    ['photos/.DS_Store', { name: 'photos/.DS_Store', data: Buffer.from('ds') }],
+    ['Thumbs.db', { name: 'Thumbs.db', data: Buffer.from('db') }],
+  ];
+  it.each(noise)('skips %s', async (_label, extra) => {
+    const zip = await openZip(put(rawZip([extra, manifest()])));
+    expect(zip.names).toEqual([BACKUP_ENTRY]);
+    expect(zip.has(extra.name as string)).toBe(false);
+    expect((await zip.read(BACKUP_ENTRY)).equals(json)).toBe(true);
+    await zip.close();
+  });
+  it('skipped entries do not count toward the size caps', async () => {
+    const big = { name: '__MACOSX/._x', data: Buffer.alloc(1000, 1) };
+    expect(
+      await reasonOf(rawZip([manifest(), big]), { maxTotalBytes: 100, maxPhotoBytes: 4 }),
+    ).toBe('accepted');
+  });
+  it('a directory name with data is not a directory entry and is refused', async () => {
+    expect(await reasonOf(rawZip([manifest(), { name: 'photos/', data: json }]))).toBe(
+      'entry_name_not_allowed',
+    );
+  });
+  it('a real file next to the manifest is refused and named', async () => {
+    const err = await openZip(put(rawZip([manifest(), { name: 'notes.txt', data: json }]))).catch(
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(ZipFormatError);
+    expect((err as ZipFormatError).reason).toBe('entry_name_not_allowed');
+    expect((err as ZipFormatError).entry).toBe('notes.txt');
+  });
+  it('the refused name is truncated to 80 characters and stripped of control characters', async () => {
+    const long = `${'a'.repeat(200)}\u0007\n.txt`;
+    const err = await openZip(put(rawZip([{ name: `x\u001b[31m${long}`, data: json }]))).catch(
+      (e: unknown) => e,
+    );
+    const shown = (err as ZipFormatError).entry!;
+    expect(shown).not.toMatch(/[\u0000-\u001f\u007f]/);
+    expect(shown.length).toBeLessThanOrEqual(83);
+    expect(shown.startsWith('x[31m')).toBe(true);
+  });
+  it('accepts one common top-level folder (Finder style) and strips it from every name', async () => {
+    const name = photo();
+    const zip = await openZip(
+      put(
+        rawZip([
+          { name: 'cellar-backup/', data: Buffer.alloc(0) },
+          { name: `cellar-backup/${BACKUP_ENTRY}`, data: json },
+          { name: `cellar-backup/${name}`, data: Buffer.from('p') },
+          { name: '__MACOSX/cellar-backup/._backup.json', data: Buffer.from('f') },
+        ]),
+      ),
+    );
+    expect(zip.names).toEqual([BACKUP_ENTRY, name]);
+    expect((await zip.read(name)).toString()).toBe('p');
+    expect((await zip.read(BACKUP_ENTRY)).equals(json)).toBe(true);
+    await zip.close();
+  });
+  it('refuses a folder prefix that is not applied to every entry', async () => {
+    expect(
+      await reasonOf(
+        rawZip([
+          { name: `a/${BACKUP_ENTRY}`, data: json },
+          { name: photo(), data: json },
+        ]),
+      ),
+    ).toBe('entry_name_not_allowed');
+    expect(
+      await reasonOf(
+        rawZip([
+          { name: `a/${BACKUP_ENTRY}`, data: json },
+          { name: `b/${photo()}`, data: json },
+        ]),
+      ),
+    ).toBe('entry_name_not_allowed');
+  });
+  it('refuses a nested or traversing folder prefix', async () => {
+    expect(await reasonOf(rawZip([{ name: `a/b/${BACKUP_ENTRY}`, data: json }]))).toBe(
+      'entry_name_not_allowed',
+    );
+    expect(await reasonOf(rawZip([{ name: `../${BACKUP_ENTRY}`, data: json }]))).toBe(
+      'entry_name_not_allowed',
+    );
+    expect(await reasonOf(rawZip([{ name: `./${BACKUP_ENTRY}`, data: json }]))).toBe(
+      'entry_name_not_allowed',
+    );
+  });
+  it('a manifest at the top is never prefix-stripped: x/backup.json next to it is refused', async () => {
+    expect(await reasonOf(rawZip([manifest(), { name: `x/${BACKUP_ENTRY}`, data: json }]))).toBe(
+      'entry_name_not_allowed',
+    );
+  });
+
+  const python = spawnSync('python3', ['-c', 'import zipfile'], { encoding: 'utf8' });
+  it.skipIf(python.status !== 0)('reads a zip made by Python zipfile (python3 -I)', async () => {
+    const src = join(dir, 'py-src');
+    mkdirSync(join(src, 'photos'), { recursive: true });
+    writeFileSync(join(src, BACKUP_ENTRY), json);
+    const out = join(dir, 'py.zip');
+    const script = join(dir, 'mkzip.py');
+    writeFileSync(
+      script,
+      [
+        'import sys, zipfile',
+        'src, out = sys.argv[1], sys.argv[2]',
+        'with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:',
+        '    z.write(src + "/backup.json", "backup.json")',
+        '    z.write(src + "/photos", "photos/")',
+        '',
+      ].join('\n'),
+    );
+    const r = spawnSync('python3', ['-I', script, src, out], { encoding: 'utf8' });
+    expect(r.status, r.stderr).toBe(0);
+    const zip = await openZip(out);
+    expect(zip.names).toEqual([BACKUP_ENTRY]);
+    expect((await zip.read(BACKUP_ENTRY)).equals(json)).toBe(true);
+    await zip.close();
+  });
+});
+
+describe('openZip: manifest cap (review m1)', () => {
+  it('is 32 MiB: a 20 MiB manifest (over the old 16 MiB cap) opens, 33 MiB is refused', async () => {
+    const mib = 1024 * 1024;
+    expect(MAX_MANIFEST_BYTES).toBe(32 * mib);
+    const open20 = await openZip(
+      put(rawZip([{ name: BACKUP_ENTRY, data: Buffer.alloc(20 * mib) }])),
+    );
+    expect(open20.sizeOf(BACKUP_ENTRY)).toBe(20 * mib);
+    await open20.close();
+    expect(await reasonOf(rawZip([{ name: BACKUP_ENTRY, data: Buffer.alloc(33 * mib) }]))).toBe(
+      'entry_too_large',
+    );
+  });
+});
+
 describe('openZip: hostile archives are refused as a whole', () => {
   const ok = rawZip([manifest()]);
 
@@ -156,7 +296,6 @@ describe('openZip: hostile archives are refused as a whole', () => {
     ['backslash', 'photos\\01HZX0000000000000000000AB.webp'],
     ['NUL byte', 'backup\0.json'],
     ['unlisted name', 'readme.txt'],
-    ['directory entry', 'photos/'],
     ['lowercase ulid', 'photos/01hzx0000000000000000000ab.webp'],
     ['ulid with a forbidden letter (I)', 'photos/01HZX000000000000000000AIB.webp'],
     ['ulid one character short', 'photos/01HZX0000000000000000000A.webp'],

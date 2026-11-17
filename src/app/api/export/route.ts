@@ -7,6 +7,7 @@ import {
   listBackupFiles,
 } from '@/lib/backup/export';
 import { omitMissingPhotos } from '@/lib/backup/prune';
+import { exportCaps } from '@/lib/backup/unzip';
 import { BACKUP_ENTRY, createZipStream, ZipTooLargeError, type ZipEntry } from '@/lib/backup/zip';
 import { getDb } from '@/lib/db';
 import { getEnv } from '@/lib/env';
@@ -70,8 +71,17 @@ export async function GET(request: Request) {
       'Cache-Control': 'private, no-store',
     });
 
+    // An export that restore would refuse is never produced: the manifest has the same cap on
+    // both sides (413 `export_too_large`, no quota used).
+    const tooBig = () => {
+      exportLimiter().refund(user.id);
+      return fail(413, 'export_too_large', msg.manifestTooLarge);
+    };
+
     if (!photos) {
-      return new Response(JSON.stringify(doc), { headers: headers('application/json', 'json') });
+      const text = JSON.stringify(doc);
+      if (Buffer.byteLength(text) > exportCaps.manifestBytes) return tooBig();
+      return new Response(text, { headers: headers('application/json', 'json') });
     }
 
     // The manifest is built after a stat of every file, so it never names a missing one.
@@ -83,8 +93,10 @@ export async function GET(request: Request) {
       if (abs && st?.isFile()) found.set(rel, { path: abs, size: st.size });
     }
     const pruned = omitMissingPhotos(doc, new Set(found.keys()));
+    const manifest = Buffer.from(JSON.stringify(pruned));
+    if (manifest.length > exportCaps.manifestBytes) return tooBig();
     const entries: ZipEntry[] = [
-      { name: BACKUP_ENTRY, data: Buffer.from(JSON.stringify(pruned)) },
+      { name: BACKUP_ENTRY, data: manifest },
       ...listBackupFiles(pruned).map((rel) => ({ name: rel, ...found.get(rel)! })),
     ];
     const body = createZipStream(entries, { now, onClose: release });

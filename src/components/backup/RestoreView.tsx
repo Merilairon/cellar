@@ -6,6 +6,7 @@ import {
   applyCount,
   formatBytes,
   isPartial,
+  stoppedAtNumber,
   liveMessageKey,
   resultLines,
   type RestoreAction,
@@ -25,6 +26,10 @@ const ERROR_KEYS = {
   expired: 'backup.error.expired',
   unauthenticated: 'backup.error.unauthenticated',
   network: 'backup.error.network',
+  rate_limited: 'backup.error.rate_limited',
+  timeout: 'backup.error.timeout',
+  server_error: 'backup.error.server_error',
+  failed: 'backup.error.failed',
 } as const;
 
 const LINE_KEYS = {
@@ -33,7 +38,8 @@ const LINE_KEYS = {
   skipped: 'backup.result.skipped',
   photos: 'backup.result.photos',
   photosFailed: 'backup.result.photosFailed',
-  notesSkipped: 'backup.result.notesSkipped',
+  notesSkippedOwn: 'backup.result.notesSkippedOwn',
+  notesSkippedAll: 'backup.result.notesSkippedAll',
 } as const;
 
 export type RestoreViewProps = {
@@ -244,7 +250,8 @@ export function RestoreView({
                   </li>
                   <li>
                     {t('backup.result.stoppedAt', {
-                      index: state.result.failed_at ?? 0,
+                      // `failed_at` is the 0-based index in the file; people count from 1.
+                      index: stoppedAtNumber(state.result.failed_at),
                       total: state.stage?.preview.recipes ?? 0,
                     })}
                   </li>
@@ -254,7 +261,18 @@ export function RestoreView({
                 .filter((l) => !(isPartial(state.result!) && l.key === 'imported'))
                 .map((l) => (
                   <li key={l.key}>
-                    {t(LINE_KEYS[l.key as keyof typeof LINE_KEYS], { count: l.count })}
+                    {t(
+                      LINE_KEYS[
+                        // Own-scope file: the notes left out are other users' shared notes.
+                        // All-users file: they belong to users who have no account here.
+                        (l.key === 'notesSkipped'
+                          ? state.stage?.preview.scope === 'all'
+                            ? 'notesSkippedAll'
+                            : 'notesSkippedOwn'
+                          : l.key) as keyof typeof LINE_KEYS
+                      ],
+                      { count: l.count },
+                    )}
                   </li>
                 ))}
             </ul>

@@ -14,8 +14,14 @@ export const MAX_ENTRIES = 60_000;
 /** Max central directory bytes read into memory (60 000 records of about 90 bytes is 5.4 MB). */
 export const MAX_CENTRAL_BYTES = 8 * 1024 * 1024;
 export const MAX_PHOTO_BYTES = 20 * 1024 * 1024;
-/** A 5 000 recipe export is a few MiB; 16 MiB bounds parse time and memory (AppSec M1). */
-export const MAX_MANIFEST_BYTES = 16 * 1024 * 1024;
+/**
+ * Largest the manifest. A 5 000 recipe export of the fixture shape is about 23 MiB (measured
+ * 4.84 MB per 1 000 recipes by scripts/export-sizes.ts), so 32 MiB leaves headroom while still
+ * bounding parse time and memory (AppSec M1). Export refuses to produce anything larger.
+ */
+export const MAX_MANIFEST_BYTES = 32 * 1024 * 1024;
+/** Test seam: the cap `GET /api/export` applies to the manifest it would produce. */
+export const exportCaps = { manifestBytes: MAX_MANIFEST_BYTES };
 export const MAX_TOTAL_BYTES = 2 * 1024 * 1024 * 1024;
 /** Deflate expansion limit (declared size / compressed size). JSON is about 10x to 30x. */
 export const MAX_RATIO = 200;
@@ -38,7 +44,11 @@ export type ZipLimits = {
 
 /** The archive is unreadable or hostile. `reason` is a stable machine word (never user text). */
 export class ZipFormatError extends Error {
-  constructor(readonly reason: string) {
+  constructor(
+    readonly reason: string,
+    /** Display-safe name of the refused entry (control characters stripped, at most 80 chars). */
+    readonly entry?: string,
+  ) {
     super(`zip_invalid: ${reason}`);
     this.name = 'ZipFormatError';
   }
@@ -73,6 +83,47 @@ const bad = (reason: string): never => {
 /** An archive entry name is exactly the manifest or a photo path; anything else is refused. */
 export function isAllowedEntryName(name: string): boolean {
   return name === BACKUP_ENTRY || PHOTO_PATH_RE.test(name);
+}
+
+/**
+ * Entries that tools add when a backup is unzipped and zipped again: directory entries (name
+ * ends with a slash, no data), the macOS resource-fork folder, `.DS_Store` and `Thumbs.db`.
+ * They are skipped: never read, never counted against the size caps.
+ */
+export function isIgnorableEntry(name: string, size: number): boolean {
+  if (name.endsWith('/')) return size === 0;
+  if (name.startsWith('__MACOSX/')) return true;
+  const base = name.slice(name.lastIndexOf('/') + 1);
+  return base === '.DS_Store' || base === 'Thumbs.db';
+}
+
+/** A name safe to show in an error: decoded, control characters stripped, 80 chars at most. */
+export function displayEntryName(nameBytes: Buffer): string {
+  const text = nameBytes
+    .toString('utf8')
+    .replace(/[\p{C}\p{Z}]/gu, (c) => (c === ' ' ? c : ''))
+    .trim();
+  return text.length > 80 ? `${text.slice(0, 80)}...` : text;
+}
+
+/** A single top-level folder name as Finder or `zip -r folder` writes it. */
+const FOLDER_RE = /^[A-Za-z0-9._ -]{1,64}$/;
+
+/**
+ * When every refused-as-is entry lives under one common top-level folder (Finder "Compress"),
+ * the prefix to strip, else ''. All names must be allowed once stripped; an archive that already
+ * has the manifest or a photo at the top is never prefix-stripped.
+ */
+function commonFolderPrefix(names: string[]): string {
+  if (names.length === 0 || names.some(isAllowedEntryName)) return '';
+  const slash = names[0]!.indexOf('/');
+  if (slash <= 0) return '';
+  const folder = names[0]!.slice(0, slash);
+  if (!FOLDER_RE.test(folder) || folder === '.' || folder === '..') return '';
+  const prefix = `${folder}/`;
+  return names.every((n) => n.startsWith(prefix) && isAllowedEntryName(n.slice(prefix.length)))
+    ? prefix
+    : '';
 }
 
 async function readRange(h: FileHandle, position: number, length: number): Promise<Buffer> {
@@ -132,9 +183,8 @@ export async function openZip(path: string, limits: ZipLimits = {}): Promise<Ope
     if (total * 46 > cdSize) bad('entry_count_mismatch');
 
     const cd = await readRange(h, cdOffset, cdSize);
-    const entries = new Map<string, ZipEntryInfo>();
+    const records: ZipEntryInfo[] = [];
     let p = 0;
-    let totalSize = 0;
     for (let i = 0; i < total; i++) {
       if (p + 46 > cd.length) bad('entry_count_mismatch');
       if (cd.readUInt32LE(p) !== CENTRAL_SIG) bad('bad_central_record');
@@ -165,22 +215,11 @@ export async function openZip(path: string, limits: ZipLimits = {}): Promise<Ope
       // backslash, control bytes and non-ASCII never reach a path or a log line.
       const nameBytes = Buffer.from(cd.subarray(p + 46, p + 46 + nameLen));
       const name = nameBytes.toString('latin1');
-      if (!isAllowedEntryName(name)) bad('entry_name_not_allowed');
-      if (entries.has(name)) bad('duplicate_entry');
-      const cap = name === BACKUP_ENTRY ? maxManifest : maxPhoto;
-      if (size > cap) bad('entry_too_large');
-      totalSize += size;
-      if (totalSize > maxTotal) bad('archive_too_large');
-      if (method === 0) {
-        if (compressedSize !== size) bad('size_mismatch');
-      } else {
-        if (size > 0 && compressedSize === 0) bad('ratio');
-        if (compressedSize > 0 && size / compressedSize > maxRatio) bad('ratio');
-        if (compressedSize > cap + 1024 * 1024) bad('entry_too_large');
+      if (isIgnorableEntry(name, size)) {
+        p = next;
+        continue;
       }
-      // The data must sit before the central directory, local header included.
-      if (localOffset + 30 + nameLen + compressedSize > cdOffset) bad('entry_out_of_range');
-      entries.set(name, {
+      records.push({
         name,
         cdOffset,
         method: method as 0 | 8,
@@ -193,6 +232,36 @@ export async function openZip(path: string, limits: ZipLimits = {}): Promise<Ope
       p = next;
     }
     if (p !== cd.length) bad('entry_count_mismatch');
+
+    // Names, caps and offsets are checked on the kept entries, after one common top-level folder
+    // (and only that) has been stripped from all of them.
+    const prefix = commonFolderPrefix(records.map((r) => r.name));
+    const entries = new Map<string, ZipEntryInfo>();
+    let totalSize = 0;
+    for (const info of records) {
+      const name = info.name.slice(prefix.length);
+      if (!isAllowedEntryName(name)) {
+        throw new ZipFormatError('entry_name_not_allowed', displayEntryName(info.nameBytes));
+      }
+      if (entries.has(name)) bad('duplicate_entry');
+      const { size, compressedSize, method, localOffset } = info;
+      const cap = name === BACKUP_ENTRY ? maxManifest : maxPhoto;
+      if (size > cap) bad('entry_too_large');
+      totalSize += size;
+      if (totalSize > maxTotal) bad('archive_too_large');
+      if (method === 0) {
+        if (compressedSize !== size) bad('size_mismatch');
+      } else {
+        if (size > 0 && compressedSize === 0) bad('ratio');
+        if (compressedSize > 0 && size / compressedSize > maxRatio) bad('ratio');
+        if (compressedSize > cap + 1024 * 1024) bad('entry_too_large');
+      }
+      // The data must sit before the central directory, local header included.
+      if (localOffset + 30 + info.nameBytes.length + compressedSize > cdOffset) {
+        bad('entry_out_of_range');
+      }
+      entries.set(name, { ...info, name });
+    }
     // Overlapping entries are how small archives claim huge totals: refuse them.
     const byOffset = [...entries.values()].sort((a, b) => a.localOffset - b.localOffset);
     for (let i = 1; i < byOffset.length; i++) {

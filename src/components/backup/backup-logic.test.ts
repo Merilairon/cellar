@@ -85,7 +85,17 @@ describe('export and file helpers', () => {
 describe('error mapping', () => {
   it('maps network and server failures', () => {
     expect(stageError(0, null, 10).key).toBe('network');
-    expect(stageError(500, { message: 'x' }, 10).key).toBe('network');
+  });
+  it('tells rate limit, timeout and server errors apart and keeps the server message', () => {
+    const limited = stageError(429, { error: 'rate_limited', message: 'Too many, wait' }, 10);
+    expect(limited).toMatchObject({ key: 'rate_limited', message: 'Too many, wait' });
+    expect(stageError(408, { message: 'stalled' }, 10)).toMatchObject({
+      key: 'timeout',
+      message: 'stalled',
+    });
+    expect(stageError(500, { message: 'x' }, 10)).toMatchObject({ key: 'server_error' });
+    expect(stageError(502, null, 10).key).toBe('server_error');
+    expect(stageError(400, { message: 'bad' }, 10)).toMatchObject({ key: 'failed' });
   });
   it('carries the server message and the found version', () => {
     const e = stageError(
@@ -126,8 +136,28 @@ describe('error mapping', () => {
     expect(stageError(409, { message: '  ' }, 1).message).toBeUndefined();
     expect(stageError(409, { message: 5 }, 1).message).toBeUndefined();
   });
-  it('maps apply failures; only 404 expires the stage', () => {
+  it('maps apply failures; the stage is gone after 404, 422, 500 and a restore-time 403', () => {
     expect(applyError(404, null)).toMatchObject({ expired: true, error: { key: 'expired' } });
+    expect(applyError(422, { message: 'not valid' })).toMatchObject({
+      expired: true,
+      error: { key: 'failed', message: 'not valid' },
+    });
+    expect(applyError(500, { message: 'broke' })).toMatchObject({
+      expired: true,
+      error: { key: 'failed', message: 'broke' },
+    });
+    expect(applyError(403, { error: 'forbidden', message: 'admin only' })).toMatchObject({
+      expired: true,
+      error: { key: 'scope_forbidden' },
+    });
+    // The stage survives these: it is retryable from the preview.
+    expect(applyError(429, { message: 'slow down' })).toMatchObject({
+      expired: false,
+      error: { key: 'rate_limited', message: 'slow down' },
+    });
+    expect(applyError(408, null)).toMatchObject({ expired: false, error: { key: 'timeout' } });
+    expect(applyError(400, null)).toMatchObject({ expired: false, error: { key: 'failed' } });
+    expect(applyError(502, null)).toMatchObject({ expired: false, error: { key: 'server_error' } });
     expect(applyError(409, null)).toMatchObject({ expired: false, error: { key: 'in_progress' } });
     expect(applyError(0, null)).toMatchObject({ expired: false, error: { key: 'network' } });
     expect(applyError(403, null).error.key).toBe('unauthenticated');
@@ -262,6 +292,12 @@ describe('restoreReducer', () => {
     const gone = restoreReducer(applying, { type: 'applyFail', failure: applyError(404, null) });
     expect(gone).toMatchObject({ phase: 'idle', file: null, stage: null, focus: { to: 'picker' } });
     expect(gone.error?.key).toBe('expired');
+    const broke = restoreReducer(applying, {
+      type: 'applyFail',
+      failure: applyError(500, { message: 'The restore could not be completed.' }),
+    });
+    expect(broke).toMatchObject({ phase: 'idle', stage: null, focus: { to: 'picker' } });
+    expect(broke.error).toMatchObject({ key: 'failed', message: expect.any(String) });
   });
   it('discard and again reset to step 1 and focus the picker', () => {
     expect(restoreReducer(previewing(), { type: 'discard' })).toMatchObject({

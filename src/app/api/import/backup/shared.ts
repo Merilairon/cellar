@@ -99,6 +99,18 @@ export async function loadBackup(path: string, kind: StageKind): Promise<Loaded>
   } catch (e) {
     await archive?.close();
     if (e instanceof ZipFormatError) {
+      if (e.reason === 'entry_name_not_allowed' && e.entry !== undefined) {
+        // Say WHICH entry (already control-stripped and truncated) so the user can fix the zip.
+        return {
+          ok: false,
+          response: fail(
+            422,
+            'backup_zip_invalid',
+            msg.zipEntryRefused.replace('{name}', `"${e.entry}"`),
+            { errors: [`entry_name_not_allowed: ${e.entry}`] },
+          ),
+        };
+      }
       return { ok: false, response: fail(422, 'backup_zip_invalid', msg.zipInvalid) };
     }
     throw e;

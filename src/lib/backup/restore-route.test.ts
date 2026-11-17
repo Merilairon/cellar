@@ -471,7 +471,7 @@ describe('POST /api/import/backup: rejected uploads change nothing', () => {
     expect(sent).toBeLessThan(10); // the stream was cancelled, not drained
   });
 
-  it('a JSON upload is capped at 16 MiB even when RESTORE_BODY_MAX is larger', async () => {
+  it('a JSON upload is capped at 32 MiB even when RESTORE_BODY_MAX is larger', async () => {
     let sent = 0;
     const chunk = new Uint8Array(1024 * 1024);
     const body = new ReadableStream<Uint8Array>({
@@ -493,6 +493,12 @@ describe('POST /api/import/backup: rejected uploads change nothing', () => {
       413,
       'backup_too_large',
     );
+  });
+
+  it('a 20 MiB JSON upload is past the old 16 MiB cap: it is read and judged, not 413', async () => {
+    const res = await stage(Buffer.alloc(20 * 1024 * 1024, 0x20));
+    expect(res.status).toBe(422);
+    expect((await res.json()).error).toBe('backup_invalid');
   });
 
   it('408 when the sender stalls; the partial file is removed', async () => {
@@ -1054,5 +1060,71 @@ describe('round trip through the routes', () => {
     const zip = await exportZip(w.a, w.uploadsA, w.ann as U, false);
     expect(zip.length).toBeGreaterThan(readFileSync(join(w.uploadsA, ls(w.uploadsA)[0]!)).length);
     w.a.$client.close();
+  });
+});
+
+describe('re-zipped backups (v0.5.1 review M1)', () => {
+  async function zipBackup(prefix: string, noise: Array<{ name: string; data: Buffer }>) {
+    const doc = JSON.parse(ownBackup(['Alpha']));
+    const name = `photos/${ulid()}.webp`;
+    doc.recipes[0].photos = [
+      { position: 0, is_cover: true, width: 64, height: 48, file: name, thumb: null },
+    ];
+    return rawZip([
+      ...noise,
+      { name: `${prefix}${BACKUP_ENTRY}`, data: Buffer.from(JSON.stringify(doc)), method: 8 },
+      { name: `${prefix}${name}`, data: await webp() },
+    ]);
+  }
+
+  it.each([
+    ['a photos/ directory entry', '', [{ name: 'photos/', data: Buffer.alloc(0) }]],
+    ['__MACOSX/._backup.json', '', [{ name: '__MACOSX/._backup.json', data: Buffer.from('f') }]],
+    ['.DS_Store', '', [{ name: '.DS_Store', data: Buffer.from('d') }]],
+    [
+      'a Finder folder with all of it',
+      'cellar-backup/',
+      [
+        { name: 'cellar-backup/', data: Buffer.alloc(0) },
+        { name: 'cellar-backup/.DS_Store', data: Buffer.from('d') },
+        { name: '__MACOSX/cellar-backup/._backup.json', data: Buffer.from('f') },
+      ],
+    ],
+  ])('stages and restores a zip with %s', async (_label, prefix, noise) => {
+    const staged = await stage(await zipBackup(prefix, noise), 'application/zip');
+    expect(staged.status).toBe(201);
+    const body = await staged.json();
+    expect(body.preview).toMatchObject({ recipes: 1, photos: 1 });
+    const applied = await applyReq(body.id);
+    expect(applied.status).toBe(200);
+    expect(await applied.json()).toMatchObject({
+      imported: 1,
+      photos_restored: 1,
+      failed_at: null,
+    });
+    expect(db.select({ n: count() }).from(photo).get()!.n).toBe(1);
+  });
+
+  it('a real extra file is refused and the message names it', async () => {
+    const before = snapshot();
+    const res = await stage(
+      await zipBackup('', [{ name: 'notes.txt', data: Buffer.from('hi') }]),
+      'application/zip',
+    );
+    expect(res.status).toBe(422);
+    const body = await res.json();
+    expect(body.error).toBe('backup_zip_invalid');
+    expect(body.message).toContain('notes.txt');
+    expect(body.errors).toEqual(['entry_name_not_allowed: notes.txt']);
+    expect(snapshot()).toEqual(before);
+  });
+
+  it('a traversal name is refused (and shown without control characters)', async () => {
+    const res = await stage(
+      await zipBackup('', [{ name: '../../etc/passwd', data: Buffer.from('x') }]),
+      'application/zip',
+    );
+    expect(res.status).toBe(422);
+    expect((await res.json()).message).toContain('../../etc/passwd');
   });
 });

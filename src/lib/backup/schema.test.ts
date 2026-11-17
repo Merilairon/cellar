@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { backupV1Schema, PHOTO_PATH_RE } from './schema';
+import { backupV1Schema, checkCaps, PHOTO_PATH_RE } from './schema';
 import { validAllDoc, validDoc } from './schema-fixtures';
 
 type Doc = ReturnType<typeof validDoc>;
@@ -421,5 +421,96 @@ describe('PHOTO_PATH_RE', () => {
     expect(PHOTO_PATH_RE.test(`photos/${ULID}.webp/`)).toBe(false);
     expect(PHOTO_PATH_RE.test(`xphotos/${ULID}.webp`)).toBe(false);
     expect(PHOTO_PATH_RE.test(`photos\\${ULID}.webp`)).toBe(false);
+  });
+});
+
+describe('app limits and tag rules apply to a backup (review m5)', () => {
+  const sections = (d: Doc, n: number) => {
+    const base = d.recipes[0].sections[0];
+    d.recipes[0].sections = Array.from({ length: n }, (_, i) => ({ ...base, position: i }));
+  };
+  const ingredients = (d: Doc, n: number) => {
+    const base = d.recipes[0].sections[0].ingredients[0];
+    d.recipes[0].sections[0].ingredients = Array.from({ length: n }, (_, i) => ({
+      ...base,
+      position: i,
+    }));
+  };
+  const steps = (d: Doc, n: number) => {
+    const base = d.recipes[0].sections[0].steps[0];
+    d.recipes[0].view_mode = 'list';
+    d.recipes[0].sections[0].steps = Array.from({ length: n }, (_, i) => ({
+      ...base,
+      position: i,
+    }));
+  };
+
+  it.each<[string, (d: Doc) => void, string]>([
+    ['tag with a zero-width space', (d) => (d.recipes[0].tags = ['a\u200Bb']), 'recipes.0.tags.0'],
+    [
+      'tag with a control character',
+      (d) => (d.recipes[0].tags = ['ok', 'a\u0007']),
+      'recipes.0.tags.1',
+    ],
+    ['tag with a bidi override', (d) => (d.recipes[0].tags = ['\u202Eevil']), 'recipes.0.tags.0'],
+    ['tag that is only spaces', (d) => (d.recipes[0].tags = ['   ']), 'recipes.0.tags.0'],
+    ['empty tag', (d) => (d.recipes[0].tags = ['']), 'recipes.0.tags.0'],
+    ['tag over 40 characters', (d) => (d.recipes[0].tags = ['t'.repeat(41)]), 'recipes.0.tags.0'],
+    ['a non-string tag', (d) => (d.recipes[0].tags = [5 as unknown as string]), 'recipes.0.tags.0'],
+    [
+      '21 tags',
+      (d) => (d.recipes[0].tags = Array.from({ length: 21 }, (_, i) => `t${i}`)),
+      'recipes.0.tags',
+    ],
+    ['21 sections', (d) => sections(d, 21), 'recipes.0.sections'],
+    [
+      '201 ingredients in a section',
+      (d) => ingredients(d, 201),
+      'recipes.0.sections.0.ingredients',
+    ],
+    ['101 steps in a section', (d) => steps(d, 101), 'recipes.0.sections.0.steps'],
+  ])('rejects %s with the path of the offender', (_n, mutate, path) => {
+    const d = validDoc();
+    mutate(d);
+    const r = backupV1Schema.safeParse(d);
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      const hit = r.error.issues.find((i) => i.path.join('.') === path);
+      expect(hit, JSON.stringify(r.error.issues)).toBeDefined();
+    }
+  });
+
+  it('the cheap pre-zod cap check reports the same limits with a path', () => {
+    const d = validDoc();
+    sections(d, 21);
+    expect(checkCaps(d)).toContainEqual({ path: 'recipes.0.sections', code: 'too_many_sections' });
+    const e = validDoc();
+    ingredients(e, 201);
+    expect(checkCaps(e)).toContainEqual({
+      path: 'recipes.0.sections.0.ingredients',
+      code: 'too_many_ingredients',
+    });
+    const f = validDoc();
+    steps(f, 101);
+    expect(checkCaps(f)).toContainEqual({
+      path: 'recipes.0.sections.0.steps',
+      code: 'too_many_steps',
+    });
+  });
+
+  it('accepts exactly the app limits and tags the app would normalize', () => {
+    const d = validDoc();
+    sections(d, 20);
+    d.recipes[0].tags = Array.from({ length: 19 }, (_, i) => `t${i}`).concat(['  Dessert ']);
+    expect(backupV1Schema.safeParse(d).success).toBe(true);
+    const e = validDoc();
+    ingredients(e, 200);
+    expect(backupV1Schema.safeParse(e).success).toBe(true);
+    const f = validDoc();
+    steps(f, 100);
+    expect(backupV1Schema.safeParse(f).success).toBe(true);
+    const g = validDoc();
+    g.recipes[0].tags = ['\u{1F370}'.repeat(40)]; // 40 code points, 80 UTF-16 units
+    expect(backupV1Schema.safeParse(g).success).toBe(true);
   });
 });

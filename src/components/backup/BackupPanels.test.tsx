@@ -234,7 +234,7 @@ describe('RestoreView', () => {
       stage: stage({ recipes: 12 }),
       result: result({
         imported: 4,
-        failed_at: 5,
+        failed_at: 4, // 0-based index in the API
         skipped: 0,
         photos_restored: 0,
         photos_failed: 0,
@@ -245,5 +245,36 @@ describe('RestoreView', () => {
     expect(text).toContain('4 recipes restored before the problem');
     expect(text).toContain('Stopped at recipe 5 of 12');
     expect(text).not.toContain('Restore finished');
+  });
+  it('result: a failure at the first recipe (failed_at 0) reads "recipe 1 of 12"', () => {
+    const html = view({
+      phase: 'result',
+      stage: stage({ recipes: 12 }),
+      result: result({ imported: 0, failed_at: 0 }),
+    });
+    expect(visible(html)).toContain('Stopped at recipe 1 of 12');
+    expect(visible(html)).not.toContain('recipe 0 of');
+  });
+  it('result: left-out notes are explained by scope (member file vs all-users file)', () => {
+    const own = visible(
+      view({
+        phase: 'result',
+        stage: stage({ scope: 'own' }),
+        result: result({ notes_skipped: 2 }),
+      }),
+    );
+    expect(own).toContain('2 shared notes left out (written by other users)');
+    expect(own).not.toContain('do not exist here');
+    const all = visible(
+      view(
+        {
+          phase: 'result',
+          stage: stage({ scope: 'all' }),
+          result: result({ notes_skipped: 1 }),
+        },
+        'admin',
+      ),
+    );
+    expect(all).toContain('1 note left out (written by a user who does not exist here)');
   });
 });

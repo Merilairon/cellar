@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MAX_TAGS_PER_RECIPE, normalizeTagName } from '@/lib/recipes/tag-name';
 
 // Backup format v1 (docs/tasks/v1.0-tasklist.md T9, G13, R6, R7, R12). Pure: no node, db, fs
 // or network imports. Every object is strict (unknown keys are rejected), no row ids appear
@@ -7,13 +8,18 @@ import { z } from 'zod';
 
 export const BACKUP_VERSION = 1 as const;
 
+// 5 000 recipes of the fixture shape serialise to about 23 MiB (scripts/export-sizes.ts: 4.84 MB
+// per 1 000), under the 32 MiB manifest cap in unzip.ts. Export refuses to exceed that cap.
 export const MAX_RECIPES = 5000;
-export const MAX_SECTIONS = 200;
-export const MAX_INGREDIENTS_PER_SECTION = 400;
-export const MAX_STEPS_PER_SECTION = 400;
+// Per-recipe limits are the ones the recipe form enforces (recipeInputSchema: 20 sections, 200
+// ingredients and 100 steps per section, 20 tags), so a file the preview accepts cannot produce
+// a recipe the edit form rejects on every save.
+export const MAX_SECTIONS = 20;
+export const MAX_INGREDIENTS_PER_SECTION = 200;
+export const MAX_STEPS_PER_SECTION = 100;
 export const MAX_NOTES_PER_RECIPE = 200;
 export const MAX_PHOTOS_PER_RECIPE = 10;
-export const MAX_TAGS_PER_RECIPE = 20;
+export { MAX_TAGS_PER_RECIPE };
 export const MAX_RATINGS_PER_RECIPE = 1000;
 export const MAX_USERS = 1000;
 /** Sum of ingredients, steps, notes and ratings in one document (checked before zod). */
@@ -39,6 +45,12 @@ const email = z
   .regex(/^[^\s@]+@[^\s@]+$/, 'invalid_email')
   // The app stores emails lowercased and identity checks compare exact strings.
   .refine((v) => v === v.toLowerCase(), 'email_not_lowercase');
+// Bounded raw length, then the app's own tag rules (the same normalizeTagName the tag table
+// goes through), so an unusable tag is a preview error and not a failure at recipe k.
+const tagName = z
+  .string()
+  .max(160)
+  .refine((v) => normalizeTagName(v) !== null, 'invalid_tag');
 const photoPath = z.string().max(64).regex(PHOTO_PATH_RE, 'invalid_photo_path');
 
 export const backupIngredientSchema = z
@@ -173,7 +185,7 @@ export const backupRecipeSchema = z
     owner_email: email.optional(),
     created_at: stamp,
     updated_at: stamp,
-    tags: z.array(z.string().min(1).max(40)).max(MAX_TAGS_PER_RECIPE),
+    tags: z.array(tagName).max(MAX_TAGS_PER_RECIPE),
     sections: z.array(backupSectionSchema).min(1).max(MAX_SECTIONS),
     photos: z.array(backupPhotoSchema).max(MAX_PHOTOS_PER_RECIPE),
     notes: z.array(backupNoteSchema).max(MAX_NOTES_PER_RECIPE),

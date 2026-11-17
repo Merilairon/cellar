@@ -95,7 +95,10 @@ export function stageError(status: number, body: unknown, max: number): RestoreE
   const b = (body && typeof body === 'object' ? body : null) as Body;
   const message = text(b?.message);
   const code = text(b?.error);
-  if (status === 0 || status >= 500) return { key: 'network' };
+  if (status === 0) return { key: 'network' };
+  if (status === 429) return { key: 'rate_limited', message };
+  if (status === 408) return { key: 'timeout', message };
+  if (status >= 500) return { key: 'server_error', message };
   if (status === 401) return { key: 'unauthenticated' };
   if (status === 413) return { key: 'tooLarge', params: { max: formatBytes(max) }, message };
   if (status === 409) return { key: 'in_progress', message };
@@ -122,18 +125,33 @@ export function stageError(status: number, body: unknown, max: number): RestoreE
       details: details.length > 0 ? details : undefined,
     };
   }
-  return { key: 'network' };
+  return { key: 'failed', message };
 }
 
+/** `expired`: the staged file is gone on the server, so the flow restarts at the first step. */
 export type ApplyFailure = { error: RestoreError; expired: boolean };
 
+/**
+ * Map a failed apply. The apply route discards the staged file in a `finally` once it has taken
+ * the lease, so a 422, a 500 or a restore-time 403 (`forbidden`) means the stage is gone, and
+ * so does any 404. A 400 (bad strategy), 408 (stalled body), 409 (busy), 429, 401 and 5xx that
+ * did not come from the route leave the stage in place and the preview stays usable.
+ */
 export function applyError(status: number, body: unknown): ApplyFailure {
   const b = (body && typeof body === 'object' ? body : null) as Body;
   const message = text(b?.message);
-  if (status === 404) return { error: { key: 'expired', message }, expired: true };
-  if (status === 409) return { error: { key: 'in_progress', message }, expired: false };
+  const gone = (key: string): ApplyFailure => ({ error: { key, message }, expired: true });
+  const kept = (key: string): ApplyFailure => ({ error: { key, message }, expired: false });
+  if (status === 404) return gone('expired');
+  if (status === 422 || status === 500) return gone('failed');
+  if (status === 403 && text(b?.error) === 'forbidden') return gone('scope_forbidden');
+  if (status === 409) return kept('in_progress');
+  if (status === 429) return kept('rate_limited');
+  if (status === 408) return kept('timeout');
+  if (status === 400) return kept('failed');
   if (status === 401 || status === 403)
     return { error: { key: 'unauthenticated' }, expired: false };
+  if (status >= 500) return kept('server_error');
   return { error: { key: 'network' }, expired: false };
 }
 
@@ -169,6 +187,11 @@ export function resultLines(r: ApplyResult): ResultLine[] {
     { key: 'notesSkipped', count: r.notes_skipped },
   ];
   return all.filter((l) => l.count > 0);
+}
+
+/** The API's `failed_at` is a 0-based index into the file; the text shows it 1-based. */
+export function stoppedAtNumber(failedAt: number | null): number {
+  return (failedAt ?? 0) + 1;
 }
 
 export function isPartial(r: ApplyResult): boolean {

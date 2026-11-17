@@ -16,6 +16,7 @@ import {
   SAMPLE_INPUTS,
   type U,
 } from './test-fixtures';
+import { exportCaps, MAX_MANIFEST_BYTES } from './unzip';
 import { collect, readZip } from './zip-test-util';
 
 const state = vi.hoisted(() => ({ db: undefined as unknown, current: null as unknown }));
@@ -286,4 +287,35 @@ describe('redaction', () => {
     const entries = readZip(await collect((await get('?photos=1')).body!));
     expect(entries[0].data.toString()).not.toContain('secret-other-note');
   });
+});
+
+describe('GET /api/export refuses what restore could not read (review m1)', () => {
+  afterEach(() => {
+    exportCaps.manifestBytes = MAX_MANIFEST_BYTES;
+  });
+
+  it('the cap matches the restore cap by default (32 MiB)', () => {
+    expect(exportCaps.manifestBytes).toBe(32 * 1024 * 1024);
+  });
+
+  it.each([
+    ['JSON', ''],
+    ['zip', '?photos=1'],
+  ])(
+    '413 export_too_large for a %s export over the cap, and the quota is not used',
+    async (_l, qs) => {
+      env.RATE_LIMIT_EXPORT_MAX = 1;
+      saveInput(db, me.id, { ...SAMPLE_INPUTS[0], title: 'Mine' });
+      exportCaps.manifestBytes = 100;
+      const res = await get(qs);
+      expect(res.status).toBe(413);
+      expect(res.headers.get('cache-control')).toBe('private, no-store');
+      expect(await res.json()).toMatchObject({
+        error: 'export_too_large',
+        message: expect.stringContaining('restore'),
+      });
+      exportCaps.manifestBytes = MAX_MANIFEST_BYTES;
+      expect((await get(qs)).status).toBe(200); // refunded, and the in-flight lease was released
+    },
+  );
 });

@@ -1018,7 +1018,8 @@
       "renamed": "{count, plural, one {# recipe restored as a copy} other {# recipes restored as copies}}",
       "photos": "{count, plural, one {# photo restored} other {# photos restored}}",
       "photosFailed": "{count, plural, one {# photo could not be read} other {# photos could not be read}}",
-      "notesSkipped": "{count, plural, one {# note left out (written by a user who does not exist here)} other {# notes left out (written by users who do not exist here)}}",
+      "notesSkippedOwn": "{count, plural, one {# shared note left out (written by another user)} other {# shared notes left out (written by other users)}}",
+      "notesSkippedAll": "{count, plural, one {# note left out (written by a user who does not exist here)} other {# notes left out (written by users who do not exist here)}}",
       "openRecipes": "Open my recipes",
       "again": "Restore another file",
       "stoppedHeading": "Restore stopped",
@@ -1036,7 +1037,11 @@
       "in_progress": "Another restore is running on this Cellar. Try again in a moment.",
       "expired": "The checked file has expired. Choose it again.",
       "unauthenticated": "Your session has expired. Sign in again.",
-      "network": "Could not reach the server. Check your connection and try again."
+      "network": "Could not reach the server. Check your connection and try again.",
+      "rate_limited": "Too many restore uploads. Try again later.",
+      "timeout": "The upload stalled and was stopped. Check your connection and try again.",
+      "server_error": "The server had a problem. Try again in a moment, and check the server log if it keeps failing.",
+      "failed": "The restore could not be completed. Choose the file again and retry."
     },
     "restore": {
       "heading": "Restore",
@@ -1061,6 +1066,7 @@
         "versionUnsupported": "This backup has a version this Cellar cannot read.",
         "invalid": "This file is not a valid Cellar backup.",
         "zipInvalid": "This zip file is not a valid Cellar backup archive.",
+        "zipEntryRefused": "This zip contains a file Cellar does not accept: {name}. A backup holds only the backup.json file and photos/<id>.webp files, and they must be at the top of the zip (or inside one folder).",
         "forbidden": "Only an admin can restore a backup of every user's recipes.",
         "inProgress": "A restore is already running on this server, possibly for another user. Wait a moment, then try again.",
         "rateLimited": "Too many restore uploads. Try again later.",
@@ -1083,6 +1089,7 @@
         "inProgress": "Another export is already running. Wait for it to finish, then try again.",
         "rateLimited": "Too many exports. Try again later.",
         "tooLarge": "This export is too large for one zip file. Download it without photos.",
+        "manifestTooLarge": "This export is larger than this Cellar can restore later, so it was not created. Export fewer recipes, or ask an admin to export per user.",
         "invalidQuery": "This export link is not valid. Go back to the Backup page and try again.",
         "failed": "The export could not be created. Try again, and check the server log if it keeps failing."
       }
