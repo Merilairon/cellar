@@ -378,7 +378,9 @@ describe('POST /api/import/backup: rejected uploads change nothing', () => {
       422,
       'backup_zip_invalid',
     );
-  });
+    // Building 60 001 ULID-named entries takes about 5 s on a loaded machine, so the default
+    // 5 s timeout is too tight.
+  }, 30_000);
 
   it('not a zip at all, and a zip whose manifest is not valid JSON', async () => {
     await expectRejected(

@@ -6,6 +6,7 @@ import {
   exportHref,
   formatBytes,
   initialRestoreState,
+  liveMessageKey,
   parseApplyResult,
   parseStage,
   precheckBackup,
@@ -281,5 +282,26 @@ describe('restoreReducer', () => {
     expect(restoreReducer(initialRestoreState, { type: 'progress', percent: 5 }).phase).toBe(
       'idle',
     );
+  });
+});
+
+describe('focus and live-region decisions', () => {
+  const withFile = { ...initialRestoreState, file: { name: 'a.zip', size: 1 } };
+  it('moves focus to the cancel button when the check starts', () => {
+    expect(restoreReducer(withFile, { type: 'uploadStart' }).focus?.to).toBe('cancel');
+  });
+  it('returns focus to the picker after cancel or failure', () => {
+    const up = restoreReducer(withFile, { type: 'uploadStart' });
+    expect(restoreReducer(up, { type: 'uploadCancelled' }).focus?.to).toBe('picker');
+    expect(restoreReducer(up, { type: 'uploadFail', error: { key: 'network' } }).focus?.to).toBe(
+      'picker',
+    );
+  });
+  it('announces coarse milestones only', () => {
+    expect(liveMessageKey('idle')).toBeNull();
+    expect(liveMessageKey('uploading')).toBe('backup.restore.live.uploading');
+    expect(liveMessageKey('preview')).toBe('backup.restore.live.checked');
+    expect(liveMessageKey('result', true)).toBe('backup.result.stoppedHeading');
+    expect(liveMessageKey('result')).toBe('backup.result.heading');
   });
 });

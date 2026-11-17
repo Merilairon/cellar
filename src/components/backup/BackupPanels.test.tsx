@@ -117,7 +117,7 @@ describe('RestoreView', () => {
   it('checking: indeterminate progress', () => {
     const html = view({ phase: 'checking', file: { name: 'a.zip', size: 1 } });
     expect(visible(html)).toContain('Checking the file…');
-    expect(html).toMatch(/<progress class="[^"]*"\s*>/);
+    expect(html).toMatch(/<progress aria-label="Checking the file…" class="[^"]*"\s*>/);
   });
   it('error: alert text from the server message, version appended', () => {
     const html = view({
@@ -199,7 +199,20 @@ describe('RestoreView', () => {
     expect(visible(html)).toContain('Restoring… this can take a while');
     expect(html).toContain('aria-busy="true"');
     expect(html).toMatch(/<fieldset[^>]*disabled/);
-    expect(html.match(/<button[^>]*disabled/g)?.length).toBe(2);
+    // Focus-holding buttons stay focusable: aria-disabled plus a handler guard, not `disabled`.
+    expect(html.match(/<button[^>]*aria-disabled="true"/g)?.length).toBe(2);
+    expect(html).not.toMatch(/<button[^>]*\sdisabled=""/);
+    expect(html).toMatch(/<progress[^>]*aria-label="Restoring/);
+  });
+  it('aria-busy is on the replaced region, never on the section holding the live region', () => {
+    const html = view({ phase: 'uploading', percent: 5, file: { name: 'a.zip', size: 1 } });
+    expect(html).toMatch(/<div class="space-y-3" aria-busy="true"/);
+    expect(html).not.toMatch(/<section[^>]*aria-busy/);
+    expect(html).toMatch(
+      /<div role="status" aria-live="polite" class="sr-only">Uploading the file/,
+    );
+    expect(html).toMatch(/<progress[^>]*aria-label="Uploading the file/);
+    expect(html).toMatch(/<span aria-hidden="true">Uploading… 5 %/);
   });
   it('result: heading, non-zero lines, links', () => {
     const html = view({ phase: 'result', stage: stage(), result: result() });

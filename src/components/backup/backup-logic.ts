@@ -227,7 +227,7 @@ export function parseApplyResult(body: unknown): ApplyResult | null {
 /* ---------- state machine ---------- */
 
 export type Phase = 'idle' | 'uploading' | 'checking' | 'preview' | 'applying' | 'result';
-export type FocusTarget = 'picker' | 'caption' | 'result';
+export type FocusTarget = 'picker' | 'caption' | 'result' | 'cancel';
 
 export type RestoreState = {
   phase: Phase;
@@ -275,7 +275,7 @@ export function restoreReducer(s: RestoreState, a: RestoreAction): RestoreState 
       return { ...s, file: a.error ? null : a.file, error: a.error, percent: 0 };
     case 'uploadStart':
       if (s.phase !== 'idle' || !s.file) return s;
-      return { ...s, phase: 'uploading', percent: 0, error: null };
+      return { ...s, phase: 'uploading', percent: 0, error: null, focus: focusOn(s, 'cancel') };
     case 'progress': {
       if (s.phase !== 'uploading') return s;
       const percent = Math.max(0, Math.min(100, Math.round(a.percent)));
@@ -284,10 +284,10 @@ export function restoreReducer(s: RestoreState, a: RestoreAction): RestoreState 
     }
     case 'uploadCancelled':
       if (s.phase !== 'uploading' && s.phase !== 'checking') return s;
-      return { ...s, phase: 'idle', percent: 0, error: null };
+      return { ...s, phase: 'idle', percent: 0, error: null, focus: focusOn(s, 'picker') };
     case 'uploadFail':
       if (s.phase !== 'uploading' && s.phase !== 'checking') return s;
-      return { ...s, phase: 'idle', percent: 0, error: a.error };
+      return { ...s, phase: 'idle', percent: 0, error: a.error, focus: focusOn(s, 'picker') };
     case 'staged':
       if (s.phase !== 'uploading' && s.phase !== 'checking') return s;
       return {
@@ -320,5 +320,26 @@ export function restoreReducer(s: RestoreState, a: RestoreAction): RestoreState 
     case 'discard':
     case 'again':
       return { ...initialRestoreState, focus: focusOn(s, 'picker') };
+  }
+}
+
+/**
+ * Coarse milestone for the polite live region (no per-percent chatter): the message key to
+ * announce when the phase is entered, or null when the phase needs no announcement.
+ */
+export function liveMessageKey(phase: Phase, partial = false): string | null {
+  switch (phase) {
+    case 'uploading':
+      return 'backup.restore.live.uploading';
+    case 'checking':
+      return 'backup.restore.checking';
+    case 'preview':
+      return 'backup.restore.live.checked';
+    case 'applying':
+      return 'backup.restore.restoring';
+    case 'result':
+      return partial ? 'backup.result.stoppedHeading' : 'backup.result.heading';
+    default:
+      return null;
   }
 }

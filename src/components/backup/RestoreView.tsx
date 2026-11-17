@@ -6,6 +6,7 @@ import {
   applyCount,
   formatBytes,
   isPartial,
+  liveMessageKey,
   resultLines,
   type RestoreAction,
   type RestoreError,
@@ -47,6 +48,7 @@ export type RestoreViewProps = {
   onAgain: () => void;
   pickerRef?: React.Ref<HTMLInputElement>;
   captionRef?: React.Ref<HTMLElement>;
+  cancelRef?: React.Ref<HTMLButtonElement>;
   resultRef?: React.Ref<HTMLHeadingElement>;
 };
 
@@ -88,6 +90,7 @@ export function RestoreView({
   onAgain,
   pickerRef,
   captionRef,
+  cancelRef,
   resultRef,
 }: RestoreViewProps) {
   const t = useTranslations();
@@ -97,16 +100,26 @@ export function RestoreView({
   const errId = `${uid}-err`;
   const reasonId = `${uid}-reason`;
   const preview = state.stage?.preview;
+  const liveKey =
+    state.phase === 'preview' && state.error
+      ? null
+      : liveMessageKey(state.phase, state.result ? isPartial(state.result) : false);
 
   return (
-    <section aria-labelledby={`${uid}-h`} aria-busy={busy} className="space-y-3">
-      <h2 id={`${uid}-h`} className="text-xl font-semibold">
-        {t('backup.restore.heading')}
-      </h2>
+    <section aria-labelledby={`${uid}-h`} className="space-y-3">
+      <div>
+        <h2 id={`${uid}-h`} className="text-xl font-semibold">
+          {t('backup.restore.heading')}
+        </h2>
+        {/* Always mounted and outside every aria-busy region, so milestones are announced. */}
+        <div role="status" aria-live="polite" className="sr-only">
+          {liveKey ? t(liveKey as never) : ''}
+        </div>
+      </div>
       <p className="text-neutral-700 dark:text-neutral-300">{t('backup.restore.intro')}</p>
 
       {(state.phase === 'idle' || state.phase === 'uploading' || state.phase === 'checking') && (
-        <div className="space-y-3">
+        <div className="space-y-3" aria-busy={busy}>
           <div className="flex flex-wrap items-center gap-3">
             <label
               className={`${btn} cursor-pointer has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[var(--rg-focus)] ${state.phase === 'idle' ? '' : 'pointer-events-none opacity-50'}`}
@@ -154,19 +167,24 @@ export function RestoreView({
             </div>
           ) : (
             <div className="space-y-2">
-              <div role="status" className="flex flex-col gap-1">
-                <span>
+              <div className="flex flex-col gap-1">
+                <span aria-hidden="true">
                   {state.phase === 'uploading'
                     ? t('backup.restore.uploading', { percent: state.percent })
                     : t('backup.restore.checking')}
                 </span>
                 {state.phase === 'uploading' ? (
-                  <progress max={100} value={state.percent} className="w-full max-w-md" />
+                  <progress
+                    max={100}
+                    value={state.percent}
+                    aria-label={t('backup.restore.live.uploading')}
+                    className="w-full max-w-md"
+                  />
                 ) : (
-                  <progress className="w-full max-w-md" />
+                  <progress aria-label={t('backup.restore.checking')} className="w-full max-w-md" />
                 )}
               </div>
-              <button type="button" className={btn} onClick={onCancelUpload}>
+              <button type="button" ref={cancelRef} className={btn} onClick={onCancelUpload}>
                 {t('backup.restore.cancel')}
               </button>
             </div>
@@ -176,7 +194,7 @@ export function RestoreView({
       )}
 
       {(state.phase === 'preview' || state.phase === 'applying') && preview && (
-        <div className="space-y-4">
+        <div className="space-y-4" aria-busy={state.phase === 'applying'}>
           <PreviewTable preview={preview} role={role} captionRef={captionRef} />
           <fieldset className="space-y-1" disabled={state.phase === 'applying'}>
             <legend className="font-semibold">{t('backup.strategy.legend')}</legend>
@@ -206,7 +224,7 @@ export function RestoreView({
 
       {state.phase === 'result' && state.result && (
         <div className="space-y-3">
-          <div role="status">
+          <div>
             <h3
               ref={resultRef}
               tabIndex={-1}
@@ -278,17 +296,23 @@ function ApplyBar({
       <div className="flex flex-wrap items-center gap-3">
         <button
           type="button"
-          className={`${btnPrimary} ${none ? 'opacity-60' : ''}`}
-          aria-disabled={none}
-          disabled={applying}
+          className={`${btnPrimary} ${none || applying ? 'opacity-60' : ''}`}
+          aria-disabled={none || applying}
           aria-describedby={none ? reasonId : undefined}
           onClick={() => {
-            if (!none) onApply();
+            if (!none && !applying) onApply();
           }}
         >
           {t('backup.apply', { count })}
         </button>
-        <button type="button" className={btn} disabled={applying} onClick={onDiscard}>
+        <button
+          type="button"
+          className={`${btn} ${applying ? 'opacity-50' : ''}`}
+          aria-disabled={applying}
+          onClick={() => {
+            if (!applying) onDiscard();
+          }}
+        >
           {t('backup.restore.cancel')}
         </button>
       </div>
@@ -298,9 +322,9 @@ function ApplyBar({
         </p>
       )}
       {applying && (
-        <div role="status" className="flex flex-col gap-1">
-          <span>{t('backup.restore.restoring')}</span>
-          <progress className="w-full max-w-md" />
+        <div className="flex flex-col gap-1">
+          <span aria-hidden="true">{t('backup.restore.restoring')}</span>
+          <progress aria-label={t('backup.restore.restoring')} className="w-full max-w-md" />
         </div>
       )}
       <ErrorLine error={state.error} id={errId} />

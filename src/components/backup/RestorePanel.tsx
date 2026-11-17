@@ -9,12 +9,15 @@ export function RestorePanel({ role, maxBytes }: { role: 'admin' | 'member'; max
   const r = useRestore(maxBytes);
   const pickerRef = useRef<HTMLInputElement>(null);
   const captionRef = useRef<HTMLElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
   const resultRef = useRef<HTMLHeadingElement>(null);
   const focus = r.state.focus;
 
   useEffect(() => {
     if (!focus) return;
-    const el = { picker: pickerRef, caption: captionRef, result: resultRef }[focus.to].current;
+    const el = { picker: pickerRef, caption: captionRef, result: resultRef, cancel: cancelRef }[
+      focus.to
+    ].current;
     el?.focus();
     // `seq` makes a repeated target fire again.
   }, [focus]);
@@ -37,6 +40,7 @@ export function RestorePanel({ role, maxBytes }: { role: 'admin' | 'member'; max
       onAgain={r.again}
       pickerRef={pickerRef}
       captionRef={captionRef}
+      cancelRef={cancelRef}
       resultRef={resultRef}
     />
   );
