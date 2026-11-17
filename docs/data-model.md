@@ -416,26 +416,132 @@ The instance is internet-exposed (PRD §6), so this is a hard requirement. Block
 | POST | /api/recipes/:id/notes | Add a note. Body `{ body, shared? }` (`body` 1 to 4000 characters after trim, `shared` default `false`). Any reader. 201 with the note |
 | PUT | /api/recipes/:id/notes/:noteId | Change your own note: `{ body?, shared? }`, at least one. 404 for another user's note |
 | DELETE | /api/recipes/:id/notes/:noteId | Delete your own note. 204 |
-| GET | /api/export | Full JSON backup. **Not implemented** (slice B) |
-| POST | /api/import/backup | Restore backup. **Not implemented** (slice B) |
+| GET | /api/export | Download a backup (v0.5.1). Any signed-in user gets **their own recipes** (`owner_id = me`; recipes other people shared with you are not included). Query parameters, both take only the value `1`: `all=1` is the whole-instance backup and is **admin only**; `photos=1` returns a zip with the photo files instead of a JSON file. An unknown parameter, a repeated parameter or any other value is `400 invalid_query`. Without `photos`: `200`, `Content-Type: application/json`, the document of section 6 (built in memory). With `photos=1`: `200`, `Content-Type: application/zip`, a streamed stored (uncompressed) zip whose first entry is `backup.json` (the same document, after a `stat` of every photo file; missing files are left out and counted in `photos_missing`), followed by `photos/<ulid>.webp` for every photo and thumbnail. Both: `Content-Disposition: attachment; filename="cellar-backup-<yyyy-mm-dd>.json"` (or `.zip`; the date is the UTC date of the export) and `Cache-Control: private, no-store`. **Errors** (JSON `{ "error": "<code>", "message": "..." }`, `no-store`, except 401): `400 invalid_query`; `401` no session (empty body, or `{ "error": "unauthenticated" }` from the proxy when there is no session cookie at all); `403 forbidden` a member sent `all=1`; `409 export_in_progress` this user already has an export running; `413 export_too_large` the zip would pass 4 GiB or 65 535 entries (zip64 is not written; export without photos instead); `429 rate_limited` with `Retry-After` (seconds); `500 export_failed`. Order of checks: session, query, `all` permission, in-flight slot (409, uses no quota), rate limit (429), build. **Limits:** one export in flight per user (a lease older than 6 hours is treated as free, in case a response was dropped without being read), and `RATE_LIMIT_EXPORT_MAX` exports per `RATE_LIMIT_EXPORT_WINDOW_SEC` per user (defaults 10 per 3600 s); a failed export is refunded. The limiter and the lease live in process memory (single process, like the other limiters). Cancelling the download stops the file reads |
+| POST | /api/import/backup | **Stage** a restore (v0.5.1): upload the backup and get a preview; nothing is written to the recipe tables. The request body is the raw file (not multipart). `Content-Type` must be `application/json` (a JSON backup) or `application/zip` (a zip backup); anything else is `415 unsupported_media_type`. The body is streamed to a file under `RESTORE_DIR` (mode 0600, named by a ULID) and never held in memory. **Caps:** `RESTORE_BODY_MAX` bytes for a zip (default 268 435 456 = 256 MiB, minimum 1024); a JSON upload is capped at the smaller of `RESTORE_BODY_MAX` and the 16 MiB manifest cap (`MAX_MANIFEST_BYTES`); the manifest (`backup.json` inside a zip) is capped at 16 MiB too. A `Content-Length` over the cap is refused before any byte is read; otherwise the cap is enforced while streaming (`413 backup_too_large`, file removed). A sender that stalls for 30 s gets `408 request_timeout`. There is no total deadline (see the v0.5.1 carryover). **Validation before anything is stored:** the file is parsed (UTF-8, JSON, no `__proto__`/`constructor`/`prototype` keys, nesting at most 32), passed through `migrateBackup` (section 6) and, for a zip, opened with a bounded reader (entry names are only `backup.json` or `photos/<ulid>.webp`, at most 60 000 entries, 20 MiB per photo, 2 GiB declared in total, no zip64, no encryption, deflate ratio at most 200, CRC-32 checked). **Success:** `201 { "id": "<ulid>", "kind": "json" \| "zip", "expires_at": "<iso>", "preview": { "scope": "own" \| "all", "recipes", "sections", "ingredients", "notes", "ratings", "photos", "conflicts": [{ "title", "reason": "same_title" }], "unknown_users": ["<email>"], "notes_skipped", "ratings_skipped" } }`. `notes` and `ratings` count what would be restored; `notes_skipped` and `ratings_skipped` count what would be left out (see section 6); `photos` is the number of photo files present in the zip (0 for a JSON file); `unknown_users` lists owner emails of an admin `all` file that have no active account here. A conflict is a recipe whose title (trimmed, NFC, case-folded) equals one the target owner already has. The staged file is kept for 1 hour (`STAGE_TTL_MS`); each user has at most one staged file (a new successful upload discards the old one); expired files are removed lazily by the next restore call, with no background timer. **Errors** (JSON `{ "error", "message", ... }`, `no-store`, `X-Content-Type-Options: nosniff`, except 401 and the CSRF 403 which have an empty body): `403` missing or cross-site origin proof (CSRF); `401`; `415`; `409 restore_in_progress` this user is already uploading or applying; `413 backup_too_large`; `408`; `422 backup_invalid` with `errors` (at most 10 strings such as `recipes.3.title: too_small`, or `forbidden_key`, `too_deep`, `not_utf8`, `syntax`), `422 backup_zip_invalid` (unreadable or hostile archive, or no `backup.json`), `422 backup_version_unsupported` with `found` (the version in the file; the message says "This backup was made by a newer Cellar. Upgrade this instance first." when `found` is a number above 1); `403 forbidden` a member uploaded a `scope: "all"` file; `500 restore_failed`. This route is **not** covered by the Next.js proxy (excluded in the `matcher` of `src/proxy.ts`, because the proxy truncates bodies at 11 MiB), so it does not get the security headers or the cookie pre-check; it authenticates itself |
+| POST | /api/import/backup/:id/apply | Apply a staged restore. Body `{ "strategy": "skip" \| "rename" }` (JSON, at most 1 KiB, nothing else; otherwise `400 invalid_strategy`). `skip` leaves out recipes whose title conflicts; `rename` restores them as "Title (restored)", then "Title (restored 2)", and so on. The staged file is read and validated again, then restored **one recipe at a time, each in its own transaction**. `200 { "imported", "skipped", "renamed", "notes_restored", "notes_skipped", "ratings_restored", "ratings_skipped", "photos_restored", "photos_failed", "failed_at": null \| <index> }`. `failed_at` is the zero-based position in the file of the first recipe that could not be stored; the run stops there, recipes before it stay restored and recipes after it are not attempted (the response is still 200). Photos are written after their recipe commits and a bad or missing photo only increments `photos_failed`; at most 2000 photos are decoded per apply (`MAX_RESTORE_PHOTOS`), the rest count as `photos_failed`. The staged file is deleted afterwards whatever the outcome. **Errors:** `403` CSRF; `401`; `404 not_found` the id is unknown, expired, malformed or belongs to someone else (all the same answer); `400 invalid_strategy`; `409 restore_in_progress` an apply is already running in this process (one at a time, for everyone); `403 forbidden`; `422` as for staging if the file no longer validates; `500 restore_failed`. Same no-store and nosniff headers and the same proxy exclusion as the stage route (the path `/api/import/backup/<id>/apply` is excluded by the same matcher) |
+| DELETE | /api/import/backup/:id | Discard a staged restore and delete its file. `204`. `404 not_found` for an unknown, expired or foreign id, `409 restore_in_progress` while that stage is being applied, `403` CSRF, `401` |
 
 ## 6. JSON Backup Format
 
-```json
-{
-  "version": 1,
-  "exported_at": "2026-11-05T10:00:00Z",
-  "recipes": [
-    {
-      "title": "Espresso Brownies",
-      "servings": null,
-      "ingredients": [{ "position": 0, "name": "unsalted butter", "metric": {"qty": 115, "unit": "g"}, "us": {"qty": 4, "unit": "oz"} }],
-      "steps": [{ "position": 0, "kind": "column", "label": "melt", "row_start": 0, "row_end": 0 }],
-      "sections": [{ "title": null, "note": "ingredients and steps nested per section in the real format" }],
-      "tags": ["dessert"], "notes": [], "ratings": []
-    }
-  ]
-}
+Implemented in v0.5.1. The format is defined by one strict zod schema, `src/lib/backup/schema.ts` (`backupV1Schema`); this section lists every field of it. The serializer is `buildBackup` in `src/lib/backup/export.ts`; the reader is `migrateBackup` in `src/lib/backup/migrate.ts`. A backup is either one JSON file or a zip that holds that same JSON as `backup.json` plus the photo files.
+
+### Rules of the format
+
+- **No ids.** No row id (recipe, section, ingredient, step, photo, note, user) appears anywhere. Children are identified by `position`; photos by a path inside the zip; users by email. Restore assigns fresh ids. The one exception that looks like an id is `split_group_key`, a per-recipe label (`g1`, `g2`, ...) shared by the rows of one split ingredient; it is not the stored ULID.
+- **Positions are the array index.** Every `position` must equal the item's index in its array (sections in a recipe, ingredients and steps in a section, photos in a recipe). A file with a gap or a repeat is rejected.
+- **Strict.** An unknown key anywhere is rejected, and so is `__proto__`, `constructor` or `prototype` at any depth. Every array and string has a cap, listed below, and the array lengths are checked before any item is looked at.
+- **Timestamps** are UTC text, `YYYY-MM-DDTHH:MM:SS` with optional milliseconds and a trailing `Z`.
+- **Emails** are lowercase.
+
+### Top level
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `version` | `1` | Integer, exactly `1` for this format. See "Versions and the migration hook" |
+| `exported_at` | timestamp | When the export was made |
+| `app_version` | string, at most 64 | The writing app's version. **Currently always `"unknown"`**: the repository has no version constant (`package.json` says `0.1.0`), so the exporter has nothing to put here |
+| `scope` | `"own"` \| `"all"` | Which export this is. See "The two scopes" |
+| `users` | array, at most 1000 | `all` scope only, required there, forbidden in `own`. Items: `{ email, display_name (1 to 80), role ("admin" \| "member"), unit_pref ("metric" \| "us"), locale (1 to 20) }`. Emails must be unique. No password hash, no id |
+| `recipes` | array, at most 5000 | See below |
+| `photos_missing` | integer 0 to 100000 | Optional; zip exports only, and only present when above 0: the number of photo files the database named that were not on disk and were therefore left out of the zip (and out of the manifest) |
+
+Across one document, ingredients, steps, notes and ratings together may not exceed 250 000 rows (`MAX_TOTAL_ROWS`).
+
+### Recipe
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `title` | string, 1 to 200 | |
+| `description` | string (at most 5000) or null | |
+| `servings` | number above 0, at most 10000, or null | |
+| `servings_label` | string (at most 60) or null | |
+| `prep_minutes`, `cook_minutes` | integer 0 to 100000, or null | |
+| `source_url` | string (at most 2000) or null | When set it must be an `http:` or `https:` URL |
+| `source_name` | string (at most 200) or null | |
+| `visibility` | `"private"` \| `"users"` | Restored as written |
+| `view_mode` | `"grid"` \| `"list"` | A `grid` recipe must give every `column` step a `row_start` |
+| `owner_email` | email | `all` scope only (required there, must be in `users`); forbidden in `own` |
+| `created_at`, `updated_at` | timestamp | Data only: see "What restore does not restore" |
+| `tags` | array of strings (1 to 40 characters), at most 20 | |
+| `sections` | array, 1 to 200 | |
+| `photos` | array, at most 10 | At most one `is_cover: true` |
+| `notes` | array, at most 200 | |
+| `ratings` | array, at most 1000 | |
+
+### Section, ingredient, step
+
+A **section** is `{ position, title (string at most 120 or null), ingredients, steps }` with at most 400 ingredients and 400 steps.
+
+An **ingredient** has, in this order: `position` (0 to 10000), `name` (1 to 200), `note` (at most 300 or null), `raw_text` (at most 500), `metric_qty`, `metric_qty_max`, `us_qty`, `us_qty_max` (number 0 to 1 000 000 or null; a `_max` needs its `_qty` and must be larger), `metric_unit`, `us_unit` (at most 20 or null), `display_primary` (`"metric"` \| `"us"`), `split_group_key` (at most 64 or null), `portion_label` (at most 60 or null), `group_label` (at most 120 or null).
+
+A **step** has `position` (0 to 10000), `kind` (`"banner_top"` \| `"column"` \| `"banner_bottom"`), `label` (1 to 80), `detail` (at most 4000), `row_start` and `row_end` (integer 0 to 10000 or null), `temp_c` (0 to 1000 or null), `temp_f` (0 to 2000 or null), `minutes_min` and `minutes_max` (0 to 100000 or null, min not above max). Banners carry no span (`row_start` and `row_end` null); a `column` has both or neither, and `row_start` is not above `row_end`. These are the same rules as the database's `step_span_chk`. `row_start` and `row_end` are indexes into the section's `ingredients` array, which is why grid spans survive a round trip. Whether the spans make a valid grid is checked again at restore time.
+
+### Photo, note, rating
+
+| Object | Fields |
+| --- | --- |
+| Photo | `position`, `is_cover` (boolean), `width`, `height` (integer 1 to 100000), `file` (`photos/<ulid>.webp`), `thumb` (`photos/<ulid>.webp` or null; null for photos that predate thumbnails). The paths must match `^photos/[0-9A-HJKMNP-TV-Z]{26}\.webp$`, and no path may appear twice in a document |
+| Note | `body` (1 to 4000), `shared` (boolean), `author_display_name` (1 to 80, display only), `author_email` (`all` scope only), `mine` (boolean, `own` scope only and required there: true when the person who exported wrote the note), `created_at`, `updated_at` |
+| Rating | `stars` (integer 1 to 5), `user_email` (`all` scope only; one rating per email per recipe), `created_at`, `updated_at`. In `own` scope there is at most one rating per recipe: yours |
+
+### The two scopes
+
+| | `own` (member, and an admin without `all`) | `all` (admin only) |
+| --- | --- | --- |
+| Recipes | Only recipes with `owner_id = you`. A recipe that someone else shared with all users is **not** included, however visible it is to you | Every recipe of every user, including `private` ones |
+| Notes | Your own notes, private and shared (`mine: true`), **plus** other users' **shared** notes with their display name only (`mine: false`). Other users' private notes are never read | Every note, private ones included, with the author's email |
+| Ratings | Your own rating only | Every rating, with the rater's email |
+| Users | No `users` list | A `users` list: email, display name, role, unit preference, locale of every account (deactivated ones too) |
+| Who may ask | Any signed-in user | `GET /api/export?all=1`; a member gets 403, and the builder also re-checks the stored role of an active account |
+
+**The admin `all` export is the whole-instance backup, on purpose.** It contains other people's private recipes and private notes. It exists so an admin can restore a family's recipes after a loss. Treat the file like the database file: it is not encrypted. It still contains no password hashes, sessions, invites or share tokens. Backing up the data volume (see the README) remains the primary full backup; the JSON backup is a portable second copy that also works across instances.
+
+### Zip layout
+
+A zip export (`?photos=1`) contains exactly these entries, in this order, stored without compression:
+
+1. `backup.json`, the document above (with `photos_missing` when a file was missing on disk).
+2. `photos/<ulid>.webp` for every photo `file` and `thumb` the manifest names, each once. The names are the file names in the exporting instance's uploads directory.
+
+Nothing else is in the archive. When a restore opens a zip it accepts only these two name shapes (deflated entries are also read, so a zip repacked by another tool works), checks every size and offset against the file, and refuses the whole archive on any violation.
+
+### Versions and the migration hook
+
+`version` is an integer. `migrateBackup(raw)` is the only entry point for reading a backup: it returns `{ ok: true, doc }` with a v1 document, or `{ ok: false, code, ... }`:
+
+- `backup_version_unsupported`, with `version` set to what was found, for any `version` other than `1`: a newer number (`2`), a string (`"1"` is reported as `"string"`), `null`, a float. The restore API turns this into 422 and tells the user to upgrade this instance when the number is above 1.
+- `backup_invalid` for a missing `version`, a non-object, a length cap exceeded, an unsafe key, or a schema error (`errors` lists up to 20 `{ path, code }`).
+
+The function is a `switch` on `version`. A future v2 adds `backupV2Schema` and `parseV2`, makes v2 the current type, and chains the old versions through a pure upgrade function so that each step stays small:
+
+```ts
+case 1: { const r = parseV1(raw); return r.ok ? { ok: true, doc: upgradeV1ToV2(r.doc) } : r; }
+case 2: return parseV2(raw);
 ```
 
-> **Not implemented.** The export and restore routes below (`GET /api/export`, `POST /api/import/backup`) and this backup format still do not exist in v0.5.0; they are planned for slice B (v0.5.1) of v1.0, and the plan (v1.0 task list R8) is that `recipe.share_token` is never exported. v0.4.2 added photos, notes and ratings to the database, but the export and restore routes and this backup format do not exist yet. The v1.0 backup format must carry photos (files), notes (with `shared` and author) and ratings; see `docs/tasks/v0.4.2-carryover.md`.
+An old Cellar therefore refuses a newer file (`default`), and a newer Cellar reads every older version. `src/lib/backup/migrate.ts` carries the same comment. No v2 exists yet.
+
+### What restore does with a document
+
+- **Member restore** (any file with `scope: "own"`, and any member): every recipe becomes the caller's. Notes are restored only when `mine` is true, and belong to the caller. Other users' shared notes in the file are **dropped** and counted in `notes_skipped`, because a note needs a real author account here and `author_display_name` is display text only. The rating in the file (yours) is restored as the caller's. A member who uploads a `scope: "all"` file gets 403.
+- **Admin restore of an `all` file:** `owner_email`, `author_email` and `user_email` are matched to **active** accounts on this instance. A recipe whose owner has no active account here is restored as the **restoring admin's**, and the email is listed under `unknown_users` in the preview; the preview does not otherwise warn per recipe. Notes and ratings by emails with no active account are dropped and counted. No account is ever created, and the `role` in `users` is never read.
+- **Conflicts:** same normalized title (trim, NFC, case-fold) for the target owner, decided against what existed before the restore started. `skip` leaves the recipe out; `rename` restores it as "Title (restored)". Two recipes with the same title inside one file are restored as they are.
+- **Photos:** only from a zip, and only entries named by a photo in the manifest. The main file is decoded and re-encoded through the same image pipeline as an upload (WebP, long edge at most 1600 px, a new 400 px thumbnail made from it; the file's own `thumb` entry is never trusted), under fresh names and ids. The cover flag is kept; if the cover photo is the one that fails, the first restored photo becomes the cover. A JSON backup has no photo files, so a recipe restored from it has no photos even though the manifest lists them.
+- **Atomicity:** one transaction per recipe (recipe, tags, sections, ingredients, steps, notes, ratings). A failure stops the run: earlier recipes stay, `failed_at` reports the position of the recipe that failed. Running the same file again with `skip` finishes the job.
+
+### What is not in a backup
+
+- **Share tokens** (`recipe.share_token`). Public links are never exported and never restored; links die with the instance they were made on, and a restored recipe has no link.
+- **Sessions, users' passwords** (hashes), **invites** and **password resets**. An `all` export lists accounts without any credential.
+- **Import jobs and kept raw HTML**, and any environment value or secret.
+- **Other users' private notes** and **other users' individual ratings** in a member (`own`) export.
+- **Recipes you do not own**, in a member export, even when they are shared with you; likewise the "save a copy" link (`copied_from_id`) is not exported.
+- **Row ids**, photo ids and file names (the zip uses its own `photos/<ulid>.webp` names, which are not the ids of the restored photos).
+- **User preferences of the person who exports** in an `own` file (unit preference, locale); only an `all` file lists them, and restore never applies them.
+
+### What restore does not restore
+
+- **`created_at` and `updated_at`** of recipes, notes and ratings are kept in the file as data but not applied: restored rows are stamped with the time of the restore.
+- **Other users' shared notes** in a member restore (see above).
+- **Share tokens**, **ownership claims** (a member restore never reads `owner_email`; there is none in an `own` file), **account roles**, and **accounts**.
+- **Photo files not in the zip** (counted in `photos_failed`) and anything past the 2000 photos decoded per apply.

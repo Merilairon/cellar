@@ -1048,6 +1048,10 @@
       "cancel": "Cancel",
       "uploading": "Uploading… {percent} %",
       "checking": "Checking the file…",
+      "live": {
+        "uploading": "Uploading the file…",
+        "checked": "File checked. Review what will be restored."
+      },
       "restoring": "Restoring… this can take a while for backups with photos.",
       "error": {
         "unsupportedMedia": "Choose a Cellar backup file: a .json or a .zip.",

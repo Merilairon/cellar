@@ -94,6 +94,13 @@
 
 **Edge cases:** incompatible backup version → error with upgrade hint; photos included as zip or referenced by path (decide in M5).
 
+*As built in v0.5.1:*
+
+- **Where.** There is no Settings page. **Backup** is a link in the header (after **Import**) that opens `/backup`, with **Export** and **Restore** on one page. It works on a phone-width screen (restore from a real phone was not tried).
+- **Step 2, backup.** **Download backup** saves `cellar-backup-<date>.json` with your own recipes. Tick **Include photos** to get a `.zip` instead (`backup.json` plus the photo files). A member gets only the recipes they own; an admin also has **Include all users' recipes**, the whole-instance backup, which includes everyone's private recipes and notes and is kept as safe as the database. Photos are in the zip, not referenced by path: that decision is made.
+- **Step 3, restore.** **Choose a file**, then **Check the file**: it uploads and is validated, and a preview shows counts (recipes, sections, notes, ratings, photos), the recipes that already exist and, for an admin, owners who have no account here. Pick **Skip them and keep mine** or **Restore them as copies named "Title (restored)"**, then **Restore**. A result lists what was restored, skipped, copied and left out; if the server stopped part way it says "Restore stopped" and at which recipe, and restoring the same file again with Skip finishes the rest. **Cancel** discards the checked file; an unused one expires after an hour.
+- **Edge cases.** A backup made by a newer Cellar is refused with "This backup was made by a newer Cellar. Upgrade this instance first."; a file that is not a backup, or a damaged zip, gets a plain error and nothing is kept. A file over the upload limit (`RESTORE_BODY_MAX`, 256 MiB by default) is refused by the page before it is sent, and again by the server. Other users' shared notes are left out of a member restore, public links are not restored, and recipes come back as new recipes dated at the time of the restore. A zip restores photos; a JSON file restores recipes without them.
+
 ## Journey 7 — Onboarding (Jan and family)
 
 1. First launch: create admin account.

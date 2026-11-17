@@ -4,7 +4,7 @@ A self-hosted recipe book for you and the people you invite. Next.js 16, SQLite,
 
 This is v0.4.2 (implemented, pending the release gate). It builds on v0.2 (manual recipes with a grid view and a list view), v0.3.0 (importing a recipe from a web address or pasted text), v0.3.1 (an automatic step-to-ingredient grid mapper for imports) and v0.3.2 (an optional headless browser for JavaScript-only pages), v0.4.0 (search, tags, unit conversion and scaling), v0.4.1 (a visual grid editor), and adds photos, notes, ratings and a cook mode. Earlier versions added accounts, invites, password recovery, security hardening and Docker packaging. It runs as a single process with a single SQLite file.
 
-The branch `release/v0.5.0` (slice A of v1.0, not tagged yet) adds sharing by public link and printing; see [Sharing and public links](#sharing-and-public-links) and [Printing](#printing). Export and backup are not part of it.
+The branch `release/v0.5.0` (slice A of v1.0, not tagged yet) adds sharing by public link and printing; see [Sharing and public links](#sharing-and-public-links) and [Printing](#printing). The branch `release/v0.5.1` (slice B, not tagged yet) adds JSON export and restore; see [Backup and restore](#backup-and-restore).
 
 ## Features
 
@@ -29,7 +29,9 @@ The branch `release/v0.5.0` (slice A of v1.0, not tagged yet) adds sharing by pu
 - **Print (v0.5.0).** A **Print** button on the recipe page and the public page prints the grid on one landscape page. See [Printing](#printing).
 - **Cook mode (v0.4.2).** **Cook** opens a full-screen view of the recipe with large check-off items for ingredients and steps, at the scale and unit you had chosen. Checks are not saved. It asks the browser to keep the screen on (HTTPS or localhost only) and says so when it cannot.
 
-Not yet available: export and backup (photos and notes are not part of any backup yet), and sorting by rating.
+- **Backup and restore (v0.5.1).** The **Backup** page downloads your recipes as a JSON file or a zip with photos, and restores such a file into any Cellar instance after a preview. See [Backup and restore](#backup-and-restore).
+
+Not yet available: sorting by rating.
 
 ## Routes
 
@@ -43,8 +45,9 @@ Not yet available: export and backup (photos and notes are not part of any backu
 | `/import/:id`       | Review screen for an import: edit the draft, then save or discard.                                                                                                                                                                                                                          |
 | `/recipes/:id/edit` | Form to edit a recipe you own (admins can edit any recipe). Saving replaces the recipe's sections, ingredients and steps.                                                                                                                                                                   |
 | `/r/:token`         | The public, read-only page of a recipe shared by link. No sign-in. Shows the recipe without photos, notes, ratings or owner; every invalid, revoked or unknown link shows the same "This link is invalid or has expired." page (see [Sharing and public links](#sharing-and-public-links)). |
+| `/backup`           | Download a backup of your recipes (JSON, or a zip with photos) and restore one: choose a file, check it, read the preview, then restore. Admins can also download every user's recipes (see [Backup and restore](#backup-and-restore)). Linked as **Backup** in the header.                 |
 
-The JSON API lives under `/api/recipes` (`/api/recipes`, `/api/recipes/:id`, `/api/recipes/:id/copy`, `/api/recipes/:id/visibility`, `/api/recipes/:id/share-link`, `/api/recipes/:id/grid`) and `/api/tags`. See [docs/data-model.md](docs/data-model.md).
+The JSON API lives under `/api/recipes` (`/api/recipes`, `/api/recipes/:id`, `/api/recipes/:id/copy`, `/api/recipes/:id/visibility`, `/api/recipes/:id/share-link`, `/api/recipes/:id/grid`), `/api/tags`, `/api/export` and `/api/import/backup`. See [docs/data-model.md](docs/data-model.md).
 
 ## Sharing and public links
 
@@ -83,6 +86,38 @@ When the app cannot tell who the client is (no `TRUSTED_PROXIES`, the default fo
 - **Font steps.** The table font depends on the largest number of step columns in any section: 1 to 6 columns 10 pt, 7 to 10 columns 9 pt, 11 or more columns 7 pt (the page itself is not scaled). For the two-section sample on the public page (the tallest case) 10.5 pt still fit on A4 and 11 pt needed two pages; 10 pt was chosen to leave room for longer recipes. The samples have at most 5 step columns, so the 9 pt and 7 pt steps were only checked with synthetic recipes (the stylesheet comment records no width overflow from 5 to 16 columns); no automated test covers them.
 - **When it does not fit.** A grid with more rows than a landscape page holds, or several long sections, prints on as few pages as possible: rows are never split and the font never goes below 7 pt (a test prints a 60-row recipe and expects more than one page).
 - **Not tested.** Real printers, Firefox, Safari and phones' print sheets. Known cosmetic issues are listed in [docs/tasks/v0.5.0-carryover.md](docs/tasks/v0.5.0-carryover.md).
+
+## Backup and restore
+
+**Backup** in the header opens `/backup` (new in v0.5.1). It has two parts: export and restore.
+
+### Export
+
+- **JSON file.** **Download backup** gives you `cellar-backup-<date>.json` with your recipes: ingredients, steps and the grid spans, tags, your notes, other people's shared notes (author name only), your ratings and which photos each recipe has. The JSON file lists the photos but does not contain them.
+- **Zip with photos.** Tick **Include photos** to get `cellar-backup-<date>.zip` instead: `backup.json` first, then every photo and thumbnail as `photos/<id>.webp`. The zip is streamed, so a large library does not fill the server's memory. A photo file that is missing on disk is left out and counted in the file (`photos_missing`).
+- **Your recipes only.** A member exports the recipes they own. Recipes that other people shared with you are not included.
+- **Admins: all users.** An admin also sees **Include all users' recipes**. That file (`scope: "all"`) is the **whole-instance backup**: every user's recipes including private ones, every note including private notes, every rating and a list of accounts (email, name, role). That is by design, so an admin can rebuild an instance. Keep the file as safe as the database. It never contains password hashes, sessions, invites or public-link tokens.
+- **Limits.** One export at a time per user, and `RATE_LIMIT_EXPORT_MAX` exports per `RATE_LIMIT_EXPORT_WINDOW_SEC` (default 10 per hour) per user. A zip over 4 GiB or 65 535 files is refused (`413`); download without photos instead.
+- **Not in any backup:** public-link tokens, sessions, passwords, invites, password resets, import jobs and kept raw HTML, and (in your own export) other people's private notes and individual ratings. The full list is in [docs/data-model.md](docs/data-model.md) section 6.
+
+### Restore
+
+1. **Choose a file** (`.json` or `.zip`) and select **Check the file**. The file is uploaded to the server, where it is stored under `RESTORE_DIR` and checked completely; nothing is written to your recipes yet. A file that is not a Cellar backup, a damaged or hostile zip, or a backup made by a newer Cellar ("This backup was made by a newer Cellar. Upgrade this instance first.") is refused with a message and nothing is kept.
+2. **Read the preview.** It shows how many recipes, sections, notes, ratings and photos the file would restore, which recipes already exist (same title, ignoring case and surrounding spaces) and, for an admin, owners who have no account here.
+3. **Choose what happens to recipes that already exist:** **Skip them and keep mine** (default), or **Restore them as copies named "Title (restored)"**.
+4. **Restore.** The result lists what was restored, skipped, copied and left out. **Cancel** discards the checked file. A checked file that is not used expires after one hour.
+
+What to expect:
+
+- **Recipes come back as new recipes**, owned by you, with fresh ids, in the same grid layout (spans included), with the same visibility. Their created and last-edited times are the time of the restore. Public links are not restored: a restored recipe is not publicly shared.
+- **Notes and ratings (member).** Your own notes and your rating come back. Other people's shared notes in the file are left out and counted, because a note needs an author account on this instance.
+- **Admin restore of an all-users file.** Owners, note authors and raters are matched by email to accounts that exist here. A recipe whose owner has no account here is restored as **yours**; the preview lists those emails but not which recipes, and notes and ratings by unknown people are left out. Nobody is created, and roles from the file are ignored. Check the owners list before you restore.
+- **Photos** come back only from a zip. Each one is decoded and re-encoded like an upload, so a file that is not a real image is skipped and counted. A JSON file restores recipes without photos. At most 2000 photos are restored per run.
+- **If something goes wrong halfway,** each recipe is restored on its own. The run stops at the first recipe that cannot be stored: the ones before it stay, the result says "Restore stopped" and at which recipe, and the ones after it are not attempted. Restore the same file again with **Skip** to finish; the recipes that are already there are skipped.
+- **Size.** Uploads are limited to `RESTORE_BODY_MAX` (256 MiB by default); a JSON file is limited to 16 MiB. A reverse proxy in front of Cellar must allow at least that much on `POST /api/import/backup` ([docs/deployment.md](docs/deployment.md)). Restoring a large zip needs free disk space for the staged file plus the re-encoded photos.
+- **One at a time.** Only one restore is applied at a time on the instance (a second one gets "restore in progress" and can be retried), and each user keeps at most one checked file.
+
+**The volume copy stays the primary full backup.** The export is a portable copy of recipes, not of the instance: it does not include accounts' passwords, public links, sessions or import history, and a restore adds recipes without removing anything. To recover a whole instance, restore the `/data` volume ([Backup](#backup) under Docker). Use the JSON or zip backup to move recipes between instances, to keep a copy outside the volume, and to hand a member their own recipes.
 
 ## Search and tags
 
@@ -417,7 +452,7 @@ Add `--push` and a registry tag to publish.
 
 ### Backup
 
-Back up the `/data` volume. The SQLite database and, since v0.3.0, the uploads directory (`/data/uploads`, imported covers) live in it. With the app stopped (`docker compose stop app`), for example:
+This is the full backup. (The **Backup** page of the app exports recipes only; see [Backup and restore](#backup-and-restore).) Back up the `/data` volume. The SQLite database and, since v0.3.0, the uploads directory (`/data/uploads`, imported covers) live in it. With the app stopped (`docker compose stop app`), for example:
 
 ```bash
 docker run --rm -v cellar_app-data:/data -v "$PWD":/backup alpine tar czf /backup/cellar-data.tgz -C /data .
@@ -450,6 +485,10 @@ Validated at startup in `src/lib/env.ts`. See `.env.example` for a template.
 | `PUBLIC_LINKS_ENABLED`           | no            | `true`                                        | `true` or `false` (anything else fails at startup). `false` disables every public `/r/<token>` link on this instance: they answer the invalid-link page, link creation is refused with 403 `public_links_disabled`, and stored tokens are kept but inert until you set it back to `true`.                                                                                                                 |
 | `RATE_LIMIT_PUBLIC_MAX`          | no            | `120`                                         | Requests to `/r/*` per client IP per window (IPv6 clients are grouped by /64); over it the answer is 429 with `Retry-After`. Skipped when the client IP is unknown (needs `TRUSTED_PROXIES`).                                                                                                                                                                                                             |
 | `RATE_LIMIT_PUBLIC_WINDOW_SEC`   | no            | `60`                                          | Public link window in seconds.                                                                                                                                                                                                                                                                                                                                                                            |
+| `RATE_LIMIT_EXPORT_MAX`          | no            | `10`                                          | Backup downloads (`GET /api/export`) per user per window. A failed export is not counted. One export at a time per user, whatever this is set to.                                                                                                                                                                                                                                                         |
+| `RATE_LIMIT_EXPORT_WINDOW_SEC`   | no            | `3600`                                        | Export window in seconds.                                                                                                                                                                                                                                                                                                                                                                                 |
+| `RESTORE_BODY_MAX`               | no            | `268435456` (256 MiB)                         | Largest backup upload, in bytes (1024 to 4294967295). Over it the upload is refused with 413 while it streams. A JSON upload is also capped at 16 MiB. Raise your reverse proxy's body limit for `POST /api/import/backup` together with this ([docs/deployment.md](docs/deployment.md)).                                                                                                                 |
+| `RESTORE_DIR`                    | no            | `<dir of UPLOADS_DIR>/restore`                | Where checked backup uploads wait before they are applied (mode 0700; each file is removed after apply, discard or one hour). `/data/restore` in Docker. Needs free disk space for the largest upload.                                                                                                                                                                                                    |
 | `KEEP_RAW_HTML`                  | no            | `false`                                       | When `true`, fetched or pasted HTML is kept at `<RAW_HTML_DIR>/<job id>.html` (mode 0600). Off by default (nothing is written). Kept files are deleted with their job by the lazy retention sweep (`IMPORT_JOB_TTL_DAYS`).                                                                                                                                                                                |
 | `RAW_HTML_DIR`                   | no            | `<dir of UPLOADS_DIR>/import-raw`             | Where raw HTML is kept when `KEEP_RAW_HTML=true`. Defaults to the v0.3.0/v0.3.1 location. Compose sets `/data/import-raw`.                                                                                                                                                                                                                                                                                |
 | `IMPORT_JOB_TTL_DAYS`            | no            | `30`                                          | Failed and abandoned import jobs (and their raw HTML) older than this are pruned lazily. `0` disables pruning. Integer, 0 to 36500.                                                                                                                                                                                                                                                                       |
@@ -490,7 +529,7 @@ Deactivated accounts are not reactivated: the command exits with an error for th
 ## Notes
 
 - Text strings live in `messages/` at the repository root (currently `messages/en.json`).
-- `src/proxy.ts` is the Next.js 16 name for what used to be `middleware.ts`. It gates unauthenticated requests and sets the security headers (CSP with a per-request nonce, and others).
+- `src/proxy.ts` is the Next.js 16 name for what used to be `middleware.ts`. It gates unauthenticated requests and sets the security headers (CSP with a per-request nonce, and others). It does not run for `/api/import/backup` (the restore upload, see [docs/deployment.md](docs/deployment.md)); that route checks the session itself.
 - The data model is documented in [docs/data-model.md](docs/data-model.md).
 
 ## Known limitations
@@ -503,6 +542,7 @@ Deactivated accounts are not reactivated: the command exits with an error for th
 - **Rate limiting is in memory.** Counters reset when the app restarts and are not shared between processes.
 - **Single process only.** Because of the in-memory rate limiter and the single SQLite file, run exactly one app instance.
 - **`TRUSTED_PROXIES` can be spoofed if the app port is reachable.** Any client that can connect directly from a trusted address can forge `X-Forwarded-For` and evade per-IP limits. Behind Caddy, do not publish the app port (do not add `docker-compose.direct.yml` as shown above). This applies to the public link limit too: with the app port reachable, a client can send a fresh `X-Forwarded-For` on every request and never be limited (security checkpoint L1 in [docs/tasks/v0.5.0-security-checkpoint.md](docs/tasks/v0.5.0-security-checkpoint.md)).
+- **Backup and restore (v0.5.1).** Restore uploads have no total time limit (only a 30 s stall limit), there is no per-user limit on restore attempts and no cap on the disk the staged files use beyond one file per user, and the restore was not tried from a phone browser, through the bundled Caddy or on a second real Docker instance. See [docs/tasks/v0.5.1-carryover.md](docs/tasks/v0.5.1-carryover.md).
 - **`style-src` allows `'unsafe-inline'`.** Scripts use a per-request nonce, but styles do not.
 
 ## License
