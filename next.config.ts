@@ -5,6 +5,8 @@ const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 
 const nextConfig: NextConfig = {
   output: 'standalone',
+  // Do not advertise the framework in an X-Powered-By header (security review I1).
+  poweredByHeader: false,
   // e2e only: a second `next dev` (headless-on server) needs its own build dir or the dev lock refuses it.
   ...(process.env.NEXT_DIST_DIR ? { distDir: process.env.NEXT_DIST_DIR } : {}),
   // Native modules are added in T2; listed now so they are never bundled.
