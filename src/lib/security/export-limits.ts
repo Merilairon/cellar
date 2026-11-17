@@ -10,6 +10,15 @@ export function exportLimiter() {
   });
 }
 
+/** Per-user limiter for staging a restore upload (env: RATE_LIMIT_RESTORE_MAX / _WINDOW_SEC). */
+export function restoreLimiter() {
+  const e = getEnv();
+  return getRateLimiter('restore:user', {
+    limit: e.RATE_LIMIT_RESTORE_MAX,
+    windowMs: e.RATE_LIMIT_RESTORE_WINDOW_SEC * 1000,
+  });
+}
+
 // One export in flight per user. Shared on globalThis like the limiter registry so separately
 // bundled route modules see the same set. A lease older than STALE_MS is treated as free: the
 // stream's close hook is the real release, this only bounds a leak if a response is dropped

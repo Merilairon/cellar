@@ -2,12 +2,28 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { deflateRawSync } from 'node:zlib';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import { ulid } from 'ulid';
 import { openZip, ZipFormatError, type OpenedZip } from './unzip';
 import { rawZip, type RawEntry } from './unzip-test-util';
 import { BACKUP_ENTRY, createZipStream } from './zip';
 import { collect } from './zip-test-util';
+
+// Passive wrapper: counts every byte the inflater emits, to prove the output limit stops early.
+const inflated = vi.hoisted(() => ({ bytes: 0 }));
+vi.mock('node:zlib', async (importOriginal) => {
+  const real = await importOriginal<typeof import('node:zlib')>();
+  return {
+    ...real,
+    createInflateRaw: (...args: Parameters<typeof real.createInflateRaw>) => {
+      const stream = real.createInflateRaw(...args);
+      stream.on('data', (c: Buffer) => {
+        inflated.bytes += c.length;
+      });
+      return stream;
+    },
+  };
+});
 
 const dir = mkdtempSync(join(tmpdir(), 'unzip-test-'));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -185,6 +201,28 @@ describe('openZip: hostile archives are refused as a whole', () => {
       { maxRatio: 1_000_000 },
     );
     expect(reason).toBe('size_mismatch');
+  });
+  it('zip bomb: a lying entry is cut off, the inflater never produces much past the declared size', async () => {
+    const zeros = Buffer.alloc(50 * 1024 * 1024);
+    const deflated = deflateRawSync(zeros);
+    inflated.bytes = 0;
+    const reason = await reasonOf(
+      rawZip([
+        {
+          name: photo(),
+          data: zeros.subarray(0, 100),
+          method: 8,
+          rawData: deflated,
+          csize: deflated.length,
+          usize: 100,
+          crc: 0,
+        },
+      ]),
+      { maxRatio: 1_000_000 },
+    );
+    expect(reason).toBe('size_mismatch');
+    expect(inflated.bytes).toBeGreaterThan(0);
+    expect(inflated.bytes).toBeLessThanOrEqual(100 + 1024 * 1024);
   });
   it('entry over its size cap (manifest and photo)', async () => {
     expect(await reasonOf(rawZip([manifest()]), { maxManifestBytes: 4 })).toBe('entry_too_large');

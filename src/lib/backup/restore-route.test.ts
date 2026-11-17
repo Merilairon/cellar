@@ -32,6 +32,8 @@ const env = vi.hoisted(() => ({
   RESTORE_BODY_MAX: 268_435_456,
   RATE_LIMIT_EXPORT_MAX: 100,
   RATE_LIMIT_EXPORT_WINDOW_SEC: 3600,
+  RATE_LIMIT_RESTORE_MAX: 10,
+  RATE_LIMIT_RESTORE_WINDOW_SEC: 3600,
 }));
 vi.mock('@/lib/db', () => ({ getDb: () => state.db }));
 vi.mock('@/lib/auth/current-user', () => ({ getCurrentUser: async () => state.current }));
@@ -62,6 +64,7 @@ beforeEach(() => {
   env.UPLOADS_DIR = join(root, 'uploads');
   env.RESTORE_DIR = join(root, 'restore');
   env.RESTORE_BODY_MAX = 268_435_456;
+  env.RATE_LIMIT_RESTORE_MAX = 10;
   limits.idleMs = 30_000;
   db = memDb();
   state.db = db;
@@ -369,8 +372,15 @@ describe('POST /api/import/backup: rejected uploads change nothing', () => {
   });
 
   it('a zip with 60 001 entries', async () => {
-    const entries = Array.from({ length: 60_001 }, () => ({
-      name: `photos/${ulid()}.webp`,
+    // Fixed valid names (a counter in Crockford base32) instead of 60 001 ulid() calls.
+    const crockford = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+    const fastName = (i: number) => {
+      let tail = '';
+      for (let n = i, k = 0; k < 6; k++, n = Math.floor(n / 32)) tail = crockford[n % 32]! + tail;
+      return `photos/01HZX000000000000000${tail}.webp`;
+    };
+    const entries = Array.from({ length: 60_001 }, (_, i) => ({
+      name: fastName(i),
       data: Buffer.alloc(0),
     }));
     await expectRejected(
@@ -378,8 +388,6 @@ describe('POST /api/import/backup: rejected uploads change nothing', () => {
       422,
       'backup_zip_invalid',
     );
-    // Building 60 001 ULID-named entries takes about 5 s on a loaded machine, so the default
-    // 5 s timeout is too tight.
   }, 30_000);
 
   it('not a zip at all, and a zip whose manifest is not valid JSON', async () => {
@@ -407,6 +415,34 @@ describe('POST /api/import/backup: rejected uploads change nothing', () => {
   it('413 on the declared Content-Length, before any file exists', async () => {
     env.RESTORE_BODY_MAX = 2048;
     await expectRejected(() => stage('x'.repeat(5000)), 413, 'backup_too_large');
+  });
+
+  it('413 on the declared Content-Length without reading a single byte of the body', async () => {
+    env.RESTORE_BODY_MAX = 2048;
+    let pulled = 0;
+    const body = new ReadableStream<Uint8Array>(
+      {
+        pull(c) {
+          pulled++;
+          c.enqueue(new Uint8Array(1024));
+        },
+      },
+      { highWaterMark: 0 },
+    );
+    await expectRejected(
+      () =>
+        stagePost(
+          new Request(url, {
+            method: 'POST',
+            headers: headers('application/json', { 'content-length': '5000' }),
+            body,
+            duplex: 'half',
+          } as RequestInit),
+        ),
+      413,
+      'backup_too_large',
+    );
+    expect(pulled).toBe(0);
   });
 
   it('413 while streaming without a Content-Length: the partial file is removed', async () => {
@@ -480,6 +516,145 @@ describe('POST /api/import/backup: rejected uploads change nothing', () => {
       408,
       'request_timeout',
     );
+  });
+});
+
+describe('POST /api/import/backup: per-user restore limit', () => {
+  it('the 11th stage in the window is 429 with Retry-After and a message; others are unaffected', async () => {
+    for (let i = 0; i < 10; i++) expect((await stage(ownBackup())).status).toBe(201);
+    const res = await stage(ownBackup());
+    expect(res.status).toBe(429);
+    expect(Number(res.headers.get('retry-after'))).toBeGreaterThan(0);
+    expect(res.headers.get('cache-control')).toBe('private, no-store');
+    expect(await res.json()).toMatchObject({
+      error: 'rate_limited',
+      message: 'Too many restore uploads. Try again later.',
+    });
+    state.current = other;
+    expect((await stage(ownBackup())).status).toBe(201);
+  });
+
+  it('a 415, a 409 and a declared-length 413 give the quota back', async () => {
+    env.RATE_LIMIT_RESTORE_MAX = 2;
+    for (let i = 0; i < 5; i++) expect((await stage('{}', 'text/plain')).status).toBe(415);
+    const staged = await (await stage(ownBackup())).json();
+    const lease = beginApply(listStages().find((x) => x.id === staged.id)!);
+    for (let i = 0; i < 5; i++) expect((await stage(ownBackup())).status).toBe(409);
+    if (lease !== 'busy') lease.end();
+    env.RESTORE_BODY_MAX = 10;
+    for (let i = 0; i < 5; i++) {
+      const r = await stage('x'.repeat(50), 'application/json', { 'content-length': '50' });
+      expect(r.status).toBe(413);
+    }
+    env.RESTORE_BODY_MAX = 268_435_456;
+    expect((await stage(ownBackup())).status).toBe(201); // second and last counted upload
+    expect((await stage(ownBackup())).status).toBe(429);
+  });
+
+  it('401 and CSRF 403 never touch the quota', async () => {
+    env.RATE_LIMIT_RESTORE_MAX = 1;
+    state.current = null;
+    for (let i = 0; i < 3; i++) expect((await stage(ownBackup())).status).toBe(401);
+    state.current = me;
+    for (let i = 0; i < 3; i++) {
+      const res = await stagePost(
+        new Request(url, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: '{}',
+        }),
+      );
+      expect(res.status).toBe(403);
+    }
+    expect((await stage(ownBackup())).status).toBe(201);
+  });
+
+  it('a rejected 422 upload that was streamed does use the quota', async () => {
+    env.RATE_LIMIT_RESTORE_MAX = 1;
+    expect((await stage('not json')).status).toBe(422);
+    expect((await stage(ownBackup())).status).toBe(429);
+  });
+});
+
+describe('response headers on the restore routes (the proxy does not run on them)', () => {
+  const expectHardened = (res: Response) => {
+    expect(res.headers.get('cache-control')).toBe('private, no-store');
+    expect(res.headers.get('x-content-type-options')).toBe('nosniff');
+  };
+
+  it('stage: 201, 401 and 403 (CSRF)', async () => {
+    expectHardened(await stage(ownBackup()));
+    state.current = null;
+    const unauth = await stage(ownBackup());
+    expect(unauth.status).toBe(401);
+    expectHardened(unauth);
+    state.current = me;
+    const csrf = await stagePost(
+      new Request(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+      }),
+    );
+    expect(csrf.status).toBe(403);
+    expectHardened(csrf);
+  });
+
+  it('apply: 200, 401 and 403 (CSRF)', async () => {
+    const staged = await (await stage(ownBackup())).json();
+    state.current = null;
+    const unauth = await applyReq(staged.id);
+    expect(unauth.status).toBe(401);
+    expectHardened(unauth);
+    state.current = me;
+    const csrf = await applyReq(staged.id, { strategy: 'skip' }, {
+      'content-type': 'application/json',
+    } as ReturnType<typeof headers>);
+    expect(csrf.status).toBe(403);
+    expectHardened(csrf);
+    const ok = await applyReq(staged.id);
+    expect(ok.status).toBe(200);
+    expectHardened(ok);
+  });
+
+  it('delete: 204, 401 and 403 (CSRF)', async () => {
+    const staged = await (await stage(ownBackup())).json();
+    state.current = null;
+    const unauth = await del(staged.id);
+    expect(unauth.status).toBe(401);
+    expectHardened(unauth);
+    state.current = me;
+    const csrf = await del(staged.id, {});
+    expect(csrf.status).toBe(403);
+    expectHardened(csrf);
+    const ok = await del(staged.id);
+    expect(ok.status).toBe(204);
+    expectHardened(ok);
+  });
+});
+
+describe('apply: strategy body idle timeout', () => {
+  it('408 when the sender stalls; the stage survives', async () => {
+    const staged = await (await stage(ownBackup())).json();
+    limits.idleMs = 30;
+    const body = new ReadableStream<Uint8Array>({
+      start(c) {
+        c.enqueue(new TextEncoder().encode('{"strat'));
+      },
+      pull: () => new Promise(() => undefined),
+    });
+    const res = await applyPost(
+      new Request(`${url}/${staged.id}/apply`, {
+        method: 'POST',
+        headers: headers('application/json'),
+        body,
+        duplex: 'half',
+      } as RequestInit),
+      { params: Promise.resolve({ id: staged.id }) },
+    );
+    expect(res.status).toBe(408);
+    expect(await res.json()).toMatchObject({ error: 'request_timeout' });
+    expect(listStages().map((s) => s.id)).toEqual([staged.id]);
   });
 });
 

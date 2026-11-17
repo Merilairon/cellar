@@ -2,8 +2,8 @@ import { getDb } from '@/lib/db';
 import { getEnv } from '@/lib/env';
 import { applyRestore, RestoreForbiddenError, type Strategy } from '@/lib/backup/restore';
 import { beginApply, discardStage, getStage, pruneStaging } from '@/lib/backup/staging';
-import { authenticate, noStore } from '@/lib/recipes/http';
-import { fail, loadBackup, msg } from '../../shared';
+import { authenticate } from '@/lib/recipes/http';
+import { fail, hardened, loadBackup, msg, readIdle } from '../../shared';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,7 +11,8 @@ type Ctx = { params: Promise<{ id: string }> };
 
 const STRATEGY_BODY_MAX = 1024;
 
-async function readStrategy(request: Request): Promise<Strategy | null> {
+/** The strategy, null when invalid, 'timeout' when the sender stalls past the idle limit. */
+async function readStrategy(request: Request): Promise<Strategy | null | 'timeout'> {
   const type = request.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase();
   if (type !== 'application/json') return null;
   const declared = request.headers.get('content-length');
@@ -21,7 +22,12 @@ async function readStrategy(request: Request): Promise<Strategy | null> {
   const chunks: Uint8Array[] = [];
   let total = 0;
   for (;;) {
-    const { done, value } = await reader.read();
+    const next = await readIdle(reader);
+    if (next === 'timeout') {
+      reader.cancel().catch(() => undefined);
+      return 'timeout';
+    }
+    const { done, value } = next;
     if (done) break;
     total += value.byteLength;
     if (total > STRATEGY_BODY_MAX) {
@@ -46,13 +52,14 @@ async function readStrategy(request: Request): Promise<Strategy | null> {
  */
 export async function POST(request: Request, { params }: Ctx) {
   const auth = await authenticate(request);
-  if (auth instanceof Response) return noStore(auth);
+  if (auth instanceof Response) return hardened(auth);
   const { user } = auth;
   const env = getEnv();
   pruneStaging(env.RESTORE_DIR);
   const staged = getStage((await params).id, user.id);
   if (!staged) return fail(404, 'not_found', msg.notFound);
   const strategy = await readStrategy(request);
+  if (strategy === 'timeout') return fail(408, 'request_timeout', msg.timeout);
   if (!strategy) return fail(400, 'invalid_strategy', msg.invalidStrategy);
 
   const lease = beginApply(staged);
@@ -69,7 +76,7 @@ export async function POST(request: Request, { params }: Ctx) {
         strategy,
         env.UPLOADS_DIR,
       );
-      return noStore(Response.json(result, { status: 200 }));
+      return hardened(Response.json(result, { status: 200 }));
     } finally {
       await loaded.archive?.close();
     }

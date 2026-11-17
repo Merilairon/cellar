@@ -34,6 +34,8 @@ function rateLimitShape() {
     RATE_LIMIT_IMPORT_WINDOW_SEC: posInt(3600),
     RATE_LIMIT_EXPORT_MAX: posInt(10), // GET /api/export, per user
     RATE_LIMIT_EXPORT_WINDOW_SEC: posInt(3600),
+    RATE_LIMIT_RESTORE_MAX: posInt(10), // stage uploads (POST /api/import/backup), per user
+    RATE_LIMIT_RESTORE_WINDOW_SEC: posInt(3600),
     RATE_LIMIT_PUBLIC_MAX: posInt(120), // GET /r/*, per trusted client IP (enforced in proxy.ts)
     RATE_LIMIT_PUBLIC_WINDOW_SEC: posInt(60),
   };

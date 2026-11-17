@@ -200,6 +200,8 @@ export type ApplyDeps = {
   insertPhotoRow?: (row: typeof photo.$inferInsert) => void;
   /** Seam: pause between decode retries when the limiter is busy. */
   sleep?: (ms: number) => Promise<void>;
+  /** Seam: photo budget per apply (defaults to MAX_RESTORE_PHOTOS). Tests only. */
+  maxPhotos?: number;
 };
 
 const DECODE_RETRIES = 3;
@@ -353,7 +355,8 @@ export async function applyRestore(
       let cover = false;
       for (const ph of r.photos) {
         try {
-          if (attempted++ >= MAX_RESTORE_PHOTOS) throw new Error('photo_budget');
+          if (attempted++ >= (deps.maxPhotos ?? MAX_RESTORE_PHOTOS))
+            throw new Error('photo_budget');
           if (!photos.has(ph.file)) throw new Error('entry_missing');
           const bytes = await photos.read(ph.file);
           const isCover = ph.is_cover && !cover;

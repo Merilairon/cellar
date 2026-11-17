@@ -6,7 +6,13 @@ import { count, eq } from 'drizzle-orm';
 import type { Db } from '@/lib/db/connection';
 import { note, photo, rating, recipe, user } from '@/lib/db/schema';
 import { buildBackup } from './export';
-import { applyRestore, previewRestore, renamedTitle, RestoreForbiddenError } from './restore';
+import {
+  applyRestore,
+  MAX_RESTORE_PHOTOS,
+  previewRestore,
+  renamedTitle,
+  RestoreForbiddenError,
+} from './restore';
 import { normalizeDoc, viaJson, webp } from './restore-test-util';
 import type { BackupV1 } from './schema';
 import {
@@ -550,6 +556,27 @@ describe('applyRestore: photos', () => {
     });
     expect(readdirSync(uploads)).toEqual([]);
     expect(rows(t.db).photos).toBe(0);
+  });
+
+  it('photos beyond the budget count as failed, the recipe still imports', async () => {
+    const { doc, zipPath } = await photoDoc();
+    const zip = await openZip(zipPath);
+    const t = target();
+    const res = await applyRestore(t.db, t.member, doc, zip, 'skip', uploads, { maxPhotos: 1 });
+    await zip.close();
+    rmSync(zipPath);
+    // 4 references, budget 1: the first (valid) photo is stored, the other 3 are failures.
+    expect(res).toMatchObject({
+      imported: 2,
+      photos_restored: 1,
+      photos_failed: 3,
+      failed_at: null,
+    });
+    expect(rows(t.db).photos).toBe(1);
+  });
+
+  it('the default budget is 2000 photos per apply', () => {
+    expect(MAX_RESTORE_PHOTOS).toBe(2000);
   });
 
   it('retries a busy decode limiter, then counts the photo as failed', async () => {

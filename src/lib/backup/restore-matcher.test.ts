@@ -23,6 +23,8 @@ describe('proxy matcher and the restore upload', () => {
       '/api/import',
       '/api/import/abc/save',
       '/api/import/backups',
+      '/api/import/backupx',
+      '/api/recipes/1/photos',
       '/api/import/backup-x',
       '/api/export',
       '/api/recipes/x/photos',

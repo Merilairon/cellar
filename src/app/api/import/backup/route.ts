@@ -16,8 +16,9 @@ import {
   type StageKind,
 } from '@/lib/backup/staging';
 import { MAX_MANIFEST_BYTES } from '@/lib/backup/unzip';
-import { authenticate, noStore } from '@/lib/recipes/http';
-import { fail, limits, loadBackup, msg } from './shared';
+import { authenticate } from '@/lib/recipes/http';
+import { restoreLimiter } from '@/lib/security/export-limits';
+import { fail, hardened, loadBackup, msg, readIdle } from './shared';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,13 +32,7 @@ async function streamToFile(request: Request, path: string, max: number): Promis
     if (!reader) return 'ok';
     let total = 0;
     for (;;) {
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      const next = await Promise.race([
-        reader.read(),
-        new Promise<'timeout'>((resolve) => {
-          timer = setTimeout(() => resolve('timeout'), limits.idleMs);
-        }),
-      ]).finally(() => clearTimeout(timer));
+      const next = await readIdle(reader);
       if (next === 'timeout') {
         reader.cancel().catch(() => undefined);
         return 'timeout';
@@ -68,21 +63,41 @@ async function streamToFile(request: Request, path: string, max: number): Promis
  */
 export async function POST(request: Request) {
   const auth = await authenticate(request);
-  if (auth instanceof Response) return noStore(auth);
+  if (auth instanceof Response) return hardened(auth);
   const { user } = auth;
+
+  // Quota is taken once the caller is known and given back for every rejection that happens
+  // before a byte is staged (media type, 409, declared length). A 429 leaves the slot free.
+  const limiter = restoreLimiter();
+  const limited = limiter.hit(user.id);
+  if (!limited.allowed) {
+    const res = fail(429, 'rate_limited', msg.rateLimited);
+    res.headers.set('Retry-After', String(limited.retryAfterSec));
+    return res;
+  }
+  const refund = () => limiter.refund(user.id);
 
   const type = request.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase();
   const kind: StageKind | null =
     type === 'application/json' ? 'json' : type === 'application/zip' ? 'zip' : null;
-  if (!kind) return fail(415, 'unsupported_media_type', msg.unsupportedMedia);
+  if (!kind) {
+    refund();
+    return fail(415, 'unsupported_media_type', msg.unsupportedMedia);
+  }
 
   const env = getEnv();
   const dir = ensureRestoreDir(env.RESTORE_DIR);
   pruneStaging(dir);
 
-  if (applyRunning(user.id)) return fail(409, 'restore_in_progress', msg.inProgress);
+  if (applyRunning(user.id)) {
+    refund();
+    return fail(409, 'restore_in_progress', msg.inProgress);
+  }
   const release = beginUpload(user.id);
-  if (!release) return fail(409, 'restore_in_progress', msg.inProgress);
+  if (!release) {
+    refund();
+    return fail(409, 'restore_in_progress', msg.inProgress);
+  }
 
   // A JSON document is parsed in memory, so it gets the manifest cap; a zip gets the full cap.
   const max =
@@ -90,6 +105,7 @@ export async function POST(request: Request) {
   const declared = request.headers.get('content-length');
   if (declared !== null && Number(declared) > max) {
     release();
+    refund();
     return fail(413, 'backup_too_large', msg.tooLarge);
   }
 
@@ -110,7 +126,7 @@ export async function POST(request: Request) {
       const createdAt = Date.now();
       registerStage({ id, ownerId: user.id, kind, path, createdAt });
       keep = true;
-      return noStore(
+      return hardened(
         Response.json(
           {
             id,

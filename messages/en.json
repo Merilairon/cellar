@@ -1062,7 +1062,8 @@
         "invalid": "This file is not a valid Cellar backup.",
         "zipInvalid": "This zip file is not a valid Cellar backup archive.",
         "forbidden": "Only an admin can restore a backup of every user's recipes.",
-        "inProgress": "A restore is already running. Wait for it to finish, then try again.",
+        "inProgress": "A restore is already running on this server, possibly for another user. Wait a moment, then try again.",
+        "rateLimited": "Too many restore uploads. Try again later.",
         "notFound": "This upload is no longer available. Upload the backup again.",
         "invalidStrategy": "Choose whether to skip or rename recipes that already exist.",
         "failed": "The restore could not be completed. Check the server log and try again."
