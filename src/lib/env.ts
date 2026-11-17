@@ -32,6 +32,10 @@ function rateLimitShape() {
     RATE_LIMIT_REGISTER_WINDOW_SEC: posInt(3600),
     RATE_LIMIT_IMPORT_MAX: posInt(20), // POST /api/import, per user
     RATE_LIMIT_IMPORT_WINDOW_SEC: posInt(3600),
+    RATE_LIMIT_EXPORT_MAX: posInt(10), // GET /api/export, per user
+    RATE_LIMIT_EXPORT_WINDOW_SEC: posInt(3600),
+    RATE_LIMIT_RESTORE_MAX: posInt(10), // stage uploads (POST /api/import/backup), per user
+    RATE_LIMIT_RESTORE_WINDOW_SEC: posInt(3600),
     RATE_LIMIT_PUBLIC_MAX: posInt(120), // GET /r/*, per trusted client IP (enforced in proxy.ts)
     RATE_LIMIT_PUBLIC_WINDOW_SEC: posInt(60),
   };
@@ -100,6 +104,10 @@ const schema = z.object({
   // location (= <dir of DATABASE_PATH>/import-raw unless UPLOADS_DIR is moved), so upgrades
   // keep finding old files.
   RAW_HTML_DIR: z.string().min(1).optional(),
+  // Staged restore uploads (T11): a body over RESTORE_BODY_MAX bytes is 413 while streaming.
+  // RESTORE_DIR holds the staged file (0700, one hour at most); default <dir of UPLOADS_DIR>/restore.
+  RESTORE_BODY_MAX: z.coerce.number().int().min(1024).max(4_294_967_295).default(268_435_456),
+  RESTORE_DIR: z.string().min(1).optional(),
   // Lazy pruning of old import jobs and their raw HTML files; 0 disables.
   IMPORT_JOB_TTL_DAYS: z.coerce.number().int().min(0).max(36500).default(30),
   // Optional headless-browser sidecar (profile `headless`). Unset = feature off, no code path
@@ -143,6 +151,7 @@ const schemaWithDerived = schema
       ...e,
       UPLOADS_DIR: uploads,
       RAW_HTML_DIR: e.RAW_HTML_DIR ?? legacyRaw,
+      RESTORE_DIR: e.RESTORE_DIR ?? join(dirname(uploads), 'restore'),
       /** v0.3.0/v0.3.1 raw HTML location; pruning may still unlink files there. */
       LEGACY_RAW_HTML_DIR: legacyRaw,
     };

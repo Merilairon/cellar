@@ -1,0 +1,351 @@
+import { useId } from 'react';
+import Link from 'next/link';
+import { useTranslations } from 'next-intl';
+import { btn, btnPrimary, errorText } from '../recipe/styles';
+import {
+  applyCount,
+  formatBytes,
+  isPartial,
+  stoppedAtNumber,
+  liveMessageKey,
+  resultLines,
+  type RestoreAction,
+  type RestoreError,
+  type RestoreState,
+} from './backup-logic';
+import { PreviewTable } from './PreviewTable';
+
+const ERROR_KEYS = {
+  extension: 'backup.error.extension',
+  tooLarge: 'backup.error.tooLarge',
+  backup_version_unsupported: 'backup.error.backup_version_unsupported',
+  backup_invalid: 'backup.error.backup_invalid',
+  zip_invalid: 'backup.error.zip_invalid',
+  scope_forbidden: 'backup.error.scope_forbidden',
+  in_progress: 'backup.error.in_progress',
+  expired: 'backup.error.expired',
+  unauthenticated: 'backup.error.unauthenticated',
+  network: 'backup.error.network',
+  rate_limited: 'backup.error.rate_limited',
+  timeout: 'backup.error.timeout',
+  server_error: 'backup.error.server_error',
+  failed: 'backup.error.failed',
+} as const;
+
+const LINE_KEYS = {
+  imported: 'backup.result.imported',
+  renamed: 'backup.result.renamed',
+  skipped: 'backup.result.skipped',
+  photos: 'backup.result.photos',
+  photosFailed: 'backup.result.photosFailed',
+  notesSkippedOwn: 'backup.result.notesSkippedOwn',
+  notesSkippedAll: 'backup.result.notesSkippedAll',
+} as const;
+
+export type RestoreViewProps = {
+  state: RestoreState;
+  role: 'admin' | 'member';
+  dispatch: (a: RestoreAction) => void;
+  onPick: (file: File | null) => void;
+  onCheck: () => void;
+  onCancelUpload: () => void;
+  onApply: () => void;
+  onDiscard: () => void;
+  onAgain: () => void;
+  pickerRef?: React.Ref<HTMLInputElement>;
+  captionRef?: React.Ref<HTMLElement>;
+  cancelRef?: React.Ref<HTMLButtonElement>;
+  resultRef?: React.Ref<HTMLHeadingElement>;
+};
+
+function ErrorLine({ error, id }: { error: RestoreError | null; id?: string }) {
+  const t = useTranslations();
+  if (!error) return null;
+  const text =
+    error.message ??
+    t(ERROR_KEYS[error.key as keyof typeof ERROR_KEYS] ?? ERROR_KEYS.network, error.params);
+  return (
+    <div role="alert" id={id}>
+      <p className={errorText}>
+        {text}
+        {error.params?.version !== undefined && error.key === 'backup_version_unsupported' && (
+          <> {t('backup.error.versionFound', { version: error.params.version })}</>
+        )}
+      </p>
+      {error.details && (
+        <ul className={`${errorText} list-disc pl-6 break-words`}>
+          {error.details.map((d, i) => (
+            <li key={i}>{d}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** Restore section (UX spec 5.3): presentational, all state comes from `useRestore`. */
+export function RestoreView({
+  state,
+  role,
+  dispatch,
+  onPick,
+  onCheck,
+  onCancelUpload,
+  onApply,
+  onDiscard,
+  onAgain,
+  pickerRef,
+  captionRef,
+  cancelRef,
+  resultRef,
+}: RestoreViewProps) {
+  const t = useTranslations();
+  const uid = useId();
+  const busy =
+    state.phase === 'uploading' || state.phase === 'checking' || state.phase === 'applying';
+  const errId = `${uid}-err`;
+  const reasonId = `${uid}-reason`;
+  const preview = state.stage?.preview;
+  const liveKey =
+    state.phase === 'preview' && state.error
+      ? null
+      : liveMessageKey(state.phase, state.result ? isPartial(state.result) : false);
+
+  return (
+    <section aria-labelledby={`${uid}-h`} className="space-y-3">
+      <div>
+        <h2 id={`${uid}-h`} className="text-xl font-semibold">
+          {t('backup.restore.heading')}
+        </h2>
+        {/* Always mounted and outside every aria-busy region, so milestones are announced. */}
+        <div role="status" aria-live="polite" className="sr-only">
+          {liveKey ? t(liveKey as never) : ''}
+        </div>
+      </div>
+      <p className="text-neutral-700 dark:text-neutral-300">{t('backup.restore.intro')}</p>
+
+      {(state.phase === 'idle' || state.phase === 'uploading' || state.phase === 'checking') && (
+        <div className="space-y-3" aria-busy={busy}>
+          <div className="flex flex-wrap items-center gap-3">
+            <label
+              className={`${btn} cursor-pointer has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[var(--rg-focus)] ${state.phase === 'idle' ? '' : 'pointer-events-none opacity-50'}`}
+            >
+              <input
+                ref={pickerRef}
+                type="file"
+                className="sr-only"
+                accept=".json,.zip,application/json,application/zip"
+                disabled={state.phase !== 'idle'}
+                aria-describedby={state.error ? errId : undefined}
+                onChange={(e) => {
+                  onPick(e.target.files?.[0] ?? null);
+                }}
+              />
+              {t('backup.restore.choose')}
+            </label>
+            {state.file && (
+              <span className="break-all">
+                {t('backup.restore.fileInfo', {
+                  name: state.file.name,
+                  size: formatBytes(state.file.size),
+                })}
+              </span>
+            )}
+          </div>
+          {state.phase === 'idle' ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                className={`${btnPrimary} ${state.file ? '' : 'opacity-60'}`}
+                aria-disabled={!state.file}
+                aria-describedby={!state.file ? reasonId : undefined}
+                onClick={() => {
+                  if (state.file) onCheck();
+                }}
+              >
+                {t('backup.restore.check')}
+              </button>
+              {!state.file && (
+                <span id={reasonId} className="text-sm text-neutral-700 dark:text-neutral-300">
+                  {t('backup.restore.chooseFirst')}
+                </span>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex flex-col gap-1">
+                <span aria-hidden="true">
+                  {state.phase === 'uploading'
+                    ? t('backup.restore.uploading', { percent: state.percent })
+                    : t('backup.restore.checking')}
+                </span>
+                {state.phase === 'uploading' ? (
+                  <progress
+                    max={100}
+                    value={state.percent}
+                    aria-label={t('backup.restore.live.uploading')}
+                    className="w-full max-w-md"
+                  />
+                ) : (
+                  <progress aria-label={t('backup.restore.checking')} className="w-full max-w-md" />
+                )}
+              </div>
+              <button type="button" ref={cancelRef} className={btn} onClick={onCancelUpload}>
+                {t('backup.restore.cancel')}
+              </button>
+            </div>
+          )}
+          <ErrorLine error={state.error} id={errId} />
+        </div>
+      )}
+
+      {(state.phase === 'preview' || state.phase === 'applying') && preview && (
+        <div className="space-y-4" aria-busy={state.phase === 'applying'}>
+          <PreviewTable preview={preview} role={role} captionRef={captionRef} />
+          <fieldset className="space-y-1" disabled={state.phase === 'applying'}>
+            <legend className="font-semibold">{t('backup.strategy.legend')}</legend>
+            {(['skip', 'rename'] as const).map((s) => (
+              <label key={s} className="flex min-h-11 items-start gap-3 py-2">
+                <input
+                  type="radio"
+                  name={`${uid}-strategy`}
+                  className="mt-1 size-5 shrink-0 accent-emerald-700"
+                  checked={state.strategy === s}
+                  onChange={() => dispatch({ type: 'strategy', strategy: s })}
+                />
+                <span>{t(s === 'skip' ? 'backup.strategy.skip' : 'backup.strategy.rename')}</span>
+              </label>
+            ))}
+          </fieldset>
+          <ApplyBar
+            state={state}
+            onApply={onApply}
+            onDiscard={onDiscard}
+            count={applyCount(preview, state.strategy)}
+            reasonId={reasonId}
+            errId={errId}
+          />
+        </div>
+      )}
+
+      {state.phase === 'result' && state.result && (
+        <div className="space-y-3">
+          <div>
+            <h3
+              ref={resultRef}
+              tabIndex={-1}
+              className="text-lg font-semibold focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[var(--rg-focus)]"
+            >
+              {t(
+                isPartial(state.result) ? 'backup.result.stoppedHeading' : 'backup.result.heading',
+              )}
+            </h3>
+            <ul className="mt-1 list-disc pl-6">
+              {isPartial(state.result) && (
+                <>
+                  <li>
+                    {t('backup.result.stoppedBefore', {
+                      count: state.result.imported,
+                    })}
+                  </li>
+                  <li>
+                    {t('backup.result.stoppedAt', {
+                      // `failed_at` is the 0-based index in the file; people count from 1.
+                      index: stoppedAtNumber(state.result.failed_at),
+                      total: state.stage?.preview.recipes ?? 0,
+                    })}
+                  </li>
+                </>
+              )}
+              {resultLines(state.result)
+                .filter((l) => !(isPartial(state.result!) && l.key === 'imported'))
+                .map((l) => (
+                  <li key={l.key}>
+                    {t(
+                      LINE_KEYS[
+                        // Own-scope file: the notes left out are other users' shared notes.
+                        // All-users file: they belong to users who have no account here.
+                        (l.key === 'notesSkipped'
+                          ? state.stage?.preview.scope === 'all'
+                            ? 'notesSkippedAll'
+                            : 'notesSkippedOwn'
+                          : l.key) as keyof typeof LINE_KEYS
+                      ],
+                      { count: l.count },
+                    )}
+                  </li>
+                ))}
+            </ul>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Link href="/recipes" className={btnPrimary}>
+              {t('backup.result.openRecipes')}
+            </Link>
+            <button type="button" className={btn} onClick={onAgain}>
+              {t('backup.result.again')}
+            </button>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ApplyBar({
+  state,
+  onApply,
+  onDiscard,
+  count,
+  reasonId,
+  errId,
+}: {
+  state: RestoreState;
+  onApply: () => void;
+  onDiscard: () => void;
+  count: number;
+  reasonId: string;
+  errId: string;
+}) {
+  const t = useTranslations();
+  const applying = state.phase === 'applying';
+  const none = count === 0;
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          className={`${btnPrimary} ${none || applying ? 'opacity-60' : ''}`}
+          aria-disabled={none || applying}
+          aria-describedby={none ? reasonId : undefined}
+          onClick={() => {
+            if (!none && !applying) onApply();
+          }}
+        >
+          {t('backup.apply', { count })}
+        </button>
+        <button
+          type="button"
+          className={`${btn} ${applying ? 'opacity-50' : ''}`}
+          aria-disabled={applying}
+          onClick={() => {
+            if (!applying) onDiscard();
+          }}
+        >
+          {t('backup.restore.cancel')}
+        </button>
+      </div>
+      {none && !applying && (
+        <p id={reasonId} className="text-sm text-neutral-700 dark:text-neutral-300">
+          {t('backup.applyNone')}
+        </p>
+      )}
+      {applying && (
+        <div className="flex flex-col gap-1">
+          <span aria-hidden="true">{t('backup.restore.restoring')}</span>
+          <progress aria-label={t('backup.restore.restoring')} className="w-full max-w-md" />
+        </div>
+      )}
+      <ErrorLine error={state.error} id={errId} />
+    </div>
+  );
+}

@@ -93,6 +93,10 @@ async function open(browser: Browser, path: string, v: View, as?: BrowserContext
 }
 
 async function axe(page: Page, label: string) {
+  // axe `document-title` read an empty title once in a full run (0 of 27 isolated or loaded
+  // reruns, cause not found): Next streams the title and React hoists it into <head>, so wait
+  // for it like for any other state instead of analysing a page mid-update.
+  await expect(page).toHaveTitle(/\S/);
   const { violations } = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
     .analyze();

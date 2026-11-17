@@ -311,6 +311,7 @@
     "main": "Main",
     "recipes": "Recipes",
     "import": "Import",
+    "backup": "Backup",
     "admin": "Admin",
     "menu": "Menu",
     "userMenu": "Account menu",
@@ -984,5 +985,114 @@
     "banner": "Recipe from {source}. Shared read-only via Cellar, not affiliated with the source.",
     "bannerSourceLabel": "Source: {source}",
     "footer": "Shared read-only link from a private recipe book."
+  },
+  "backup": {
+    "title": "Backup",
+    "apply": "{count, plural, one {Restore # recipe} other {Restore # recipes}}",
+    "applyNone": "Every recipe in this file already exists. Choose Restore as copies to add them.",
+    "strategy": {
+      "legend": "Recipes that already exist",
+      "skip": "Skip them and keep mine",
+      "rename": "Restore them as copies named \"Title (restored)\""
+    },
+    "preview": {
+      "caption": "Backup contents",
+      "recipes": "Recipes",
+      "sections": "Sections",
+      "notes": "Notes",
+      "ratings": "Ratings",
+      "photos": "Photos",
+      "scopeOwn": "Backup of: your recipes",
+      "scopeAll": "Backup of: all users",
+      "conflicts": "Already in your recipes ({count})",
+      "showAll": "Show all {count}",
+      "unknownUsers": "Owners not found here ({count})",
+      "unknownUsersHelp": "These recipes will be restored as yours. Their notes and ratings by users who do not exist here are left out.",
+      "othersNotes": "Shared notes written by other users are left out; they need an account here.",
+      "ratingsSkipped": "{count, plural, one {# rating by another user is left out.} other {# ratings by other users are left out.}}"
+    },
+    "result": {
+      "heading": "Restore finished",
+      "imported": "{count, plural, one {# recipe restored} other {# recipes restored}}",
+      "skipped": "{count, plural, one {# recipe skipped (already in your recipes)} other {# recipes skipped (already in your recipes)}}",
+      "renamed": "{count, plural, one {# recipe restored as a copy} other {# recipes restored as copies}}",
+      "photos": "{count, plural, one {# photo restored} other {# photos restored}}",
+      "photosFailed": "{count, plural, one {# photo could not be read} other {# photos could not be read}}",
+      "notesSkippedOwn": "{count, plural, one {# shared note left out (written by another user)} other {# shared notes left out (written by other users)}}",
+      "notesSkippedAll": "{count, plural, one {# note left out (written by a user who does not exist here)} other {# notes left out (written by users who do not exist here)}}",
+      "openRecipes": "Open my recipes",
+      "again": "Restore another file",
+      "stoppedHeading": "Restore stopped",
+      "stoppedBefore": "{count, plural, one {# recipe restored before the problem} other {# recipes restored before the problem}}",
+      "stoppedAt": "Stopped at recipe {index} of {total}. Run the same file again with Skip to continue."
+    },
+    "error": {
+      "extension": "Choose a .json or .zip file exported by Cellar.",
+      "tooLarge": "This file is larger than {max}, the most this Cellar accepts.",
+      "backup_version_unsupported": "This backup was made by a newer Cellar. Upgrade this instance first.",
+      "versionFound": "(backup version {version})",
+      "backup_invalid": "This file is not a Cellar backup, or it is damaged.",
+      "zip_invalid": "The zip file could not be read. It must be a backup downloaded from Cellar.",
+      "scope_forbidden": "This backup contains every user's recipes. Only an admin can restore it.",
+      "in_progress": "Another restore is running on this Cellar. Try again in a moment.",
+      "expired": "The checked file has expired. Choose it again.",
+      "unauthenticated": "Your session has expired. Sign in again.",
+      "network": "Could not reach the server. Check your connection and try again.",
+      "rate_limited": "Too many restore uploads. Try again later.",
+      "timeout": "The upload stalled and was stopped. Check your connection and try again.",
+      "server_error": "The server had a problem. Try again in a moment, and check the server log if it keeps failing.",
+      "failed": "The restore could not be completed. Choose the file again and retry."
+    },
+    "restore": {
+      "heading": "Restore",
+      "intro": "Restore recipes from a Cellar backup (.json or .zip). Existing recipes are never changed.",
+      "choose": "Choose a backup file",
+      "fileInfo": "{name}, {size}",
+      "check": "Check the file",
+      "chooseFirst": "Choose a file first",
+      "cancel": "Cancel",
+      "uploading": "Uploading… {percent} %",
+      "checking": "Checking the file…",
+      "live": {
+        "uploading": "Uploading the file…",
+        "checked": "File checked. Review what will be restored."
+      },
+      "restoring": "Restoring… this can take a while for backups with photos.",
+      "error": {
+        "unsupportedMedia": "Choose a Cellar backup file: a .json or a .zip.",
+        "tooLarge": "This backup is too large to upload. Restore it without photos, or ask the instance owner to raise the upload limit.",
+        "timeout": "The upload stalled and was stopped. Check your connection and try again.",
+        "versionNewer": "This backup was made by a newer Cellar. Upgrade this instance first.",
+        "versionUnsupported": "This backup has a version this Cellar cannot read.",
+        "invalid": "This file is not a valid Cellar backup.",
+        "zipInvalid": "This zip file is not a valid Cellar backup archive.",
+        "zipEntryRefused": "This zip contains a file Cellar does not accept: {name}. A backup holds only the backup.json file and photos/<id>.webp files, and they must be at the top of the zip (or inside one folder).",
+        "forbidden": "Only an admin can restore a backup of every user's recipes.",
+        "inProgress": "A restore is already running on this server, possibly for another user. Wait a moment, then try again.",
+        "rateLimited": "Too many restore uploads. Try again later.",
+        "notFound": "This upload is no longer available. Upload the backup again.",
+        "invalidStrategy": "Choose whether to skip or rename recipes that already exist.",
+        "failed": "The restore could not be completed. Check the server log and try again."
+      }
+    },
+    "export": {
+      "heading": "Export",
+      "intro": "Download your recipes as a JSON file: ingredients, steps and grid layout, tags, your notes, shared notes from others, and your ratings.",
+      "photos": "Include photos (zip)",
+      "photosHelp": "A zip with the JSON file and every photo. Larger download.",
+      "all": "Include all users' recipes",
+      "allHelp": "The whole Cellar: every user's recipes, notes and ratings, including private ones. Keep this file safe.",
+      "download": "Download backup",
+      "excluded": "Not included: passwords, sign-in sessions, public links, other users' private notes.",
+      "error": {
+        "forbidden": "Only an admin can export every user's recipes.",
+        "inProgress": "Another export is already running. Wait for it to finish, then try again.",
+        "rateLimited": "Too many exports. Try again later.",
+        "tooLarge": "This export is too large for one zip file. Download it without photos.",
+        "manifestTooLarge": "This export is larger than this Cellar can restore later, so it was not created. Export fewer recipes, or ask an admin to export per user.",
+        "invalidQuery": "This export link is not valid. Go back to the Backup page and try again.",
+        "failed": "The export could not be created. Try again, and check the server log if it keeps failing."
+      }
+    }
   }
 }

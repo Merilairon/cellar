@@ -75,6 +75,42 @@ describe('PUBLIC_LINKS_ENABLED', () => {
   );
 });
 
+describe('restore rate limit env', () => {
+  it('defaults to 10 per 3600 seconds', () => {
+    const e = parseEnv(base);
+    expect([e.RATE_LIMIT_RESTORE_MAX, e.RATE_LIMIT_RESTORE_WINDOW_SEC]).toEqual([10, 3600]);
+  });
+
+  it('accepts positive integers and rejects zero, negatives and non-numbers', () => {
+    const e = parseEnv({
+      ...base,
+      RATE_LIMIT_RESTORE_MAX: '3',
+      RATE_LIMIT_RESTORE_WINDOW_SEC: '60',
+    });
+    expect([e.RATE_LIMIT_RESTORE_MAX, e.RATE_LIMIT_RESTORE_WINDOW_SEC]).toEqual([3, 60]);
+    for (const v of ['0', '-1', 'abc', '1.5']) {
+      expect(() => parseEnv({ ...base, RATE_LIMIT_RESTORE_MAX: v })).toThrow();
+      expect(() => parseEnv({ ...base, RATE_LIMIT_RESTORE_WINDOW_SEC: v })).toThrow();
+    }
+  });
+});
+
+describe('export rate limit env', () => {
+  it('defaults to 10 per 3600 seconds', () => {
+    const e = parseEnv(base);
+    expect([e.RATE_LIMIT_EXPORT_MAX, e.RATE_LIMIT_EXPORT_WINDOW_SEC]).toEqual([10, 3600]);
+  });
+
+  it('accepts positive integers and rejects zero, negatives and non-numbers', () => {
+    const e = parseEnv({ ...base, RATE_LIMIT_EXPORT_MAX: '2', RATE_LIMIT_EXPORT_WINDOW_SEC: '30' });
+    expect([e.RATE_LIMIT_EXPORT_MAX, e.RATE_LIMIT_EXPORT_WINDOW_SEC]).toEqual([2, 30]);
+    for (const v of ['0', '-1', 'abc', '1.5']) {
+      expect(() => parseEnv({ ...base, RATE_LIMIT_EXPORT_MAX: v })).toThrow();
+      expect(() => parseEnv({ ...base, RATE_LIMIT_EXPORT_WINDOW_SEC: v })).toThrow();
+    }
+  });
+});
+
 describe('public page rate limit env', () => {
   it('defaults to 120 per 60 seconds', () => {
     const e = parseEnv(base);
@@ -89,5 +125,23 @@ describe('public page rate limit env', () => {
       expect(() => parseEnv({ ...base, RATE_LIMIT_PUBLIC_MAX: v })).toThrow();
       expect(() => parseEnv({ ...base, RATE_LIMIT_PUBLIC_WINDOW_SEC: v })).toThrow();
     }
+  });
+});
+
+describe('restore env', () => {
+  it('defaults: 256 MiB cap, restore dir next to the uploads dir', () => {
+    const e = parseEnv({ ...base, DATABASE_PATH: '/data/app.db' });
+    expect(e.RESTORE_BODY_MAX).toBe(268_435_456);
+    expect(e.RESTORE_DIR).toBe('/data/restore');
+    expect(parseEnv({ ...base, UPLOADS_DIR: '/mnt/u/uploads' }).RESTORE_DIR).toBe('/mnt/u/restore');
+  });
+
+  it('accepts overrides and rejects non-numbers, tiny and huge caps', () => {
+    const e = parseEnv({ ...base, RESTORE_BODY_MAX: '5000', RESTORE_DIR: '/tmp/r' });
+    expect([e.RESTORE_BODY_MAX, e.RESTORE_DIR]).toEqual([5000, '/tmp/r']);
+    for (const v of ['0', '-1', 'abc', '1.5', '1000', '99999999999']) {
+      expect(() => parseEnv({ ...base, RESTORE_BODY_MAX: v })).toThrow();
+    }
+    expect(() => parseEnv({ ...base, RESTORE_DIR: '' })).toThrow();
   });
 });

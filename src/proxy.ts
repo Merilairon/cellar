@@ -73,5 +73,10 @@ export function proxy(request: NextRequest) {
 
 export const config = {
   // Static assets bypass the proxy entirely; everything else is gated by isPublicPath.
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+  // `/api/import/backup` (staged restore upload, up to RESTORE_BODY_MAX) is excluded too: a
+  // matched request has its body buffered in memory and silently truncated at
+  // `proxyClientMaxBodySize` (11 MiB, see next.config.ts), which would turn every larger
+  // backup into a corrupt file, and raising that limit would make every route buffer that much.
+  // The route authenticates itself (CSRF, session) and answers JSON that is never cached.
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/import/backup(?:/|$)).*)'],
 };

@@ -4,8 +4,11 @@
 	encode zstd gzip
 	# Reject oversized request bodies before they reach the app. Photo uploads send the raw
 	# image as the body (up to 10 MiB, enforced again in the app), so that one route gets 11 MB;
-	# everything else (forms, JSON) stays at 1 MB. handle blocks are mutually exclusive, so the
-	# smaller cap cannot shadow the larger one.
+	# everything else (forms, JSON) stays at 1 MB. The backup restore upload sends the raw file
+	# (JSON or zip, default cap RESTORE_BODY_MAX = 256 MiB in the app) to POST /api/import/backup,
+	# so that one route gets 270MB. Caddy counts MB as 1 000 000 bytes, so 260MB would reject a
+	# legal 256 MiB upload. Raise it together with RESTORE_BODY_MAX. handle blocks are mutually
+	# exclusive, so the smaller cap cannot shadow the larger one.
 	# Caddy sets X-Forwarded-For/Proto/Host itself and drops client-supplied values.
 	# The app only trusts them from TRUSTED_PROXIES (= Caddy's fixed IP, 172.28.0.10).
 	@photo_upload {
@@ -15,6 +18,16 @@
 	handle @photo_upload {
 		request_body {
 			max_size 11MB
+		}
+		reverse_proxy app:3000
+	}
+	@restore_upload {
+		method POST
+		path /api/import/backup
+	}
+	handle @restore_upload {
+		request_body {
+			max_size 270MB
 		}
 		reverse_proxy app:3000
 	}

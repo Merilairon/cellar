@@ -5,6 +5,7 @@ export function navItems(role: 'admin' | 'member'): NavItem[] {
   const items: NavItem[] = [
     { href: '/recipes', labelKey: 'nav.recipes' },
     { href: '/import', labelKey: 'nav.import' },
+    { href: '/backup', labelKey: 'nav.backup' },
   ];
   if (role === 'admin') items.push({ href: '/admin/users', labelKey: 'nav.admin' });
   return items;

@@ -32,6 +32,37 @@ export default defineConfig({
         // Small per-IP cap so public-page.spec.ts can reach the 429 with a few requests. Only
         // requests carrying x-forwarded-for are limited (the loopback peer is an unknown client).
         RATE_LIMIT_PUBLIC_MAX: '20',
+        // 7f7b050 added a restore limiter (10 stage uploads per hour per user). The backup specs
+        // (backup-a11y and backup-visual run against this server, backup.spec against :3103) stage
+        // far more than that, so lift it on both. The 429 path is covered at unit level with a low
+        // limit (src/lib/backup/restore-route.test.ts); no e2e starts a server for it.
+        RATE_LIMIT_RESTORE_MAX: '1000',
+        RATE_LIMIT_RESTORE_WINDOW_SEC: '3600',
+      },
+    },
+    {
+      // Instance B for backup.spec.ts (T12): the SAME production build as :3100 (so it must be
+      // listed after it; the first server builds), with its own database, uploads and restore
+      // staging directory, cleaned at start. Cost: one extra `next start` process, about 1 to 2 s
+      // to become ready (measured; see docs/tasks/v0.5.1-visual-report.md). A body cap small
+      // enough to reach the 413 path with a 3 MiB upload (2 MiB) is set here for the dedicated test; every
+      // other test uploads files far below it. Session cookies are per host, not per port, so
+      // specs keep A and B in separate browser contexts.
+      command:
+        'rm -f data/e2e-b.db data/e2e-b.db-wal data/e2e-b.db-shm && rm -rf data/e2e-b-uploads data/e2e-b-restore && npm run start -- -p 3103',
+      url: 'http://localhost:3103/login',
+      reuseExistingServer: false, // the setup test needs a fresh DB
+      timeout: 60_000,
+      env: {
+        SESSION_SECRET: 'e2e-secret-b-e2e-secret-b-e2e-secret-b',
+        BASE_URL: 'http://localhost:3103',
+        DATABASE_PATH: './data/e2e-b.db',
+        UPLOADS_DIR: './data/e2e-b-uploads',
+        RESTORE_DIR: './data/e2e-b-restore',
+        RESTORE_BODY_MAX: '2097152',
+        RATE_LIMIT_RESTORE_MAX: '1000', // see the :3100 server above
+        RATE_LIMIT_RESTORE_WINDOW_SEC: '3600',
+        TRUSTED_PROXIES: '127.0.0.1,::1',
       },
     },
     {
