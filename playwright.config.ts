@@ -35,6 +35,29 @@ export default defineConfig({
       },
     },
     {
+      // Instance B for backup.spec.ts (T12): the SAME production build as :3100 (so it must be
+      // listed after it; the first server builds), with its own database, uploads and restore
+      // staging directory, cleaned at start. Cost: one extra `next start` process, about 1 to 2 s
+      // to become ready (measured; see docs/tasks/v0.5.1-visual-report.md). A body cap small
+      // enough to reach the 413 path with a 3 MiB upload (2 MiB) is set here for the dedicated test; every
+      // other test uploads files far below it. Session cookies are per host, not per port, so
+      // specs keep A and B in separate browser contexts.
+      command:
+        'rm -f data/e2e-b.db data/e2e-b.db-wal data/e2e-b.db-shm && rm -rf data/e2e-b-uploads data/e2e-b-restore && npm run start -- -p 3103',
+      url: 'http://localhost:3103/login',
+      reuseExistingServer: false, // the setup test needs a fresh DB
+      timeout: 60_000,
+      env: {
+        SESSION_SECRET: 'e2e-secret-b-e2e-secret-b-e2e-secret-b',
+        BASE_URL: 'http://localhost:3103',
+        DATABASE_PATH: './data/e2e-b.db',
+        UPLOADS_DIR: './data/e2e-b-uploads',
+        RESTORE_DIR: './data/e2e-b-restore',
+        RESTORE_BODY_MAX: '2097152',
+        TRUSTED_PROXIES: '127.0.0.1,::1',
+      },
+    },
+    {
       // Second instance for the import e2e: `next dev` (NODE_ENV=development), same DB. Env
       // parsing only accepts IMPORT_ALLOW_LOCAL_FETCH outside production and a production
       // build inlines NODE_ENV, so a built server can never enable it. With the seam on, the

@@ -221,7 +221,7 @@ export function RestoreView({
                 <>
                   <li>
                     {t('backup.result.stoppedBefore', {
-                      count: state.result.imported + state.result.renamed,
+                      count: state.result.imported,
                     })}
                   </li>
                   <li>

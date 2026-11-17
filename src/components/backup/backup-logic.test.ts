@@ -167,6 +167,15 @@ describe('counts and results', () => {
       resultLines(result({ renamed: 2, photos_failed: 1, notes_skipped: 4 })).map((l) => l.key),
     ).toEqual(['imported', 'renamed', 'skipped', 'photos', 'photosFailed', 'notesSkipped']);
   });
+  it('counts copies once: `imported` includes `renamed`', () => {
+    const lines = resultLines(result({ imported: 4, renamed: 4, skipped: 0 }));
+    expect(lines.find((l) => l.key === 'imported')).toBeUndefined();
+    expect(lines.find((l) => l.key === 'renamed')?.count).toBe(4);
+    expect(resultLines(result({ imported: 9, renamed: 2 })).slice(0, 2)).toEqual([
+      { key: 'imported', count: 7 },
+      { key: 'renamed', count: 2 },
+    ]);
+  });
   it('parses untrusted bodies defensively', () => {
     expect(parseStage(null)).toBeNull();
     expect(parseStage({ id: 'x' })).toBeNull();

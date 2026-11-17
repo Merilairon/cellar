@@ -158,8 +158,10 @@ export type ResultLine = { key: string; count: number };
 
 /** Result lines in spec order; zero counts are omitted. */
 export function resultLines(r: ApplyResult): ResultLine[] {
+  // The API counts every restored recipe in `imported`, copies included (`renamed` is the subset
+  // restored under a new title), so the plain line is the difference.
   const all: ResultLine[] = [
-    { key: 'imported', count: r.imported },
+    { key: 'imported', count: Math.max(0, r.imported - r.renamed) },
     { key: 'renamed', count: r.renamed },
     { key: 'skipped', count: r.skipped },
     { key: 'photos', count: r.photos_restored },
