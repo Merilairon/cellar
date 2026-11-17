@@ -205,6 +205,8 @@ export type ApplyDeps = {
   maxPhotos?: number;
 };
 
+const yieldToEventLoop = (): Promise<void> => new Promise((r) => setImmediate(r));
+
 const DECODE_RETRIES = 3;
 /** Photos decoded per restore: bounds how long one apply holds the process-wide slot (AppSec M2). */
 export const MAX_RESTORE_PHOTOS = 2000;
@@ -294,6 +296,8 @@ export async function applyRestore(
 
   for (let k = 0; k < doc.recipes.length; k++) {
     const r = doc.recipes[k]!;
+    // A skipped recipe costs almost nothing, but 5000 of them must not hold the loop either.
+    if (k > 0 && k % 50 === 0) await yieldToEventLoop();
     const owner = p.ownerOf(r);
     const conflict = p.existing.get(owner)!.has(normalizeTitle(r.title));
     if (conflict && strategy === 'skip') {
@@ -350,6 +354,10 @@ export async function applyRestore(
     res.notes_skipped += r.notes.length - noteRows.length;
     res.ratings_restored += ratingRows.length;
     res.ratings_skipped += r.ratings.length - ratingRows.length;
+
+    // Yield between recipes (never inside a transaction): the apply is synchronous per recipe,
+    // so without this one restore freezes every other request (v1.0 security review H1).
+    await yieldToEventLoop();
 
     if (photos) {
       const stored: string[] = [];

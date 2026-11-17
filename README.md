@@ -486,6 +486,7 @@ Cellar speaks plain HTTP on port 3000 inside the compose network. For a public h
 - **Do not cache `/r/*`** (public links). The app answers every `/r/*` request with `Cache-Control: no-store` so that a revoked link stops working on the next request. A proxy or CDN that caches those paths keeps serving a revoked recipe.
 - **Pass the app's headers through.** The app sets its own CSP, `Referrer-Policy` (`no-referrer` on `/r/*`) and other security headers. Do not override them with proxy header rules. The app does not send `Strict-Transport-Security`; add it in the proxy once you are sure the host stays on HTTPS.
 - **Do not buffer or time out large downloads.** A backup zip is streamed to the browser. A proxy that buffers responses or has a short timeout may break a large download. This was **not tested**.
+- **MUST for internet exposure: limit how long a client may take to send a request body.** The app has no total deadline for a request body (it only cuts a body that stalls for 30 s on the restore and photo routes, and Next.js disables Node's own request timeout). A client that sends one byte every 24 seconds held a connection (and, on `POST /api/import/backup`, that user's one restore slot) for 420 s in the v1.0 security review, and on every other route a stalled body got no answer at all. The proxy must cut such a request itself, with a read timeout that is longer than your slowest legitimate upload: a 256 MiB restore over a 10 Mbit/s uplink needs about 3.5 minutes, so `10m` is a safe value; the Caddy and Traefik sections below show the setting (the shipped `Caddyfile` does not contain it yet: add it). Caddy: `read_body` and `read_header` in the global options. Traefik: `respondingTimeouts.readTimeout` on the entry point.
 - **The token is in the URL.** A public link (`/r/<token>`) appears in your proxy's access log. Treat that log as holding live links.
 
 ### Caddy (profile `caddy`)
@@ -514,11 +515,28 @@ Only Caddy listens (80, 443, 443/udp). The shipped `Caddyfile` does this:
 | `POST /api/import/backup`      | `270MB`    | The default `RESTORE_BODY_MAX` is 256 MiB (268 435 456 bytes). Caddy counts `MB` as 1 000 000 bytes, so `260MB` would refuse a legal upload. |
 | everything else                | `1MB`      | Forms and JSON.                                                                                                                              |
 
+**Request body time limit (run on 2026-11-17, Caddy 2.11.9).** The shipped `Caddyfile` has no global options block, so add this at the very top of it (above the site block):
+
+```caddyfile
+{
+	servers {
+		timeouts {
+			read_header 10s
+			read_body 10m
+		}
+	}
+}
+```
+
+`caddy validate` accepted it. I also ran a Caddy with `read_body 3s` in front of a plain HTTP backend (not Cellar): a client that sent one byte per second was cut off and got `504` after about 5 s; without the setting it is held open. `read_body` is a total limit for the whole body of every request on the server, so it is a trade-off: `10m` bounds a trickle sender and still lets a 256 MiB restore finish on a 10 Mbit/s uplink; lower it (for example to `30s`) only if nobody restores over a slow link. The `10m` value itself was not tested with a real 256 MiB upload.
+
 It also compresses responses (`zstd`, `gzip`), sets the forwarded headers itself (dropping client-supplied values) and has no cache. If you raise `RESTORE_BODY_MAX`, raise the `270MB` in the `Caddyfile` too (in decimal MB, with some margin above the byte value) and restart Caddy. For HSTS add `header Strict-Transport-Security "max-age=15552000"` inside the site block.
 
 ### Traefik (docker labels)
 
 **Example. The labels, routers, body limits, forwarded headers and rate limiting were run on 2026-11-17 with Traefik v3.6.25 and Traefik's default self-signed certificate. The Let's Encrypt resolver (the `certresolver` lines and the three `--certificatesresolvers` flags) was NOT run: it needs a real DNS name.** Details are in [docs/deployment.md](docs/deployment.md).
+
+> **Security warning: this example gives the internet-facing proxy the Docker socket.** `/var/run/docker.sock` is mounted into Traefik so that it can read the container labels. `:ro` only makes the socket file read-only; it does **not** limit the Docker API, so anyone who takes over Traefik (a bug in the proxy, a bad plugin) controls Docker and therefore the host. This is the setup that was **run** (labels, routers, body limits, forwarded headers). The safer alternative, [the file provider below](#traefik-without-the-docker-socket-file-provider), needs no socket and is the recommended choice on a host that holds anything else; only its routing and read timeout were run, not the full Cellar setup. A socket proxy (a small container that exposes only the read-only container-list calls) is the other option and was **not run**.
 
 Create `docker-compose.traefik.yml` (this exact name) next to `docker-compose.yml` with the YAML below. `SITE_ADDRESS` and `ACME_EMAIL` are required in `.env` (an unset `SITE_ADDRESS` makes the router match nothing, silently). Port 3000 must not be published (no direct file), and ports 80 and 443 must be free. Start with the two files and no profile:
 
@@ -544,6 +562,8 @@ services:
       - --entrypoints.web.http.redirections.entryPoint.to=websecure
       - --entrypoints.web.http.redirections.entryPoint.scheme=https
       - --entrypoints.websecure.address=:443
+      # Cut a request whose body takes longer than 10 minutes (see the MUST in the list above).
+      - --entrypoints.websecure.transport.respondingTimeouts.readTimeout=10m
       - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:?set ACME_EMAIL}
       - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
       - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
@@ -601,7 +621,8 @@ Notes on the example:
 - **No headers middleware.** The app's CSP, `Referrer-Policy` and `Cache-Control` reach the browser unchanged. Keep it that way.
 - **Body limits.** The `buffering` middleware reads the whole body before it forwards it. Bodies larger than `memRequestBodyBytes` go to a temporary file inside the Traefik container (under `/tmp`, in its writable layer), so the Docker host needs free disk for the largest restore you allow. Traefik compares sizes in bytes: the photo route allows 11 MiB (11 534 336 bytes) and the restore route 270 000 000 bytes (above the 268 435 456 default; raise it with `RESTORE_BODY_MAX`).
 - **`traefik.docker.network`** is needed because `app` is on two networks. It must name the project's default network, which is `cellar_default` unless you start Compose with `-p` (then also set `COMPOSE_PROJECT_NAME`).
-- **The Docker socket.** Traefik reads container labels through `/var/run/docker.sock`. `:ro` does not limit what a compromised Traefik can do: whoever controls Traefik controls Docker. If that bothers you, use Traefik's file provider or a socket proxy; neither was tried here.
+- **The Docker socket.** See the warning above the example. `:ro` does not limit what a compromised Traefik can do. Use the file provider below to avoid the socket.
+- **Read timeout.** The `readTimeout` flag above is not part of the run recorded at the top (that run used Traefik's default). I ran `traefik:v3.6` (file provider, plain HTTP backend, not Cellar) with the default: a one-byte-per-second sender was cut after 61 s, and with `readTimeout=3s` after 4 s. Traefik's default of 60 s therefore already ends trickle senders but would also cut a legitimate restore upload that takes longer than a minute (a 256 MiB file over most home uplinks); the 10 minutes in the example fix that and were not tested with a real restore.
 - **Not tested:** the Let's Encrypt resolver, real DNS, HTTP/3, an end-to-end apply of a 256 MiB restore through Traefik (a 256 MiB body passed the proxy and was rejected by the app as not a backup, and a real 2 MB backup zip was staged with 201), and arm64.
 
 ## Configuration
@@ -703,6 +724,28 @@ Deactivated accounts are not reactivated: the command exits with an error for th
 - `src/proxy.ts` is the Next.js 16 name for what used to be `middleware.ts`. It gates unauthenticated requests and sets the security headers (CSP with a per-request nonce, and others). It does not run for `/api/import/backup` (the restore upload, see [docs/deployment.md](docs/deployment.md)); that route checks the session itself.
 - The data model is documented in [docs/data-model.md](docs/data-model.md).
 
+### Traefik without the Docker socket (file provider)
+
+Instead of labels, give Traefik a static file that names the service by its compose address, and do not mount the socket. In `docker-compose.traefik.yml` replace the `--providers.docker*` flags with `--providers.file.directory=/etc/traefik/dynamic`, replace the socket volume with `./traefik-dynamic:/etc/traefik/dynamic:ro`, and drop the `labels` of `app`. Put a file such as `traefik-dynamic/cellar.yml` in that directory:
+
+```yaml
+http:
+  routers:
+    cellar:
+      rule: Host(`recipes.example.com`) # your SITE_ADDRESS; the file provider does not read .env
+      entryPoints: [websecure]
+      service: cellar
+      tls:
+        certResolver: letsencrypt
+  services:
+    cellar:
+      loadBalancer:
+        servers:
+          - url: http://app:3000
+```
+
+**What was run (2026-11-17, `traefik:v3.6`):** this file provider layout with a plain `http://127.0.0.1` backend (not Cellar, not on the compose network, no TLS, no buffering middleware) routed requests, and the `readTimeout` behaviour above was measured with it. **Not run:** the `app:3000` address, the `tls` and `certResolver` lines, and the three body-limit routers: add the `cellar-photo`, `cellar-restore` and `cellar-default` buffering middlewares and routers from the labels above as `http.middlewares` and `http.routers` entries (same rules, priorities and byte values) and test them before relying on them.
+
 ## Known limitations
 
 - **Import cover preview.** The import review screen does not preview the cover (the page's content security policy blocks remote images). The automatic grid mapping is a proposal measured only on hand-written fixtures, works for English only, and the review screen has no visual editor (correct a mapping by editing row numbers, or save it and use **Edit grid layout** on the recipe page). JavaScript-only pages need the optional headless sidecar (v0.3.2, off by default). Microdata-only pages are read by a bounded reader (only the first 40,000 `<` characters of a page are parsed); a page where the recipe lies beyond that is not read. Its accuracy on real sites is untested.
@@ -714,6 +757,7 @@ Deactivated accounts are not reactivated: the command exits with an error for th
 - **Single process only.** Because of that and the single SQLite file, run exactly one app instance.
 - **`TRUSTED_PROXIES` can be spoofed if the app port is reachable.** Any client that can connect directly from a trusted address can forge `X-Forwarded-For` and evade per-IP limits. Behind Caddy, do not publish the app port (do not add `docker-compose.direct.yml` as shown above). This applies to the public link limit too: with the app port reachable, a client can send a fresh `X-Forwarded-For` on every request and never be limited (security checkpoint L1 in [docs/tasks/v0.5.0-security-checkpoint.md](docs/tasks/v0.5.0-security-checkpoint.md)).
 - **Backup and restore.** A JSON or zip backup is not a full backup (see [Backup and restore](#backup-and-restore)). A member restore drops other people's shared notes (they need an author account). An admin restore of an all-users file gives recipes of owners without an account here to the restoring admin. Restore uploads have no total time limit (only a 30 s stall limit) and no cap on the disk the staged files use beyond one file per user and `RATE_LIMIT_RESTORE_MAX` uploads per hour; do not offer restore to accounts you do not trust. A failed photo is not retried by running the same file again with Skip. The backup file's `app_version` field reads `unknown`. See [docs/tasks/v0.5.1-carryover.md](docs/tasks/v0.5.1-carryover.md).
+- **No total request deadline in the app.** A slow sender can hold a connection open indefinitely (measured: 420 s). The proxy must enforce a body read timeout; see the MUST in [Reverse proxy](#reverse-proxy). A restore is also CPU-bound while it applies: it yields to other requests between recipes, but a very large backup can still slow the server for a second or two at a time.
 - **No photos on public pages.** The public `/r/<token>` page shows no photos, notes or ratings by design.
 - **Print is measured in Chromium only.** Both sample recipes print on one A4 and one Letter landscape page there. Other browsers ignore the landscape request. The font steps by column count (10, 9 and 7 pt) were measured with synthetic recipes beyond five step columns, and a recipe with more rows than a page holds prints on several pages. See [Printing](#printing).
 - **Uploads have no per-user or per-volume quota.** Each recipe holds at most 10 photos and at most 3 photo uploads are processed at once, but nothing caps the total disk used.

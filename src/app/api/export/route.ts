@@ -34,6 +34,12 @@ const fail = (status: number, error: string, message: string, headers?: Record<s
   noStore(Response.json({ error, message }, { status, headers }));
 
 export async function GET(request: Request) {
+  // GET passes `isCsrfSafe`, but a cross-site navigation carries the Lax cookie and would spend
+  // one of the user's hourly exports on a forced download (v1.0 review L3). Absent, same-origin,
+  // same-site and none (typed URL, bookmark) stay allowed, so curl and scripts work.
+  if (request.headers.get('sec-fetch-site') === 'cross-site') {
+    return noStore(new Response(null, { status: 403 }));
+  }
   const auth = await authenticate(request);
   if (auth instanceof Response) return noStore(auth);
   const { user } = auth;

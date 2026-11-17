@@ -76,6 +76,9 @@ function enforce(guard: RecipeGuard | undefined, row: RecipeRow): void {
   if (verdict !== 'ok') throw new RecipeGuardError(verdict);
 }
 
+/** Rows per multi-row INSERT of ingredients and steps. */
+export const INSERT_CHUNK = 100;
+
 function insertSections(tx: Conn, recipeId: string, sections: RecipeTree['sections']): void {
   const groups = new Map<string, string>();
   const remap = (g: string | null | undefined): string | null => {
@@ -87,24 +90,31 @@ function insertSections(tx: Conn, recipeId: string, sections: RecipeTree['sectio
   sections.forEach((sec, si) => {
     const sectionId = ulid();
     tx.insert(section).values({ id: sectionId, recipeId, position: si, title: sec.title }).run();
-    sec.ingredients.forEach((ing, i) =>
-      tx
-        .insert(ingredient)
-        .values({
-          ...ing,
-          recipeId,
-          sectionId,
-          position: i,
-          splitGroupId: remap(ing.splitGroupId),
-        })
-        .run(),
-    );
-    sec.steps.forEach((st, i) =>
-      tx
-        .insert(step)
-        .values({ ...st, recipeId, sectionId, position: i })
-        .run(),
-    );
+    // Multi-row statements: one prepared native statement per row cost seconds and about 2 GB
+    // for a 100 000-row restore (v1.0 security review H1). SQLite caps bound variables per
+    // statement (32 766), and an ingredient has about 20 columns, so 100 rows stay far below.
+    for (let at = 0; at < sec.ingredients.length; at += INSERT_CHUNK) {
+      tx.insert(ingredient)
+        .values(
+          sec.ingredients.slice(at, at + INSERT_CHUNK).map((ing, j) => ({
+            ...ing,
+            recipeId,
+            sectionId,
+            position: at + j,
+            splitGroupId: remap(ing.splitGroupId),
+          })),
+        )
+        .run();
+    }
+    for (let at = 0; at < sec.steps.length; at += INSERT_CHUNK) {
+      tx.insert(step)
+        .values(
+          sec.steps
+            .slice(at, at + INSERT_CHUNK)
+            .map((st, j) => ({ ...st, recipeId, sectionId, position: at + j })),
+        )
+        .run();
+    }
   });
 }
 
