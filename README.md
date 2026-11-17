@@ -2,9 +2,11 @@
 
 A self-hosted recipe book for you and the people you invite. Next.js 16, SQLite, one container.
 
-This is v0.4.2 (implemented, pending the release gate). It builds on v0.2 (manual recipes with a grid view and a list view), v0.3.0 (importing a recipe from a web address or pasted text), v0.3.1 (an automatic step-to-ingredient grid mapper for imports) and v0.3.2 (an optional headless browser for JavaScript-only pages), v0.4.0 (search, tags, unit conversion and scaling), v0.4.1 (a visual grid editor), and adds photos, notes, ratings and a cook mode. Earlier versions added accounts, invites, password recovery, security hardening and Docker packaging. It runs as a single process with a single SQLite file.
+This is v1.0. It adds sharing by public link, printing, JSON and zip backup and restore, structured logs and a container health check on top of v0.5.1; see [Upgrades](#upgrades) for what each release changed for the person running it. It runs as a single process with a single SQLite file.
 
-The branch `release/v0.5.0` (slice A of v1.0, not tagged yet) adds sharing by public link and printing; see [Sharing and public links](#sharing-and-public-links) and [Printing](#printing). The branch `release/v0.5.1` (slice B, not tagged yet) adds JSON export and restore; see [Backup and restore](#backup-and-restore).
+**Contents:** [Features](#features) · [Routes](#routes) · [Sharing](#sharing-and-public-links) · [Printing](#printing) · [Backup and restore](#backup-and-restore) · [Search and tags](#search-and-tags) · [Import](#import-a-recipe) · [Run locally](#run-locally) · [Run with Docker](#run-with-docker) · [Reverse proxy](#reverse-proxy) · [Configuration](#configuration) · [Upgrades](#upgrades) · [First run](#first-run) · [Known limitations](#known-limitations)
+
+**Self-hosting in short.** Docker with the Compose plugin, one `.env` file with `SESSION_SECRET`, one command ([Run with Docker](#run-with-docker)). Data is one volume. Put a reverse proxy in front for HTTPS ([Reverse proxy](#reverse-proxy)) and copy the volume for backups ([Backup and restore](#backup-and-restore)).
 
 ## Features
 
@@ -37,6 +39,12 @@ Not yet available: sorting by rating.
 
 | Route               | What it shows                                                                                                                                                                                                                                                                               |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/`                 | A short welcome page for signed-in users; signed-out visitors are sent to `/login`.                                                                                                                                                                                                         |
+| `/login`            | Sign in. Needs no session.                                                                                                                                                                                                                                                                  |
+| `/setup`            | Creates the first admin on an empty database; answers 404 once an admin exists (see [First run](#first-run)).                                                                                                                                                                               |
+| `/register/:token`  | Accept an invite and set a display name and password (see [Invite users](#invite-users)).                                                                                                                                                                                                   |
+| `/reset/:token`     | Set a new password from a reset link (see [Password recovery](#password-recovery)).                                                                                                                                                                                                         |
+| `/admin/users`      | Admins only: invites, reset links, deactivate or delete users.                                                                                                                                                                                                                              |
 | `/recipes`          | Your recipes and recipes shared with you, newest first. Accepts `?q=`, `?tag=` and `?author=` (see [Search and tags](#search-and-tags)). Shows an empty state with calls to action when there are none.                                                                                     |
 | `/profile`          | Your preferred unit system (metric or US).                                                                                                                                                                                                                                                  |
 | `/recipes/new`      | Form to create a recipe.                                                                                                                                                                                                                                                                    |
@@ -45,9 +53,11 @@ Not yet available: sorting by rating.
 | `/import/:id`       | Review screen for an import: edit the draft, then save or discard.                                                                                                                                                                                                                          |
 | `/recipes/:id/edit` | Form to edit a recipe you own (admins can edit any recipe). Saving replaces the recipe's sections, ingredients and steps.                                                                                                                                                                   |
 | `/r/:token`         | The public, read-only page of a recipe shared by link. No sign-in. Shows the recipe without photos, notes, ratings or owner; every invalid, revoked or unknown link shows the same "This link is invalid or has expired." page (see [Sharing and public links](#sharing-and-public-links)). |
+| `/robots.txt`       | `User-agent: *` and `Disallow: /`, served without a session. Asks every crawler to stay out, public links included.                                                                                                                                                                         |
+| `/api/health`       | Public, no session. `200 {"status":"ok"}` when the database answers, `503 {"status":"error"}` otherwise; no version, path or configuration. Used by the container health check ([docs/deployment.md](docs/deployment.md)).                                                                  |
 | `/backup`           | Download a backup of your recipes (JSON, or a zip with photos) and restore one: choose a file, check it, read the preview, then restore. Admins can also download every user's recipes (see [Backup and restore](#backup-and-restore)). Linked as **Backup** in the header.                 |
 
-The JSON API lives under `/api/recipes` (`/api/recipes`, `/api/recipes/:id`, `/api/recipes/:id/copy`, `/api/recipes/:id/visibility`, `/api/recipes/:id/share-link`, `/api/recipes/:id/grid`), `/api/tags`, `/api/export` and `/api/import/backup`. See [docs/data-model.md](docs/data-model.md).
+The JSON API lives under `/api/recipes` (`/api/recipes`, `/api/recipes/:id`, `/api/recipes/:id/copy`, `/api/recipes/:id/visibility`, `/api/recipes/:id/share-link`, `/api/recipes/:id/grid`, `/api/recipes/:id/photos`, `/api/recipes/:id/notes`, `/api/recipes/:id/rating`), `/api/photos/:id`, `/api/tags`, `/api/import` (URL and paste import), `/api/export`, `/api/import/backup` and `/api/health`. See [docs/data-model.md](docs/data-model.md).
 
 ## Sharing and public links
 
@@ -64,7 +74,7 @@ Turning a link on or off, or replacing it, does not change the recipe's "last ed
 
 **Copyright notice.** When a recipe was imported from a web page and has not been edited since, the Share dialog shows a notice that the recipe text may be protected by copyright and that you are responsible for publishing it. It is shown for the whole dialog (both the All users and the public link setting), and it only warns: it never blocks sharing. Editing the recipe removes it. Whether it should apply to the public link only is an open owner question, see [docs/tasks/v0.5.0-carryover.md](docs/tasks/v0.5.0-carryover.md).
 
-**Turn public links off for the whole instance.** Set `PUBLIC_LINKS_ENABLED=false` (default `true`) and restart. Every `/r/<token>` answers the invalid-link page, the Share dialog hides the switch and says an admin turned links off, and `POST` and `DELETE /api/recipes/:id/share-link` answer 403 `public_links_disabled`. Stored links are kept but inert; set the variable back to `true` and the same links work again.
+**Turn public links off for the whole instance.** Set `PUBLIC_LINKS_ENABLED=false` (default `true`) and restart. Every `/r/<token>` answers the invalid-link page, the Share dialog hides the switch and says an admin turned links off, and `POST /api/recipes/:id/share-link` answers 403 `public_links_disabled`. `DELETE` (turning a link off) still works, so a link you revoke while links are disabled stays revoked when you enable them again. Stored links are kept but inert; set the variable back to `true` and the same links work again.
 
 **Rate limit and the reverse proxy.** `/r/*` is limited per client IP to `RATE_LIMIT_PUBLIC_MAX` requests per `RATE_LIMIT_PUBLIC_WINDOW_SEC` (120 per 60 seconds by default), and answers 429 with `Retry-After` beyond that. For the limit to apply:
 
@@ -89,7 +99,7 @@ When the app cannot tell who the client is (no `TRUSTED_PROXIES`, the default fo
 
 ## Backup and restore
 
-**Backup** in the header opens `/backup` (new in v0.5.1). It has two parts: export and restore.
+**For a full backup of the instance, copy the volume ([Full backup](#full-backup-copy-the-volume)); that is the primary backup.** The **Backup** page in the header (`/backup`, new in v0.5.1) is a portable export of recipes, and a restore of such a file. It has two parts: export and restore.
 
 ### Export
 
@@ -118,7 +128,35 @@ What to expect:
 - **Re-zipped backups.** A zip you unzipped and zipped again is accepted when it contains only the backup file and the `photos/<id>.webp` files, at the top or inside one folder. Directory entries, `__MACOSX/`, `.DS_Store` and `Thumbs.db` are ignored. Any other file is refused, and the error names it.
 - **One at a time.** Only one restore is applied at a time on the instance (a second one gets "restore in progress" and can be retried), and each user keeps at most one checked file.
 
-**The volume copy stays the primary full backup.** The export is a portable copy of recipes, not of the instance: it does not include accounts' passwords, public links, sessions or import history, and a restore adds recipes without removing anything. To recover a whole instance, restore the `/data` volume ([Backup](#backup) under Docker). Use the JSON or zip backup to move recipes between instances, to keep a copy outside the volume, and to hand a member their own recipes.
+**The volume copy stays the primary full backup.** The export is a portable copy of recipes, not of the instance: it does not include accounts' passwords, public links, sessions or import history, and a restore adds recipes without removing anything. To recover a whole instance, restore the `/data` volume ([Full backup](#full-backup-copy-the-volume)). Use the JSON or zip backup to move recipes between instances, to keep a copy outside the volume, and to hand a member their own recipes.
+
+### Full backup: copy the volume
+
+This is the primary backup. It holds everything: the SQLite database (accounts, sessions, recipes, notes, share links), the uploads directory (`/data/uploads`, photos) and anything else under `/data`. Stop the app first so the database file is consistent (it runs in WAL mode, so a copy of a running instance can miss recent writes).
+
+The volume is named `<compose project>_app-data`. The project name is `cellar` unless you pass `-p`; check with `docker volume ls`.
+
+```bash
+docker compose stop app
+docker run --rm -v cellar_app-data:/data -v "$PWD":/backup alpine \
+  tar czf /backup/cellar-data.tgz -C /data .
+docker compose start app
+```
+
+Use the same `-f` and `--profile` flags on every compose command here as when you started the stack (direct mode: `-f docker-compose.yml -f docker-compose.direct.yml`). Run these from a directory outside the repository checkout: the archive is created by root. Store `cellar-data.tgz` somewhere that is not this machine. It contains password hashes and session records, so keep it as private as the server.
+
+To restore it into an empty volume (a new machine, or after you deleted the old volume):
+
+```bash
+docker compose down                      # same -f/--profile flags as when you started; keep the volume if it still exists; remove it only to replace it
+docker volume rm cellar_app-data         # skip if the volume does not exist yet
+docker volume create cellar_app-data
+docker run --rm -v cellar_app-data:/data -v "$PWD":/backup alpine \
+  tar xzf /backup/cellar-data.tgz -C /data
+docker compose up -d                      # same -f/--profile flags again
+```
+
+Run as root inside the helper container, `tar` keeps the file owner (uid 1000, the `node` user the app runs as), which is what the app needs. These commands (tar, volume re-creation, start; the first admin was still there afterwards) were run on 2026-11-17 against a one-account instance; a volume holding uploaded photos and a larger library was not part of that run.
 
 ## Search and tags
 
@@ -235,7 +273,7 @@ Some recipe pages only exist after JavaScript runs, or refuse plain HTTP clients
 - **When it triggers.** The fallback chain is static fetch, then headless, then paste. Headless runs only when the static page has no Recipe data at all, or the static fetch is refused with 401, 403 or 429, and only if `HEADLESS_URL` is set. A page whose Recipe data exists but is empty does not trigger it. A review draft from it has `method = headless` and a note on the review screen.
 - **Off by default.** With `HEADLESS_URL` unset, the app makes no sidecar request and behaves as in v0.3.1. A plain `docker compose up` does not start the sidecar.
 - **Enable it.** Set `HEADLESS_URL=http://browser:3001` and `HEADLESS_TOKEN=$(openssl rand -hex 32)` in `.env` (the app refuses to start with a `HEADLESS_URL` and no valid token), then run `docker compose --profile headless up -d --build` (add your usual `-f` and `--profile` flags). The sidecar refuses to start without a token.
-- **Cost.** Sidecar image about 1.2 GB on disk (the app image is about 437 MB). Memory on amd64: about 106 MiB idle, about 178 MB after one small render, 195 MB peak; the compose limit is 2 GiB. Heavy real pages and arm64 are not measured. Startup time was not measured.
+- **Cost.** Sidecar image about 1.2 GB on disk (the app image is about 440 MB). Memory on amd64: about 106 MiB idle, about 178 MB after one small render, 195 MB peak; the compose limit is 2 GiB. Heavy real pages and arm64 are not measured. Startup time with the sidecar was not measured.
 - **Security.** Every request Chromium makes goes through a filtering proxy that resolves each host once and refuses private, loopback, link-local and metadata addresses. The sidecar runs as non-root with a read-only root, no volumes, no published ports and Chromium's own sandbox on. It executes untrusted JavaScript, so a Chromium zero-day is the residual risk. Details, the network layout and an optional firewall snippet: [docs/deployment.md](docs/deployment.md).
 - **Unsupported hosts.** Hosts with `user.max_user_namespaces=0` (unprivileged user namespaces disabled) are unsupported. The sidecar exits with an `UNSUPPORTED HOST` message and never runs without its sandbox.
 - **arm64: verified in CI on a native GitHub arm64 runner** (sidecar sandbox and syscall tests, real Chromium render tests, app image, `sharp` re-encode). It is not verified on Raspberry Pi or Home Assistant OS hardware itself; the kernel there must allow unprivileged user namespaces. QEMU emulation cannot run the sandbox and is not used for this.
@@ -280,7 +318,7 @@ What this has not been tested against: a real network. TLS certificate and SNI h
 
 - The imported draft is kept in the `import_job` table (`draft_json`). Failed and abandoned jobs older than `IMPORT_JOB_TTL_DAYS` (default 30, `0` disables) are pruned lazily, together with their raw HTML files. There is no background process.
 - Raw HTML is **not** stored unless `KEEP_RAW_HTML=true`. When enabled, files are written to `RAW_HTML_DIR` (default `import-raw/` next to the uploads directory, which is next to the database unless you moved `UPLOADS_DIR`; this is the same place v0.3.0 and v0.3.1 used) and pruned with their job. Files left in that older location are still cleaned up if you later point `RAW_HTML_DIR` elsewhere, but they are not moved. Headless-rendered HTML can be larger.
-- Covers are stored in the uploads directory (`UPLOADS_DIR`; `/data/uploads` in Docker, inside the `app-data` volume, so the [backup](#backup) covers them).
+- Covers are stored in the uploads directory (`UPLOADS_DIR`; `/data/uploads` in Docker, inside the `app-data` volume, so the [volume backup](#full-backup-copy-the-volume) covers them).
 - `source_url` is stored in a normalized form (host lowercased, fragment, default port and tracking parameters removed, query parameters sorted, trailing slash removed) with the scheme you entered, so an `http`-only site keeps a working link. For the duplicate warning, `http` and `https` are treated as equal.
 - The mapping proposal is part of the draft in `draft_json`; no new table or column was added in v0.3.1. Draft tags (keywords and category) are part of the draft too and become `tag` rows only when you save.
 
@@ -411,7 +449,7 @@ cp .env.example .env
 docker compose -f docker-compose.yml -f docker-compose.direct.yml up -d --build
 ```
 
-Open <http://localhost:3000>. Compose refuses to start if `SESSION_SECRET` is unset, and the app refuses to start in production if it is shorter than 32 characters or a known placeholder such as the one in `.env.example`.
+Open <http://localhost:3000>. Not on the machine running Docker (a LAN address, a VPS)? Set `BASE_URL=http://<server-address>:3000` in `.env` first and open exactly that address; with any other address every form submit is refused with 403. Generate the secret with `openssl rand -base64 48` and paste the output after `SESSION_SECRET=`. Compose refuses to start if `SESSION_SECRET` is unset, and the app refuses to start in production if it is shorter than 32 characters or a known placeholder such as the one in `.env.example`.
 
 #### Changing the port
 
@@ -419,27 +457,7 @@ Open <http://localhost:3000>. Compose refuses to start if `SESSION_SECRET` is un
 
 `docker-compose.direct.yml` is the opt-in file that publishes the app port; it is not loaded automatically, so a plain `docker compose up` or `--profile caddy` run never exposes the app port by accident. Data lives in the `app-data` volume, mounted at `/data`.
 
-### Caddy profile (automatic HTTPS)
-
-Use this to put the app on a public host name with a Let's Encrypt certificate. Set in `.env`:
-
-```bash
-SITE_ADDRESS=recipes.example.com
-BASE_URL=https://recipes.example.com
-TRUSTED_PROXIES=172.28.0.10
-```
-
-`172.28.0.10` is the fixed address Caddy gets on the compose network. DNS must point at the host, and ports 80 and 443 must be reachable. Then start with:
-
-```bash
-docker compose --profile caddy up -d --build
-```
-
-The app port is **not** published in this mode; only Caddy listens (80, 443). Do not combine this with `docker-compose.direct.yml`: with the app port reachable, `TRUSTED_PROXIES` can be spoofed (see [Known limitations](#known-limitations)).
-
-The app does not send `Strict-Transport-Security`. If you want HSTS, let Caddy add it, for example `header Strict-Transport-Security "max-age=15552000"` inside the site block of `Caddyfile`. Only do this once you are sure the host will stay on HTTPS.
-
-See [docs/deployment.md](docs/deployment.md) for details.
+Plain `docker compose up` starts the `app` service only: the headless browser sidecar (`--profile headless`) and Caddy (`--profile caddy`) are opt-in. The image has a health check; `docker compose ps` shows `healthy` after a few seconds. For HTTPS on a public host name see [Reverse proxy](#reverse-proxy); for backups see [Backup and restore](#backup-and-restore); to update see [Upgrades](#upgrades). Image size, startup time and the health check: [docs/deployment.md](docs/deployment.md).
 
 ### Multi-arch image
 
@@ -451,24 +469,144 @@ docker buildx build --platform linux/amd64,linux/arm64 -t cellar:multi .
 
 Add `--push` and a registry tag to publish.
 
-### Backup
-
-This is the full backup. (The **Backup** page of the app exports recipes only; see [Backup and restore](#backup-and-restore).) Back up the `/data` volume. The SQLite database and, since v0.3.0, the uploads directory (`/data/uploads`, imported covers) live in it. With the app stopped (`docker compose stop app`), for example:
-
-```bash
-docker run --rm -v cellar_app-data:/data -v "$PWD":/backup alpine tar czf /backup/cellar-data.tgz -C /data .
-```
-
-The volume name is `<compose project>_app-data`; check with `docker volume ls`.
-
 ### Troubleshooting
 
 - **Every form submit returns 403, or `/setup` does nothing:** `BASE_URL` does not match the address in your browser. Make the host and port identical (`APP_PORT=3412` needs `BASE_URL=http://localhost:3412`), then run `docker compose ... up -d` again so the container picks it up.
 - **`Pool overlaps with other one on this address space` on `up`:** the compose network uses the fixed subnet `172.28.0.0/24` (Caddy is `172.28.0.10`). A second compose project, or any other Docker network, using that range conflicts. Stop the other project or change the `subnet` and `ipv4_address` in `docker-compose.yml` (and `TRUSTED_PROXIES` to match).
 
-## Environment variables
+## Reverse proxy
 
-Validated at startup in `src/lib/env.ts`. See `.env.example` for a template.
+Cellar speaks plain HTTP on port 3000 inside the compose network. For a public host name, put a reverse proxy in front for HTTPS. This repository ships a Caddy profile and, below, a Traefik example. Any other proxy works if it meets the rules in the next list.
+
+**What every proxy must do**
+
+- **Never publish the app port.** `docker-compose.yml` only `expose`s 3000. Do not add `docker-compose.direct.yml` and do not map 3000 in a proxy setup of your own. The per-IP limits (login, registration, public links) believe `X-Forwarded-For`, so a client that can reach the app directly can dodge them.
+- **Forward the client address and tell the app who to trust.** Set `X-Forwarded-For` (and `X-Forwarded-Proto`, `X-Forwarded-Host`) to the real client, replacing any client-supplied value, and set `TRUSTED_PROXIES` to the proxy's address. Without `TRUSTED_PROXIES` the per-IP limits are skipped. Both examples below pin the proxy to `172.28.0.10` on the compose network, so `TRUSTED_PROXIES=172.28.0.10` works for both.
+- **Allow big enough request bodies on two routes.** A photo is uploaded as the raw image, up to 10 MiB, to `POST /api/recipes/:id/photos`; allow at least 10 MiB there (the examples use 11). A backup restore is uploaded raw to `POST /api/import/backup`; allow at least `RESTORE_BODY_MAX` (default 256 MiB = 268 435 456 bytes) there. **Raise the proxy limit together with `RESTORE_BODY_MAX`**: if the proxy limit is lower, the proxy refuses the upload with its own 413 before the app sees it. Everything else can stay at 1 MB.
+- **Do not cache `/r/*`** (public links). The app answers every `/r/*` request with `Cache-Control: no-store` so that a revoked link stops working on the next request. A proxy or CDN that caches those paths keeps serving a revoked recipe.
+- **Pass the app's headers through.** The app sets its own CSP, `Referrer-Policy` (`no-referrer` on `/r/*`) and other security headers. Do not override them with proxy header rules. The app does not send `Strict-Transport-Security`; add it in the proxy once you are sure the host stays on HTTPS.
+- **Do not buffer or time out large downloads.** A backup zip is streamed to the browser. A proxy that buffers responses or has a short timeout may break a large download. This was **not tested**.
+- **The token is in the URL.** A public link (`/r/<token>`) appears in your proxy's access log. Treat that log as holding live links.
+
+### Caddy (profile `caddy`)
+
+**Validated on 2026-11-17** (amd64, Docker 29.9.3, Caddy 2.11.9): `caddy validate` accepted the `Caddyfile`, and the profile was run once with Caddy's internal CA on `localhost` (details in [docs/deployment.md](docs/deployment.md)). It is not validated against a real DNS name and Let's Encrypt certificate.
+
+Coming from direct mode? Rerun without `docker-compose.direct.yml` (`up -d --build` recreates the app and closes port 3000), and make sure nothing else uses ports 80 and 443 on the host. Set in `.env`:
+
+```bash
+SITE_ADDRESS=recipes.example.com
+BASE_URL=https://recipes.example.com
+TRUSTED_PROXIES=172.28.0.10
+```
+
+`172.28.0.10` is the fixed address Caddy gets on the compose network. DNS must point at the host and ports 80 and 443 must be reachable from the internet for the certificate. Then start with:
+
+```bash
+docker compose --profile caddy up -d --build
+```
+
+Only Caddy listens (80, 443, 443/udp). The shipped `Caddyfile` does this:
+
+| Route                          | Body limit | Why                                                                                                                                          |
+| ------------------------------ | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/recipes/:id/photos` | `11MB`     | A photo is up to 10 MiB (10 485 760 bytes); the app checks that limit itself.                                                                |
+| `POST /api/import/backup`      | `270MB`    | The default `RESTORE_BODY_MAX` is 256 MiB (268 435 456 bytes). Caddy counts `MB` as 1 000 000 bytes, so `260MB` would refuse a legal upload. |
+| everything else                | `1MB`      | Forms and JSON.                                                                                                                              |
+
+It also compresses responses (`zstd`, `gzip`), sets the forwarded headers itself (dropping client-supplied values) and has no cache. If you raise `RESTORE_BODY_MAX`, raise the `270MB` in the `Caddyfile` too (in decimal MB, with some margin above the byte value) and restart Caddy. For HSTS add `header Strict-Transport-Security "max-age=15552000"` inside the site block.
+
+### Traefik (docker labels)
+
+**Example. The labels, routers, body limits, forwarded headers and rate limiting were run on 2026-11-17 with Traefik v3.6.25 and Traefik's default self-signed certificate. The Let's Encrypt resolver (the `certresolver` lines and the three `--certificatesresolvers` flags) was NOT run: it needs a real DNS name.** Details are in [docs/deployment.md](docs/deployment.md).
+
+Create `docker-compose.traefik.yml` (this exact name) next to `docker-compose.yml` with the YAML below. `SITE_ADDRESS` and `ACME_EMAIL` are required in `.env` (an unset `SITE_ADDRESS` makes the router match nothing, silently). Port 3000 must not be published (no direct file), and ports 80 and 443 must be free. Start with the two files and no profile:
+
+```bash
+# .env: SITE_ADDRESS=recipes.example.com  BASE_URL=https://recipes.example.com
+#       TRUSTED_PROXIES=172.28.0.10       ACME_EMAIL=you@example.com
+docker compose -f docker-compose.yml -f docker-compose.traefik.yml up -d --build
+```
+
+```yaml
+services:
+  traefik:
+    image: traefik:v3.6
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedByDefault=false
+      - --providers.docker.network=${COMPOSE_PROJECT_NAME:-cellar}_default
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entryPoint.to=websecure
+      - --entrypoints.web.http.redirections.entryPoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:?set ACME_EMAIL}
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik-acme:/letsencrypt
+    networks:
+      default:
+        ipv4_address: 172.28.0.10 # same fixed address as Caddy; matches TRUSTED_PROXIES
+
+  app:
+    labels:
+      traefik.enable: 'true'
+      traefik.docker.network: ${COMPOSE_PROJECT_NAME:-cellar}_default
+      traefik.http.services.cellar.loadbalancer.server.port: '3000'
+      # Photo upload: 11 MiB (the app allows 10 MiB of image).
+      traefik.http.middlewares.cellar-photo.buffering.maxRequestBodyBytes: '11534336'
+      traefik.http.middlewares.cellar-photo.buffering.memRequestBodyBytes: '2097152'
+      traefik.http.routers.cellar-photo.rule: Host(`${SITE_ADDRESS}`) && Method(`POST`) && PathRegexp(`^/api/recipes/[^/]+/photos$$`)
+      traefik.http.routers.cellar-photo.priority: '30'
+      traefik.http.routers.cellar-photo.entrypoints: websecure
+      traefik.http.routers.cellar-photo.tls.certresolver: letsencrypt
+      traefik.http.routers.cellar-photo.middlewares: cellar-photo
+      traefik.http.routers.cellar-photo.service: cellar
+      # Backup restore: must be at least RESTORE_BODY_MAX (default 268435456); raise both together.
+      traefik.http.middlewares.cellar-restore.buffering.maxRequestBodyBytes: '270000000'
+      traefik.http.middlewares.cellar-restore.buffering.memRequestBodyBytes: '2097152'
+      traefik.http.routers.cellar-restore.rule: Host(`${SITE_ADDRESS}`) && Method(`POST`) && Path(`/api/import/backup`)
+      traefik.http.routers.cellar-restore.priority: '30'
+      traefik.http.routers.cellar-restore.entrypoints: websecure
+      traefik.http.routers.cellar-restore.tls.certresolver: letsencrypt
+      traefik.http.routers.cellar-restore.middlewares: cellar-restore
+      traefik.http.routers.cellar-restore.service: cellar
+      # Everything else: 1 MiB.
+      traefik.http.middlewares.cellar-default.buffering.maxRequestBodyBytes: '1048576'
+      traefik.http.middlewares.cellar-default.buffering.memRequestBodyBytes: '1048576'
+      traefik.http.routers.cellar.rule: Host(`${SITE_ADDRESS}`)
+      traefik.http.routers.cellar.priority: '1'
+      traefik.http.routers.cellar.entrypoints: websecure
+      traefik.http.routers.cellar.tls.certresolver: letsencrypt
+      traefik.http.routers.cellar.middlewares: cellar-default
+      traefik.http.routers.cellar.service: cellar
+
+volumes:
+  traefik-acme:
+```
+
+Notes on the example:
+
+- **No `ports` on `app`, no `docker-compose.direct.yml`.** The `$$` in the regular expression is how Compose writes a literal `$`.
+- **`X-Forwarded-*`.** With no `forwardedHeaders.trustedIPs` on the entry points, Traefik replaces client-supplied `X-Forwarded-For`, `X-Forwarded-Proto` and `X-Real-Ip` with the values it measured. Do not add `trustedIPs` unless Traefik itself sits behind another proxy. A request that sent its own `X-Forwarded-For` was still counted against its real address by the `/r/*` limit.
+- **No headers middleware.** The app's CSP, `Referrer-Policy` and `Cache-Control` reach the browser unchanged. Keep it that way.
+- **Body limits.** The `buffering` middleware reads the whole body before it forwards it. Bodies larger than `memRequestBodyBytes` go to a temporary file inside the Traefik container (under `/tmp`, in its writable layer), so the Docker host needs free disk for the largest restore you allow. Traefik compares sizes in bytes: the photo route allows 11 MiB (11 534 336 bytes) and the restore route 270 000 000 bytes (above the 268 435 456 default; raise it with `RESTORE_BODY_MAX`).
+- **`traefik.docker.network`** is needed because `app` is on two networks. It must name the project's default network, which is `cellar_default` unless you start Compose with `-p` (then also set `COMPOSE_PROJECT_NAME`).
+- **The Docker socket.** Traefik reads container labels through `/var/run/docker.sock`. `:ro` does not limit what a compromised Traefik can do: whoever controls Traefik controls Docker. If that bothers you, use Traefik's file provider or a socket proxy; neither was tried here.
+- **Not tested:** the Let's Encrypt resolver, real DNS, HTTP/3, an end-to-end apply of a 256 MiB restore through Traefik (a 256 MiB body passed the proxy and was rejected by the app as not a backup, and a real 2 MB backup zip was staged with 201), and arm64.
+
+## Configuration
+
+Every setting is an environment variable, validated at startup in `src/lib/env.ts` (a bad value stops the app with a message that names the variable). Copy `.env.example` to `.env`; Compose passes the variables below to the container. "Required" means the app does not start without it. Docker Compose substitutes defaults for some of them (`BASE_URL` from `APP_PORT`, for example); the default column is the app's own.
 
 | Variable                         | Required      | Default                                       | Description                                                                                                                                                                                                                                                                                                                                                                                               |
 | -------------------------------- | ------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -500,22 +638,52 @@ Validated at startup in `src/lib/env.ts`. See `.env.example` for a template.
 | `HEADLESS_TIMEOUT_MS`            | no            | `35000`                                       | How long the app waits for the sidecar, 1 to 35000. The sidecar's own render limit is a fixed 30 s and cannot be raised. If the app gives up first, the sidecar cancels that render and frees its slot.                                                                                                                                                                                                   |
 | `UPLOADS_DIR`                    | no            | `<dir of DATABASE_PATH>/uploads`              | Where recipe photos (uploaded and imported) are stored. `/data/uploads` in Docker.                                                                                                                                                                                                                                                                                                                        |
 | `IMPORT_ALLOW_LOCAL_FETCH`       | no            | `false`                                       | Development and tests only: lets the importer fetch private addresses and non-80/443 ports (local fixture server). **Disables the SSRF guard; startup fails if set in production.**                                                                                                                                                                                                                       |
+| `LOG_LEVEL`                      | no            | `info`                                        | `debug`, `info`, `warn` or `error` (anything else fails at startup). The app writes one JSON object per line: `debug` and `info` to stdout, `warn` and `error` to stderr, so `docker compose logs app` shows both. `debug` also adds error stack traces. Tokens, emails, passwords, notes, request bodies and raw HTML are never logged.                                                                  |
+| `HEADLESS_ALLOW_NO_TOKEN`        | no            | unset                                         | Only the value `1` is accepted. Lets the app accept a `HEADLESS_URL` without `HEADLESS_TOKEN`; the sidecar needs the same variable to start without a token. Tests only, not recommended.                                                                                                                                                                                                                 |
 
 **Rate limiting and unknown clients.** Per-IP limits only work when the app can tell clients apart, which needs `TRUSTED_PROXIES` to match your reverse proxy. Without it (the default for direct mode or `npm run dev`) every visitor looks like the same "unknown" client; rather than let a few bad requests lock everybody out, the per-IP limits (login, registration and the public `/r/*` limit) are then skipped and only the per-email login limit applies. Your proxy must also send `X-Forwarded-For`. Register and reset links carry unguessable tokens, so they stay safe without a per-IP limit. Counters are in memory and reset on restart.
 
 Sidecar-only variables (read by the `browser` container, not the app): `BIND_ADDR` (default `0.0.0.0`; must be an IP address literal, set it to the container's internal address if you can), `HEADLESS_ALLOW_NO_TOKEN` (set to `1` to start the sidecar without a token; logged, tests only, not recommended; the app needs the same variable to accept a `HEADLESS_URL` without a token), `PORT` (3001) and render limits. See [docker/browser/README.md](docker/browser/README.md).
 
-Docker-only variables read by Compose (not by the app): `APP_PORT` (published host port, default `3000`; `BASE_URL` must use the same port) and `SITE_ADDRESS` (Caddy host name, default `localhost`).
+Docker-only variables read by Compose (not by the app): `ACME_EMAIL` (only in the [Traefik example](#traefik-docker-labels)), `APP_PORT` (published host port, default `3000`; `BASE_URL` must use the same port) and `SITE_ADDRESS` (Caddy host name, default `localhost`).
+
+## Upgrades
+
+**Generic procedure.**
+
+1. **Back up first.** Copy the volume ([Full backup](#full-backup-copy-the-volume)). Migrations only go forward; there are no down migrations, so the volume copy is also how you go back.
+2. **Get the new version.** `git pull` (or check out the release tag you want) in the directory that holds `docker-compose.yml`. Your `.env` is not tracked by git, so a pull leaves it alone; `git diff HEAD@{1} -- .env.example` after the pull shows new variables; every new variable has a default, so an old `.env` keeps working.
+3. **Rebuild and start**, with the same `-f` and `--profile` flags you used before: `docker compose up -d --build`. The old container is replaced; the volume is kept.
+4. **Migrations run at app start**, before the app serves requests. The health check turns `healthy` when the app is up (`docker compose ps`). If it does not, read `docker compose logs app`.
+5. **Update the sidecar and the proxy if you use them.** `docker compose --profile headless build` for the sidecar. A `Caddyfile` changed in the repository is picked up when Caddy restarts (`docker compose --profile caddy restart caddy`); a proxy you configured yourself needs the body limits in [Reverse proxy](#reverse-proxy).
+
+**Per release.** Only what a person running the instance has to know. The migration numbers come from `drizzle/` at each tag.
+
+| Release | What changes for you                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| v0.1    | First release. Nothing to upgrade from.                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| v0.2    | Migrations `0001`, `0002` (recipes). A database made by v0.1 needs nothing. (Only a development database from an unreleased v0.2 work-in-progress branch has to be reset, see [Run locally](#run-locally).)                                                                                                                                                                                                                                                     |
+| v0.3.0  | Migration `0003` (URL import and covers). The app now makes outbound HTTP(S) requests on ports 80 and 443 when someone imports a URL: allow that egress if you filter it. Imported covers and photos live under `/data/uploads` in the same volume.                                                                                                                                                                                                             |
+| v0.3.1  | No migration, no new variable.                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| v0.3.2  | Migration `0004`. The optional headless sidecar and the `HEADLESS_*` variables arrive; with `HEADLESS_URL` unset nothing changes. New: old import jobs and kept raw HTML are pruned after `IMPORT_JOB_TTL_DAYS` (default 30; `0` disables).                                                                                                                                                                                                                     |
+| v0.4.0  | Migrations `0005` (search index, tags; every existing recipe is indexed) and `0006`. Needs SQLite FTS5, which the bundled build has; the app checks at start. Rebuild the sidecar if you use it.                                                                                                                                                                                                                                                                |
+| v0.4.1  | No migration, no new variable.                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| v0.4.2  | Migration `0007` (photos, notes, ratings). **Reverse proxy: allow bodies of at least 10 MiB on `POST /api/recipes/:id/photos`.** The bundled `Caddyfile` was changed to do this (11MB for that route); a proxy that caps bodies at 1 MB makes every phone photo fail.                                                                                                                                                                                           |
+| v0.5.0  | No migration. New variables `PUBLIC_LINKS_ENABLED` and `RATE_LIMIT_PUBLIC_*`. **If you leave public links on, check [Reverse proxy](#reverse-proxy): app port unpublished, `TRUSTED_PROXIES` set, `/r/*` not cached.**                                                                                                                                                                                                                                          |
+| v0.5.1  | No migration. New variables `RESTORE_BODY_MAX`, `RESTORE_DIR`, `RATE_LIMIT_EXPORT_*`, `RATE_LIMIT_RESTORE_*`. **Reverse proxy: allow `RESTORE_BODY_MAX` bytes on `POST /api/import/backup`.** The bundled `Caddyfile` now has that route; an older copy with `260MB` is too small. Staged restore files live in `/data/restore`.                                                                                                                                |
+| v1.0    | **No migration** (`drizzle/` still ends at `0007`). Logs are now one JSON object per line (anything that parses the old console text will not match); new variable `LOG_LEVEL`. The image and compose file have a health check, so `docker ps` shows `healthy` or `unhealthy`. Turning a public link off now works while `PUBLIC_LINKS_ENABLED=false`. Changing a recipe between Private and All users no longer updates its "last edited" time (since v0.5.0). |
+
+Not verified: an upgrade of a real v0.4.x volume through `docker compose up` was not repeated for this release; the migrations were checked on a copy of a v0.4.1 volume started with `docker run` (see [docs/tasks/v0.5.0-t0-baseline.md](docs/tasks/v0.5.0-t0-baseline.md)).
 
 ## First run
 
-On a fresh database, open `/setup` (for example <http://localhost:3000/setup>) and create the first admin account with an email, display name and password. After that, sign in at `/login`.
+On a fresh database, open `/setup` (for example <http://localhost:3000/setup>) and create the first admin account with an email, display name and password (at least 12 characters). After that, sign in at `/login`.
 
 > **Warning:** until the first admin exists, `/setup` is open to anyone who can reach the app, and whoever submits it first becomes the admin. Complete setup before you expose the host to a network or the internet (for example, finish it on `localhost` or before opening ports 80/443).
 
 ## Invite users
 
-Signed in as an admin, open **Admin > Users** (`/admin/users`) and create an invite, optionally for a specific email. The app shows an invite link once; send it to the person. The link is single use and expires after 7 days. The person opens it, sets a display name and password, and has a member account.
+Signed in as an admin, open **Users** in the header (`/admin/users`) and create an invite, optionally for a specific email. The app shows an invite link once (it starts with `BASE_URL`, so check that is the address your family uses); send it to the person. The link is single use and expires after 7 days. The person opens it, sets a display name and password, and has a member account.
 
 ## Password recovery
 
@@ -542,10 +710,15 @@ Deactivated accounts are not reactivated: the command exits with an error for th
 - **Grid editor.** There is no autosave and concurrent edits are not merged: a conflict means choosing your version or theirs. List recipes need **Convert to grid** first. Sections cannot be reordered and ingredients cannot be reordered by dragging (use Move up and down or Alt+Up and Alt+Down). Links in the page header do not ask before discarding unsaved changes; browser Back does. Two very fast browser Backs in a row can still leave the editor open with unsaved edits (CR-m2d). The Alt+Left and Alt+Right chords that move a step one column are not verified against real browser history navigation (O4), so on some browsers they may trigger Back or Forward instead. Tested in Chromium with emulated touch only: real phones and tablets (including drag and the Back gesture), Firefox, Safari and screen readers are untested. Accessibility was checked with axe and scripted keyboard tests, not with assistive technology. Details: [docs/tasks/v0.4.1-carryover.md](docs/tasks/v0.4.1-carryover.md).
 - **Search is basic by design.** No stemming (plural and singular differ), no typo tolerance, no phrase or `OR` syntax (operators typed in the box are treated as plain text), results capped at 100 with a query. Result order uses ranking statistics computed over every recipe in the database, so in principle the order of two results you can read can depend on words in recipes you cannot (the documented Low finding F3 in [docs/tasks/v0.4.0-security-checkpoint.md](docs/tasks/v0.4.0-security-checkpoint.md), open for the owner's decision).
 - **Unit conversion covers a short ingredient list.** Cross conversion (cup to grams) exists only for the ingredients named under [Units and scaling](#units-and-scaling). Search and unit display are untested in Firefox, Safari and with a screen reader; see [docs/tasks/v0.4.0-carryover.md](docs/tasks/v0.4.0-carryover.md) for what is not tested.
-- **Rate limiting is in memory.** Counters reset when the app restarts and are not shared between processes.
-- **Single process only.** Because of the in-memory rate limiter and the single SQLite file, run exactly one app instance.
+- **Rate limits and staging live in memory.** Counters (login, registration, import, export, restore, public links), the staged restore registry and the export and apply locks reset when the app restarts and are not shared between processes. Staged files left on disk after a restart are removed once they are an hour old.
+- **Single process only.** Because of that and the single SQLite file, run exactly one app instance.
 - **`TRUSTED_PROXIES` can be spoofed if the app port is reachable.** Any client that can connect directly from a trusted address can forge `X-Forwarded-For` and evade per-IP limits. Behind Caddy, do not publish the app port (do not add `docker-compose.direct.yml` as shown above). This applies to the public link limit too: with the app port reachable, a client can send a fresh `X-Forwarded-For` on every request and never be limited (security checkpoint L1 in [docs/tasks/v0.5.0-security-checkpoint.md](docs/tasks/v0.5.0-security-checkpoint.md)).
-- **Backup and restore (v0.5.1).** Restore uploads have no total time limit (only a 30 s stall limit), there is no per-user limit on restore attempts and no cap on the disk the staged files use beyond one file per user, and the restore was not tried from a phone browser, through the bundled Caddy or on a second real Docker instance. See [docs/tasks/v0.5.1-carryover.md](docs/tasks/v0.5.1-carryover.md).
+- **Backup and restore.** A JSON or zip backup is not a full backup (see [Backup and restore](#backup-and-restore)). A member restore drops other people's shared notes (they need an author account). An admin restore of an all-users file gives recipes of owners without an account here to the restoring admin. Restore uploads have no total time limit (only a 30 s stall limit) and no cap on the disk the staged files use beyond one file per user and `RATE_LIMIT_RESTORE_MAX` uploads per hour; do not offer restore to accounts you do not trust. A failed photo is not retried by running the same file again with Skip. The backup file's `app_version` field reads `unknown`. See [docs/tasks/v0.5.1-carryover.md](docs/tasks/v0.5.1-carryover.md).
+- **No photos on public pages.** The public `/r/<token>` page shows no photos, notes or ratings by design.
+- **Print is measured in Chromium only.** Both sample recipes print on one A4 and one Letter landscape page there. Other browsers ignore the landscape request. The font steps by column count (10, 9 and 7 pt) were measured with synthetic recipes beyond five step columns, and a recipe with more rows than a page holds prints on several pages. See [Printing](#printing).
+- **Uploads have no per-user or per-volume quota.** Each recipe holds at most 10 photos and at most 3 photo uploads are processed at once, but nothing caps the total disk used.
+- **Unreadable database.** If the database file cannot be opened at start, the app keeps running but answers 500 on every route, and the container turns `unhealthy`; Docker does not restart it by itself ([docs/deployment.md](docs/deployment.md)).
+- **NOT TESTED.** Real phones and tablets, screen readers, Firefox, Safari, Raspberry Pi and other arm64 hardware (arm64 is verified in CI on a GitHub runner only), real printers (only a PDF saved from Chromium), a real DNS name with Let's Encrypt (Caddy or Traefik), a full 256 MiB restore applied end to end through a proxy, and photo or backup downloads through a proxy that buffers or has a short timeout. Accessibility was checked with axe and scripted keyboard tests only.
 - **`style-src` allows `'unsafe-inline'`.** Scripts use a per-request nonce, but styles do not.
 
 ## License
