@@ -15,9 +15,20 @@ export const LOG_LEVELS = ['debug', 'info', 'warn', 'error'] as const;
  * spaces removed: exact names for the generic words, substrings for credential-like names, so
  * `Set-Cookie`, `x-api-key`, `refresh_token`, `userEmail` are covered too.
  */
-const EXACT_KEYS = new Set(['body', 'note', 'notes', 'raw', 'html', 'ip', 'url', 'ua']);
+const EXACT_KEYS = new Set([
+  'body',
+  'note',
+  'notes',
+  'raw',
+  'html',
+  'ip',
+  'url',
+  'ua',
+  'filename',
+  'title',
+]);
 const KEY_PARTS =
-  /token|secret|passw|cookie|authori[sz]|session|credential|apikey|csrf|jwt|bearer|email|shareurl|forwardedfor/;
+  /token|secret|passw|cookie|authori[sz]|session|credential|apikey|csrf|jwt|bearer|email|shareurl|forwardedfor|clientip|sourceurl|userinfo/;
 
 const isRedactedKey = (key: string): boolean => {
   const k = key.toLowerCase().replace(/[-_. ]/g, '');

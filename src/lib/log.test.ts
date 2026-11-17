@@ -33,14 +33,24 @@ describe('log hardening (backend review)', () => {
       ip: '1.2.3.4',
       Passwd: 'a',
       csrf: 'a',
+      clientIp: '1.2.3.4',
+      source_url: 'http://u:p@h/',
+      fileName: 'a.webp',
+      Title: 'Secret stew',
+      userinfo: 'u:p',
       count: 3,
+      description: 'ok',
+      recipe: 'ok',
+      recipe_id: 'ok',
     });
     const o = JSON.parse(out[0]!) as Record<string, unknown>;
     for (const [k, v] of Object.entries(o)) {
-      if (['ts', 'level', 'event', 'count'].includes(k)) continue;
+      if (['ts', 'level', 'event', 'count', 'description', 'recipe', 'recipe_id'].includes(k))
+        continue;
       expect(v, k).toBe('[redacted]');
     }
     expect(o.count).toBe(3);
+    expect([o.description, o.recipe, o.recipe_id]).toEqual(['ok', 'ok', 'ok']);
   });
 
   it('scrubs secrets inside string values and error messages', () => {

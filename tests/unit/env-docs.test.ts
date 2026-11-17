@@ -17,6 +17,12 @@ const NOT_OPERATOR_INPUTS = new Set([
   'LEGACY_RAW_HTML_DIR',
 ]);
 
+/** Names deliberately not forwarded by docker-compose.yml. One comment each. */
+const NOT_FORWARDED_BY_COMPOSE = new Set([
+  // Dev/test seam that disables the SSRF guard; env.ts refuses it in production, so the image never gets it.
+  'IMPORT_ALLOW_LOCAL_FETCH',
+]);
+
 function envNames(): string[] {
   const names = new Set<string>();
   for (const m of read('src/lib/env.ts').matchAll(/^\s+([A-Z][A-Z0-9_]+):/gm)) names.add(m[1]);
@@ -49,5 +55,13 @@ describe('environment variable documentation', () => {
   it('mentions every variable in .env.example (commented-out lines count)', () => {
     const missing = names.filter((n) => !new RegExp(`^#?\\s*${n}=`, 'm').test(example));
     expect(missing, `missing from .env.example: ${missing.join(', ')}`).toEqual([]);
+  });
+
+  it('forwards every variable in docker-compose.yml (compose has no env_file)', () => {
+    const compose = read('docker-compose.yml');
+    const missing = names.filter(
+      (n) => !NOT_FORWARDED_BY_COMPOSE.has(n) && !new RegExp(`^\\s+${n}:`, 'm').test(compose),
+    );
+    expect(missing, `not forwarded by docker-compose.yml: ${missing.join(', ')}`).toEqual([]);
   });
 });

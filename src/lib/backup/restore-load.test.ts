@@ -1,8 +1,8 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { count } from 'drizzle-orm';
 import type { Db } from '@/lib/db/connection';
 import { INSERT_CHUNK, insertRecipeTree } from '@/lib/db/recipes';
-import { ingredient, recipe } from '@/lib/db/schema';
+import { ingredient } from '@/lib/db/schema';
 import { migrateBackup } from './migrate';
 import { applyRestore } from './restore';
 import { viaJson } from './restore-test-util';
@@ -39,20 +39,20 @@ function bigDoc(recipes: number, ingredients: number) {
 }
 
 describe('restore apply load (H1)', () => {
-  it('yields to the event loop between recipes: a timer scheduled before the apply fires during it', async () => {
+  it('yields to the event loop after every recipe: one setImmediate per recipe during the apply', async () => {
     const db = memDb();
     dbs.push(db);
     const u = mkUser(db, 'a@x.test');
     const doc = bigDoc(8, 200);
-    let seenAtFire = -1;
-    setTimeout(() => {
-      seenAtFire = db.select({ n: count() }).from(recipe).get()!.n;
-    }, 0);
-    const res = await applyRestore(db, { id: u.id, role: 'member' }, doc, null, 'skip', '/nope');
-    expect(res.imported).toBe(8);
-    // Fired after some recipes were committed but before the last one: the loop was released.
-    expect(seenAtFire).toBeGreaterThan(0);
-    expect(seenAtFire).toBeLessThan(8);
+    const spy = vi.spyOn(globalThis, 'setImmediate');
+    try {
+      const res = await applyRestore(db, { id: u.id, role: 'member' }, doc, null, 'skip', '/nope');
+      expect(res.imported).toBe(8);
+      // Counted, not timed: removing the yield leaves 0 calls.
+      expect(spy.mock.calls.length).toBeGreaterThanOrEqual(8);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it('inserts ingredients in multi-row statements of INSERT_CHUNK rows', () => {
