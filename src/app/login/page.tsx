@@ -1,3 +1,4 @@
+import { titleFromCatalog } from '@/lib/page-meta';
 import { getTranslations } from 'next-intl/server';
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth/current-user';
@@ -5,6 +6,8 @@ import { getDb } from '@/lib/db';
 import { countUsers } from '@/lib/db/users';
 
 export const dynamic = 'force-dynamic';
+
+export const generateMetadata = () => titleFromCatalog('login.title');
 
 export default async function LoginPage({
   searchParams,

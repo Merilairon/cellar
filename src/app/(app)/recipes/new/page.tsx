@@ -1,5 +1,8 @@
+import { titleFromCatalog } from '@/lib/page-meta';
 import { getTranslations } from 'next-intl/server';
 import { RecipeForm } from '@/components/recipe/RecipeForm';
+
+export const generateMetadata = () => titleFromCatalog('recipe.form.newTitle');
 
 export default async function Page() {
   const t = await getTranslations();

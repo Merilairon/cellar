@@ -1,3 +1,5 @@
+import type { Metadata } from 'next';
+import { notFoundMetadata, titleFromCatalog } from '@/lib/page-meta';
 import { getTranslations } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { lookupInvite } from '@/lib/auth/invites';
@@ -12,6 +14,17 @@ const ERRORS: Record<string, string> = {
   password: 'register.errors.password',
   email_taken: 'register.errors.emailTaken',
 };
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ token: string }>;
+}): Promise<Metadata> {
+  // An unusable token renders the shared 404, so it must also get the shared 404 title.
+  return lookupInvite(getDb(), (await params).token)
+    ? titleFromCatalog('register.title')
+    : notFoundMetadata();
+}
 
 export default async function RegisterPage({
   params,

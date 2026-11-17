@@ -464,7 +464,7 @@ export function Notes({
           />
           <button
             type="button"
-            className={`${btnPrimary} mt-2 aria-disabled:opacity-60`}
+            className={`${btnPrimary} mt-2`}
             aria-disabled={reasonText ? 'true' : undefined}
             aria-describedby={reasonText ? reasonId : undefined}
             disabled={busy}

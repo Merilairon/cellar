@@ -1,3 +1,5 @@
+import type { Metadata } from 'next';
+import { cache } from 'react';
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { RecipeActionSlot } from '@/components/recipe/RecipeActions';
@@ -14,22 +16,37 @@ import { listNotesFor } from '@/lib/recipes/notes';
 import { isImportedUnedited } from '@/lib/recipes/access';
 import { shareContext } from '@/lib/recipes/http';
 import { getRecipeFor } from '@/lib/recipes/service';
+import { notFoundMetadata } from '@/lib/page-meta';
+import { contentTitle } from '@/lib/page-title';
 
 export const dynamic = 'force-dynamic';
 
-export default async function Page({
-  params,
-  searchParams,
-}: {
+type Props = {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ notice?: string }>;
-}) {
+};
+
+// One lookup per request for the title and the page; the same access check as the page, so a
+// recipe the viewer cannot read gets the shared 404 title (and the page itself 404s).
+const lookup = cache(async (id: string) => {
   const user = await getCurrentUser();
-  if (!user) notFound(); // the (app) layout already redirects; this narrows the type
+  if (!user) return null;
+  const result = getRecipeFor(getDb(), user, id, shareContext());
+  return result.ok ? { user, recipe: result.recipe } : null;
+});
+
+export async function generateMetadata({ params }: Pick<Props, 'params'>): Promise<Metadata> {
+  const found = await lookup((await params).id);
+  if (!found) return notFoundMetadata();
+  const t = await getTranslations();
+  return { title: contentTitle(found.recipe.title, t('meta.untitledRecipe')) };
+}
+
+export default async function Page({ params, searchParams }: Props) {
+  const found = await lookup((await params).id);
+  if (!found) notFound(); // not found and not visible look the same
+  const { user, recipe } = found;
   const db = getDb();
-  const result = getRecipeFor(db, user, (await params).id, shareContext());
-  if (!result.ok) notFound(); // not found and not visible look the same
-  const recipe = result.recipe;
   const notes = listNotesFor(db, user, recipe.id);
   const t = await getTranslations();
   const coverFailed = (await searchParams).notice === 'cover_failed';

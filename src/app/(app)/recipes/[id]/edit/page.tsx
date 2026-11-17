@@ -1,4 +1,6 @@
 import { notFound } from 'next/navigation';
+import type { Metadata } from 'next';
+import { notFoundMetadata, titleFromCatalog } from '@/lib/page-meta';
 import { getTranslations } from 'next-intl/server';
 import { RecipeForm } from '@/components/recipe/RecipeForm';
 import { getCurrentUser } from '@/lib/auth/current-user';
@@ -8,6 +10,19 @@ import { shareContext } from '@/lib/recipes/http';
 import { getRecipeFor } from '@/lib/recipes/service';
 
 export const dynamic = 'force-dynamic';
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const user = await getCurrentUser();
+  const result = user ? getRecipeFor(getDb(), user, (await params).id, shareContext()) : null;
+  // The same test as the page: unreadable and read-only recipes are the shared 404.
+  return result?.ok && result.recipe.can_edit
+    ? titleFromCatalog('recipe.form.editTitle')
+    : notFoundMetadata();
+}
 
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();

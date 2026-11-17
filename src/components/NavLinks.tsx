@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -12,6 +12,7 @@ export function NavLinks({ items }: { items: NavItem[] }) {
   const pathname = usePathname();
   const [open, setOpen] = useState<string | null>(null);
   const isOpen = open === pathname; // closes itself on navigation
+  const toggle = useRef<HTMLButtonElement>(null);
 
   const link = (i: NavItem) => (
     <Link
@@ -25,8 +26,19 @@ export function NavLinks({ items }: { items: NavItem[] }) {
   );
 
   return (
-    <nav aria-label={t('nav.main')} className="flex-1">
+    <nav
+      aria-label={t('nav.main')}
+      className="flex-1"
+      onKeyDown={(e) => {
+        // Escape closes the small-screen panel and hands focus back to its toggle.
+        if (e.key === 'Escape' && isOpen) {
+          setOpen(null);
+          toggle.current?.focus();
+        }
+      }}
+    >
       <button
+        ref={toggle}
         type="button"
         aria-expanded={isOpen}
         aria-controls="main-nav-panel"

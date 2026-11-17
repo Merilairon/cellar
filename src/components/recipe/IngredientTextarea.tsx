@@ -40,7 +40,7 @@ export function IngredientTextarea({
       </FormField>
       {lines.length > 0 && (
         <div className="mt-2">
-          <h4 className="text-sm font-medium">{t('recipe.form.preview')}</h4>
+          <h3 className="text-sm font-medium">{t('recipe.form.preview')}</h3>
           <ol className="mt-1 divide-y divide-neutral-200 rounded border border-neutral-300 text-sm dark:divide-neutral-700 dark:border-neutral-700">
             {lines.map((line, n) => {
               const parsed = parseIngredientLine(line);

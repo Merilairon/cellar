@@ -31,6 +31,8 @@ export function UndoToast({ toast, onDismiss }: { toast: ToastState; onDismiss: 
   }, [paused, onDismiss, toast]);
   return (
     <div
+      role="region"
+      aria-label={t('gridEditor.toast.region')}
       className="ge-toast fixed inset-x-4 bottom-4 z-30 mx-auto flex max-w-md items-center gap-2 rounded px-3 py-2 shadow-lg"
       style={{ background: 'var(--ge-toast-bg)', color: 'var(--ge-toast-ink)' }}
       data-ge-toast

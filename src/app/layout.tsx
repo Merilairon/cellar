@@ -7,7 +7,9 @@ import './globals.css';
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations();
-  return { title: t('common.home') };
+  // Each page sets its own part; the product name follows (WCAG 2.4.2). A page with no title
+  // gets the default, and the template does not apply to the segment that defines it.
+  return { title: { template: `%s · ${t('common.home')}`, default: t('common.home') } };
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {

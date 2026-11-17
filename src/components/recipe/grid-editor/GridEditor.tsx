@@ -373,7 +373,7 @@ export function GridEditor({ recipe, onClose, onRecipe }: GridEditorProps) {
               {/* Done when clean, Cancel when dirty: one slot (UX spec F2, section 13). */}
               <button
                 type="button"
-                className={`${savedClean ? btnPrimary : btn} aria-disabled:opacity-60`}
+                className={savedClean ? btnPrimary : `${btn} aria-disabled:opacity-60`}
                 aria-disabled={flow.saving}
                 onClick={() => {
                   // m1: no leaving while a save is in flight (it would persist "discarded" edits).
@@ -386,7 +386,7 @@ export function GridEditor({ recipe, onClose, onRecipe }: GridEditorProps) {
               </button>
               <button
                 type="button"
-                className={`${savedClean ? btn : btnPrimary} aria-disabled:opacity-60`}
+                className={savedClean ? `${btn} aria-disabled:opacity-60` : btnPrimary}
                 aria-disabled={saveReason !== null || flow.saving}
                 aria-busy={flow.saving || undefined}
                 aria-describedby={saveReason ? saveReasonId : undefined}

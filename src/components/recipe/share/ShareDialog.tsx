@@ -205,8 +205,8 @@ export function ShareDialog(p: ShareDialogProps) {
                 </p>
 
                 {state.confirm === 'off' && (
-                  <div role="group" aria-label={t('share.link.offConfirm')} className="mt-3">
-                    <p>{t('share.link.offConfirm')}</p>
+                  <div role="group" aria-labelledby={`${uid}-off-q`} className="mt-3">
+                    <p id={`${uid}-off-q`}>{t('share.link.offConfirm')}</p>
                     <div className="mt-2 flex flex-wrap gap-2">
                       <button
                         type="button"
@@ -286,8 +286,8 @@ export function ShareDialog(p: ShareDialogProps) {
                       </button>
                     </div>
                     {state.confirm === 'rotate' && (
-                      <div role="group" aria-label={t('share.link.rotateConfirm')} className="mt-3">
-                        <p>{t('share.link.rotateConfirm')}</p>
+                      <div role="group" aria-labelledby={`${uid}-rotate-q`} className="mt-3">
+                        <p id={`${uid}-rotate-q`}>{t('share.link.rotateConfirm')}</p>
                         <div className="mt-2 flex flex-wrap gap-2">
                           <button
                             type="button"

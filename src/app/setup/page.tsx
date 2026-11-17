@@ -1,9 +1,16 @@
+import type { Metadata } from 'next';
+import { notFoundMetadata, titleFromCatalog } from '@/lib/page-meta';
 import { getTranslations } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { getDb } from '@/lib/db';
 import { countUsers } from '@/lib/db/users';
 
 export const dynamic = 'force-dynamic';
+
+export async function generateMetadata(): Promise<Metadata> {
+  // Once an account exists the page is the shared 404, with the shared 404 title.
+  return countUsers(getDb()) > 0 ? notFoundMetadata() : titleFromCatalog('setup.title');
+}
 
 export default async function SetupPage({
   searchParams,

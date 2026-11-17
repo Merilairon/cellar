@@ -1,9 +1,12 @@
+import { titleFromCatalog } from '@/lib/page-meta';
 import { getTranslations } from 'next-intl/server';
 import { redirect } from 'next/navigation';
 import { ExportPanel } from '@/components/backup/ExportPanel';
 import { RestorePanel } from '@/components/backup/RestorePanel';
 import { getCurrentUser } from '@/lib/auth/current-user';
 import { getEnv } from '@/lib/env';
+
+export const generateMetadata = () => titleFromCatalog('backup.title');
 
 export default async function BackupPage() {
   const t = await getTranslations();

@@ -48,6 +48,11 @@ const rejects: Array<[string, (d: Doc) => void, string]> = [
   ['recipes not an array', (d) => ((d as { recipes: unknown }).recipes = {}), 'recipes'],
   ['recipes over 5000', (d) => (d.recipes = new Array(5001).fill(d.recipes[0])), 'recipes'],
   ['empty title', (d) => (d.recipes[0].title = ''), 'recipes.0.title'],
+  [
+    'whitespace-only title (F9: no blank <title>)',
+    (d) => (d.recipes[0].title = '   \t '),
+    'recipes.0.title',
+  ],
   ['title over 200', (d) => (d.recipes[0].title = 't'.repeat(201)), 'recipes.0.title'],
   [
     'description over 5000',
@@ -355,6 +360,13 @@ describe('backupV1Schema: accepts', () => {
   });
   it('a valid all document', () => {
     expect(backupV1Schema.safeParse(validAllDoc()).success).toBe(true);
+  });
+  it('a padded title, stored trimmed', () => {
+    const d = validDoc();
+    d.recipes[0].title = '  Padded  ';
+    const r = backupV1Schema.safeParse(d);
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.recipes[0].title).toBe('Padded');
   });
   it('a document with no recipes', () => {
     expect(backupV1Schema.safeParse({ ...validDoc(), recipes: [] }).success).toBe(true);

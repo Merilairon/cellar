@@ -996,9 +996,8 @@ dialog.rg-sheet.ck-dialog {
   margin: 0;
   font-size: 1.1em;
   font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* Wraps, never clips: at 200 % text the whole title must stay readable (WCAG 1.4.4). */
+  overflow-wrap: anywhere;
 }
 .ck-title:focus-visible {
   outline: 3px solid var(--rg-focus);
@@ -1356,5 +1355,30 @@ li > .ck-item > .ck-strip {
   }
   .rg-table td.rg-step[data-selected='true'] {
     outline: 0;
+  }
+}
+
+/* ---------- Forced colors (Windows contrast themes): state must not depend on colour alone ---------- */
+@media (forced-colors: active) {
+  /* Pressed toggles (scale presets, Grid/List): the system selection colours. */
+  button[aria-pressed='true'] {
+    forced-color-adjust: none;
+    background: Highlight;
+    color: HighlightText;
+  }
+  /* Share "Public link" switch: bordered track, a knob that stays visible, Highlight when on. */
+  [role='switch'] > span {
+    forced-color-adjust: none;
+    border: 2px solid CanvasText;
+    background: Canvas;
+  }
+  [role='switch'][aria-checked='true'] > span {
+    background: Highlight;
+  }
+  [role='switch'] > span > span {
+    background: CanvasText;
+  }
+  [role='switch'][aria-checked='true'] > span > span {
+    background: HighlightText;
   }
 }

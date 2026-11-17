@@ -111,7 +111,7 @@ export function CookMode({
         }}
       >
         <div className="ck-bar">
-          <h2 id={titleId} tabIndex={-1} className="ck-title" title={recipe.title}>
+          <h2 id={titleId} tabIndex={-1} className="ck-title">
             {t('cook.heading', { title: recipe.title })}
           </h2>
           <button type="button" className="ck-close" onClick={requestClose}>

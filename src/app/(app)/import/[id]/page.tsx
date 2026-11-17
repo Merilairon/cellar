@@ -1,4 +1,6 @@
 import { notFound, redirect } from 'next/navigation';
+import type { Metadata } from 'next';
+import { notFoundMetadata, titleFromCatalog } from '@/lib/page-meta';
 import { getTranslations } from 'next-intl/server';
 import { ReviewForm } from '@/components/import/ReviewForm';
 import { getCurrentUser } from '@/lib/auth/current-user';
@@ -7,6 +9,18 @@ import { getImportFor } from '@/lib/import/service';
 import type { Draft } from '@/lib/import/normalize';
 
 export const dynamic = 'force-dynamic';
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const user = await getCurrentUser();
+  // Owner only, like the page: another user's job id is the shared 404.
+  return user && getImportFor(getDb(), user, (await params).id)
+    ? titleFromCatalog('import.review.title')
+    : notFoundMetadata();
+}
 
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();

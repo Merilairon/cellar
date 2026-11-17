@@ -7,6 +7,9 @@ import { getDb } from '@/lib/db';
 import { getEnv } from '@/lib/env';
 import { log } from '@/lib/log';
 import { getPublicRecipe } from '@/lib/recipes/public';
+import { notFoundMetadata } from '@/lib/page-meta';
+import { contentTitle } from '@/lib/page-title';
+import { getTranslations } from 'next-intl/server';
 
 // Reads the DB per request: a revoked link must 404 at once, so nothing here may be cached.
 export const dynamic = 'force-dynamic';
@@ -23,14 +26,17 @@ const lookupToken = cache((token: string) =>
 const lookup = async (params: Props['params']) => lookupToken((await params).token);
 
 /**
- * `noindex, nofollow` on the page; a missing recipe returns no title so the 404 keeps the
- * shared not-found metadata and stays byte-identical across failure branches (R4).
+ * `noindex, nofollow` on the page and its recipe title; every miss returns the same fixed 404
+ * title, so the branches stay identical (R4) and the browser does not replace the 404's title.
  */
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const recipe = await lookup(params);
+  const robots = { index: false, follow: false };
+  if (!recipe) return { ...(await notFoundMetadata()), robots };
+  const untitled = (await getTranslations())('meta.untitledRecipe');
   return {
-    ...(recipe ? { title: recipe.title } : {}),
-    robots: { index: false, follow: false },
+    title: contentTitle(recipe.title, untitled),
+    robots,
   };
 }
 

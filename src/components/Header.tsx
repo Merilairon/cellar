@@ -14,7 +14,10 @@ export async function Header({ user, theme }: { user: User; theme: Theme }) {
   return (
     <header className="relative border-b border-neutral-200 dark:border-neutral-800">
       <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-2 px-4 py-2">
-        <Link href="/" className="font-bold text-emerald-700 dark:text-emerald-400">
+        <Link
+          href="/"
+          className="-my-1.5 inline-flex min-h-9 items-center font-bold text-emerald-700 dark:text-emerald-400"
+        >
           {t('common.home')}
         </Link>
         <NavLinks items={navItems(user.role)} />
